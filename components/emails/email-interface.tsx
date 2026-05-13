@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useState, useTransition, useEffect } from "react"
 import { sendEmail, markEmailRead, deleteEmail } from "@/lib/actions/email-actions"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -30,8 +30,13 @@ interface EmailInterfaceProps {
   users: EmailUser[]
 }
 
-export function EmailInterface({ inbox, sent, users }: EmailInterfaceProps) {
-  const [tab, setTab] = useState<"inbox" | "sent">("inbox")
+export function EmailInterface({ inbox: initialInbox, sent: initialSent, users }: EmailInterfaceProps) {
+  const [tab, setTab] = useState<"inbox" | "sent">(() => {
+    if (typeof window !== "undefined") return (sessionStorage.getItem("email:tab") as "inbox" | "sent") ?? "inbox"
+    return "inbox"
+  })
+  const [inbox, setInbox] = useState(initialInbox)
+  const [sent, setSent] = useState(initialSent)
   const [selectedEmail, setSelectedEmail] = useState<EmailRow | null>(null)
   const [composeOpen, setComposeOpen] = useState(false)
   const [toId, setToId] = useState("")
@@ -40,11 +45,28 @@ export function EmailInterface({ inbox, sent, users }: EmailInterfaceProps) {
   const [isPending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
 
+  // Persist tab choice
+  useEffect(() => { sessionStorage.setItem("email:tab", tab) }, [tab])
+
+  // Restore selected email by ID after re-render
+  useEffect(() => {
+    const savedId = sessionStorage.getItem("email:selectedId")
+    if (savedId && !selectedEmail) {
+      const all = [...inbox, ...sent]
+      const found = all.find((e) => e.id === savedId)
+      if (found) setSelectedEmail(found)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   const emails = tab === "inbox" ? inbox : sent
 
   async function handleOpen(email: EmailRow) {
     setSelectedEmail(email)
+    sessionStorage.setItem("email:selectedId", email.id)
     if (tab === "inbox" && !email.read) {
+      // Update local state immediately — no server round-trip needed for UI
+      setInbox((prev) => prev.map((e) => e.id === email.id ? { ...e, read: true } : e))
       await markEmailRead(email.id)
     }
   }
@@ -62,10 +84,16 @@ export function EmailInterface({ inbox, sent, users }: EmailInterfaceProps) {
 
   function handleDelete(emailId: string) {
     if (!confirm("Delete this email?")) return
+    // Optimistic update — remove from local state immediately
+    setInbox((prev) => prev.filter((e) => e.id !== emailId))
+    setSent((prev) => prev.filter((e) => e.id !== emailId))
+    if (selectedEmail?.id === emailId) {
+      setSelectedEmail(null)
+      sessionStorage.removeItem("email:selectedId")
+    }
+    toast.success("Email deleted")
     startTransition(async () => {
       await deleteEmail(emailId)
-      if (selectedEmail?.id === emailId) setSelectedEmail(null)
-      toast.success("Email deleted")
     })
   }
 

@@ -19,6 +19,7 @@ export async function sendEmail(formData: FormData) {
     data: { fromId: session.id, toId, subject: subject.trim(), body: body.trim() },
   })
 
+  // Only revalidate on send so the recipient's inbox updates
   revalidatePath("/emails")
   return { success: true }
 }
@@ -43,23 +44,23 @@ export async function getSentEmails() {
   })
 }
 
-// Mark email as read
+// Mark email as read — NO revalidatePath: client state already reflects it
 export async function markEmailRead(emailId: string) {
   const session = await requireSession()
   await prisma.internalEmail.updateMany({
     where: { id: emailId, toId: session.id },
     data: { read: true },
   })
-  revalidatePath("/emails")
+  // Intentionally no revalidatePath — prevents page remount that wipes UI state
 }
 
-// Delete email
+// Delete email — updates local state, no full page revalidation needed
 export async function deleteEmail(emailId: string) {
   const session = await requireSession()
   await prisma.internalEmail.deleteMany({
     where: { id: emailId, OR: [{ fromId: session.id }, { toId: session.id }] },
   })
-  revalidatePath("/emails")
+  // Intentionally no revalidatePath — client removes it from state immediately
 }
 
 // Get all users to send email to

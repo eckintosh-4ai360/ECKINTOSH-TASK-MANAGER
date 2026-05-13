@@ -50,21 +50,38 @@ export function ChatInterface({ currentUserId, currentUserName }: ChatInterfaceP
   const [mediaUploading, setMediaUploading] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editInput, setEditInput] = useState("")
+  const [wsStatus, setWsStatus] = useState<"connected" | "reconnecting" | "offline">("reconnecting")
   const wsRef = useRef<WebSocket | null>(null)
+  const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const reconnectDelay = useRef(1000)
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const msgRefs = useRef<Record<string, HTMLDivElement | null>>({})
+  const restoredRef = useRef(false)
+  // Track when each user was last seen online
+  const lastSeenRef = useRef<Record<string, Date>>({})
 
   useEffect(() => {
-    getChatUsers().then(setUsers)
+    getChatUsers().then((u) => {
+      setUsers(u)
+    })
     getUnreadCounts().then(setUnread)
   }, [])
 
-  // Connect WebSocket
-  useEffect(() => {
+  // ── Stable WebSocket with auto-reconnect ─────────────────────────────────
+  const connectWs = useCallback(() => {
+    // Don't reconnect if already open
+    if (wsRef.current?.readyState === WebSocket.OPEN) return
+
     const wsUrl = `ws://${window.location.host}/ws?userId=${currentUserId}`
     const ws = new WebSocket(wsUrl)
     wsRef.current = ws
+
+    ws.onopen = () => {
+      setWsStatus("connected")
+      reconnectDelay.current = 1000 // reset backoff on success
+      if (reconnectTimer.current) { clearTimeout(reconnectTimer.current); reconnectTimer.current = null }
+    }
 
     ws.onmessage = (event) => {
       try {
@@ -87,24 +104,59 @@ export function ChatInterface({ currentUserId, currentUserName }: ChatInterfaceP
         if (data.type === "presence") {
           setOnlineUsers((prev) => {
             const next = new Set(prev)
-            if (data.online) next.add(data.userId)
-            else next.delete(data.userId)
+            if (data.online) {
+              next.add(data.userId)
+            } else {
+              next.delete(data.userId)
+              // Record last seen timestamp so we can show "last seen X ago"
+              lastSeenRef.current[data.userId] = new Date()
+            }
             return next
           })
         }
       } catch {}
     }
-    return () => ws.close()
+
+    ws.onclose = () => {
+      setWsStatus("reconnecting")
+      // Exponential backoff: 1s → 2s → 4s → … max 30s
+      reconnectTimer.current = setTimeout(() => {
+        reconnectDelay.current = Math.min(reconnectDelay.current * 2, 30_000)
+        connectWs()
+      }, reconnectDelay.current)
+    }
+
+    ws.onerror = () => {
+      setWsStatus("offline")
+      ws.close() // triggers onclose → reconnect
+    }
   }, [currentUserId])
+
+  useEffect(() => {
+    connectWs()
+    return () => {
+      if (reconnectTimer.current) clearTimeout(reconnectTimer.current)
+      // Mark as intentionally closed so onclose won't reconnect
+      wsRef.current?.close()
+    }
+  }, [connectWs])
 
   const selectedUserRef = useRef(selectedUser)
   useEffect(() => { selectedUserRef.current = selectedUser }, [selectedUser])
 
   const selectUser = useCallback(async (user: ChatUser) => {
     setSelectedUser(user)
-    setMessages([])
+    // ← DO NOT clear messages immediately: keep old messages visible while loading
     setReplyingTo(null)
     setEditingId(null)
+
+    // Restore draft for this contact
+    const savedDraft = sessionStorage.getItem(`chat-draft:${user.id}`) ?? ""
+    setInput(savedDraft)
+
+    // Persist last open conversation
+    sessionStorage.setItem("chat:lastUserId", user.id)
+
     const history = await getConversation(user.id)
     setMessages(
       history.map((m) => ({
@@ -128,6 +180,17 @@ export function ChatInterface({ currentUserId, currentUserName }: ChatInterfaceP
     await markMessagesRead(user.id)
     setUnread((prev) => { const next = { ...prev }; delete next[user.id]; return next })
   }, [])
+
+  // Restore last open conversation when user list loads
+  useEffect(() => {
+    if (restoredRef.current || users.length === 0) return
+    restoredRef.current = true
+    const lastId = sessionStorage.getItem("chat:lastUserId")
+    if (lastId) {
+      const user = users.find((u) => u.id === lastId)
+      if (user) selectUser(user)
+    }
+  }, [users, selectUser])
 
   // Upload media file then send via WS
   const sendMedia = async (file: File) => {
@@ -163,7 +226,6 @@ export function ChatInterface({ currentUserId, currentUserName }: ChatInterfaceP
   const sendMessage = () => {
     const content = input.trim()
     if (!content || !selectedUser || wsRef.current?.readyState !== WebSocket.OPEN) return
-
     wsRef.current.send(JSON.stringify({
       type: "chat",
       to: selectedUser.id,
@@ -171,7 +233,17 @@ export function ChatInterface({ currentUserId, currentUserName }: ChatInterfaceP
       ...(replyingTo ? { replyToId: replyingTo.id } : {}),
     }))
     setInput("")
+    sessionStorage.removeItem(`chat-draft:${selectedUser.id}`) // clear saved draft
     setReplyingTo(null)
+  }
+
+  // Persist draft as user types
+  const handleInputChange = (val: string) => {
+    setInput(val)
+    if (selectedUser) {
+      if (val) sessionStorage.setItem(`chat-draft:${selectedUser.id}`, val)
+      else sessionStorage.removeItem(`chat-draft:${selectedUser.id}`)
+    }
   }
 
   const sendDelete = (msgId: string) => {
@@ -225,9 +297,26 @@ export function ChatInterface({ currentUserId, currentUserName }: ChatInterfaceP
     else last.msgs.push(msg)
   }
 
-  const filteredUsers = users.filter((u) =>
-    (u.name ?? u.email).toLowerCase().includes(search.toLowerCase())
-  )
+  // Helper: human-readable last-seen string
+  const getLastSeen = (userId: string): string => {
+    const ts = lastSeenRef.current[userId]
+    if (!ts) return ""
+    const diff = Math.floor((Date.now() - ts.getTime()) / 1000)
+    if (diff < 60) return "last seen just now"
+    if (diff < 3600) return `last seen ${Math.floor(diff / 60)}m ago`
+    if (diff < 86400) return `last seen ${Math.floor(diff / 3600)}h ago`
+    return `last seen ${Math.floor(diff / 86400)}d ago`
+  }
+
+  // Always show ALL users — online float to top, then alphabetical
+  const filteredUsers = users
+    .filter((u) => (u.name ?? u.email).toLowerCase().includes(search.toLowerCase()))
+    .sort((a, b) => {
+      const aOnline = onlineUsers.has(a.id) ? 0 : 1
+      const bOnline = onlineUsers.has(b.id) ? 0 : 1
+      if (aOnline !== bOnline) return aOnline - bOnline
+      return (a.name ?? a.email).localeCompare(b.name ?? b.email)
+    })
 
   return (
     <div className="flex h-[calc(100vh-120px)] overflow-hidden rounded-2xl border border-white/10 shadow-2xl" style={{ background: "hsl(var(--background))" }}>
@@ -270,14 +359,22 @@ export function ChatInterface({ currentUserId, currentUserName }: ChatInterfaceP
                   <div className="w-11 h-11 rounded-full bg-gradient-to-br from-primary/40 to-primary/10 flex items-center justify-center text-sm font-bold text-primary uppercase">
                     {(user.name ?? user.email)[0]}
                   </div>
-                  {isOnline && <span className="absolute bottom-0 right-0 w-3 h-3 bg-emerald-400 rounded-full border-2 border-background" />}
+                  {isOnline
+                    ? <span className="absolute bottom-0 right-0 w-3 h-3 bg-emerald-400 rounded-full border-2 border-background" />
+                    : <span className="absolute bottom-0 right-0 w-3 h-3 bg-muted-foreground/30 rounded-full border-2 border-background" />
+                  }
                 </div>
 
                 <div className="flex-1 min-w-0">
                   <div className="flex justify-between items-baseline">
                     <p className="text-sm font-semibold text-foreground truncate">{user.name ?? user.email}</p>
                   </div>
-                  <p className="text-xs text-muted-foreground truncate mt-0.5">{isOnline ? "online" : user.role.toLowerCase()}</p>
+                  <p className="text-xs truncate mt-0.5" style={{ color: isOnline ? "rgb(52 211 153)" : "" }}>
+                    {isOnline
+                      ? "online"
+                      : getLastSeen(user.id) || user.role.toLowerCase()
+                    }
+                  </p>
                 </div>
 
                 {unreadCount > 0 && (
@@ -489,13 +586,26 @@ export function ChatInterface({ currentUserId, currentUserName }: ChatInterfaceP
 
           {/* Input bar */}
           <div className="flex items-center gap-2 px-4 py-3 border-t border-white/5 flex-shrink-0" style={{ background: "hsl(222 18% 9%)" }}>
+            {wsStatus !== "connected" && (
+              <div className="absolute left-1/2 -translate-x-1/2 bottom-20 z-10">
+                <span className={cn(
+                  "text-[11px] font-medium px-3 py-1 rounded-full border flex items-center gap-1.5 shadow-lg",
+                  wsStatus === "reconnecting"
+                    ? "bg-amber-500/10 border-amber-500/30 text-amber-400"
+                    : "bg-red-500/10 border-red-500/30 text-red-400"
+                )}>
+                  <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" />
+                  {wsStatus === "reconnecting" ? "Reconnecting…" : "Offline"}
+                </span>
+              </div>
+            )}
             <MediaPicker onSend={sendMedia} isSending={mediaUploading} />
             <Input
               ref={inputRef}
               value={input}
-              onChange={(e) => setInput(e.target.value)}
+              onChange={(e) => handleInputChange(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage() } }}
-              placeholder="Type a message…"
+              placeholder={wsStatus === "connected" ? "Type a message…" : "Waiting for connection…"}
               className="flex-1 border-none bg-white/8 rounded-full h-10 px-4 focus-visible:ring-0 text-sm"
               style={{ background: "hsl(222 18% 14%)" }}
             />
