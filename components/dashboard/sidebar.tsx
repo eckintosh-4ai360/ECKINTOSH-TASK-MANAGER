@@ -1,6 +1,6 @@
 "use client"
 
-import { LayoutDashboard, CheckSquare, Calendar, BarChart3, Users, Settings, HelpCircle, LogOut } from "lucide-react"
+import { LayoutDashboard, CheckSquare, Calendar, BarChart3, Users, Settings, HelpCircle, LogOut, ShieldCheck, Layers, MessageSquare, Mail } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useState } from "react"
 import Link from "next/link"
@@ -8,10 +8,14 @@ import { usePathname } from "next/navigation"
 
 const menuItems = [
   { icon: LayoutDashboard, label: "Dashboard", href: "/" },
-  { icon: CheckSquare, label: "Tasks", badge: "124", href: "/tasks" },
+  { icon: Layers, label: "Projects", href: "/projects" },
+  { icon: CheckSquare, label: "Tasks", href: "/tasks" },
+  { icon: MessageSquare, label: "Messages", href: "/messages" },
+  { icon: Mail, label: "Email", href: "/emails" },
   { icon: Calendar, label: "Calendar", href: "/calendar" },
   { icon: BarChart3, label: "Analytics", href: "/analytics" },
   { icon: Users, label: "Team", href: "/team" },
+  { icon: ShieldCheck, label: "Admin Users", href: "/admin/users" },
 ]
 
 const generalItems = [

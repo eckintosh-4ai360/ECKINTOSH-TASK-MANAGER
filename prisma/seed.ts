@@ -1,6 +1,7 @@
 import "dotenv/config"
 import { PrismaClient } from "@prisma/client"
 import { PrismaPg } from "@prisma/adapter-pg"
+import bcrypt from "bcryptjs"
 import pg from "pg"
 
 const { Pool } = pg
@@ -11,7 +12,12 @@ async function main() {
 
   console.log("Connecting to:", url.substring(0, 40) + "...")
 
-  const pool = new Pool({ connectionString: url })
+  const cleanUrl = url
+    .replace(/[?&]sslmode=[^&]*/g, "")
+    .replace(/[?&]channel_binding=[^&]*/g, "")
+    .replace(/\?&/, "?")
+
+  const pool = new Pool({ connectionString: cleanUrl, ssl: { rejectUnauthorized: false } })
   const adapter = new PrismaPg(pool)
   const prisma = new PrismaClient({ adapter })
 
@@ -21,15 +27,21 @@ async function main() {
   await prisma.user.deleteMany()
   console.log("Cleared existing data...")
 
-  // Create default user
+  // Hash admin password
+  const adminPassword = await bcrypt.hash("Admin@2026", 10)
+
+  // Create admin user
   const user = await prisma.user.create({
     data: {
       email: "admin@eckintosh.dev",
       name: "Eckintosh Admin",
+      password: adminPassword,
       role: "ADMIN",
     },
   })
-  console.log("Created user:", user.email)
+  console.log("Created admin user:", user.email)
+  console.log("Admin password: Admin@2026")
+
 
   // Seed Project 1
   const project1 = await prisma.project.create({

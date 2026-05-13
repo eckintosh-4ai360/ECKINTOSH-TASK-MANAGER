@@ -17,11 +17,15 @@ model User {
     createdAt DateTime @default(now())
     updatedAt DateTime @updatedAt
 
-    projects      Project[]
-    tasks         Task[]
-    teamMembers   TeamMember[]
-    notifications Notification[]
-    timeEntries   TimeEntry[]
+    projects         Project[]
+    tasks            Task[]
+    teamMembers      TeamMember[]
+    notifications    Notification[]
+    timeEntries      TimeEntry[]
+    sentMessages     Message[]        @relation("MessageSender")
+    receivedMessages Message[]        @relation("MessageReceiver")
+    sentEmails       InternalEmail[]  @relation("EmailFrom")
+    receivedEmails   InternalEmail[]  @relation("EmailTo")
 
     @@map("users")
 }
@@ -194,4 +198,40 @@ model Analytics {
     updatedAt      DateTime @updatedAt
 
     @@map("analytics")
+}
+
+model Message {
+    id         String   @id @default(cuid())
+    content    String?  // optional - can be media-only
+    senderId   String
+    receiverId String
+    read       Boolean  @default(false)
+    replyToId  String?
+    mediaUrl   String?  // path to uploaded file
+    mediaType  String?  // image | video | audio | document
+    mediaName  String?  // original filename
+    mediaSize  Int?     // size in bytes
+    createdAt  DateTime @default(now())
+
+    sender   User     @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+    receiver User     @relation("MessageReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
+    replyTo  Message?  @relation("MessageReplies", fields: [replyToId], references: [id], onDelete: SetNull)
+    replies  Message[] @relation("MessageReplies")
+
+    @@map("messages")
+}
+
+model InternalEmail {
+    id        String   @id @default(cuid())
+    subject   String
+    body      String
+    fromId    String
+    toId      String
+    read      Boolean  @default(false)
+    createdAt DateTime @default(now())
+
+    from User @relation("EmailFrom", fields: [fromId], references: [id], onDelete: Cascade)
+    to   User @relation("EmailTo", fields: [toId], references: [id], onDelete: Cascade)
+
+    @@map("internal_emails")
 }
