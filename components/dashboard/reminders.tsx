@@ -5,14 +5,18 @@ import { Video, Clock, Zap, Shield, Download, Terminal } from "lucide-react"
 import { useEffect, useState } from "react"
 
 export function Reminders() {
-  const [time, setTime] = useState(new Date())
+  const [time, setTime] = useState<Date | null>(null)
+  const [mounted, setMounted] = useState(false)
   
   useEffect(() => {
+    setMounted(true)
+    setTime(new Date())
     const timer = setInterval(() => setTime(new Date()), 1000)
     return () => clearInterval(timer)
   }, [])
 
-  const formatTime = (date: Date) => {
+  const formatTime = (date: Date | null) => {
+    if (!date) return "00:00:00"
     return date.toLocaleTimeString('en-US', { 
       hour12: false, 
       hour: '2-digit', 
@@ -21,7 +25,8 @@ export function Reminders() {
     })
   }
 
-  const formatDate = (date: Date) => {
+  const formatDate = (date: Date | null) => {
+    if (!date) return ""
     return date.toLocaleDateString('en-US', { 
       month: 'short', 
       day: 'numeric', 
@@ -38,9 +43,9 @@ export function Reminders() {
       <div className="text-center mb-6">
         <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-2">System Time</p>
         <p className="text-3xl font-bold font-mono text-primary animate-text-glow tracking-wider">
-          {formatTime(time)}
+          {mounted ? formatTime(time) : "00:00:00"}
         </p>
-        <p className="text-sm text-muted-foreground mt-1">{formatDate(time)}</p>
+        <p className="text-sm text-muted-foreground mt-1">{mounted ? formatDate(time) : ""}</p>
       </div>
 
       {/* System Info Grid */}

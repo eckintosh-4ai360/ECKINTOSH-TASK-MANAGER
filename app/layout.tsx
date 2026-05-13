@@ -37,7 +37,7 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" className="dark bg-background">
+    <html lang="en" className="dark bg-background" suppressHydrationWarning>
       <body className={`font-sans antialiased bg-background futuristic-grid`}>
         <ThemeProvider defaultTheme="dark" storageKey="tasko-theme">
           {children}
