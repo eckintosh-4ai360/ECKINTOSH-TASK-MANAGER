@@ -1,0 +1,293 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  /* Futuristic dark theme with cyan accents */
+  --background: oklch(0.12 0.02 230);
+  --foreground: oklch(0.95 0.01 230);
+  --card: oklch(0.16 0.02 230);
+  --card-foreground: oklch(0.95 0.01 230);
+  --popover: oklch(0.14 0.02 230);
+  --popover-foreground: oklch(0.95 0.01 230);
+  --primary: oklch(0.75 0.15 195);
+  --primary-foreground: oklch(0.12 0.02 230);
+  --secondary: oklch(0.20 0.02 230);
+  --secondary-foreground: oklch(0.95 0.01 230);
+  --muted: oklch(0.22 0.02 230);
+  --muted-foreground: oklch(0.65 0.02 230);
+  --accent: oklch(0.75 0.15 195);
+  --accent-foreground: oklch(0.12 0.02 230);
+  --destructive: oklch(0.60 0.20 25);
+  --destructive-foreground: oklch(0.98 0.01 0);
+  --border: oklch(0.28 0.03 230);
+  --input: oklch(0.20 0.02 230);
+  --ring: oklch(0.75 0.15 195);
+  --chart-1: oklch(0.75 0.15 195);
+  --chart-2: oklch(0.70 0.12 280);
+  --chart-3: oklch(0.65 0.15 160);
+  --chart-4: oklch(0.70 0.10 50);
+  --chart-5: oklch(0.60 0.18 320);
+  --radius: 0.75rem;
+  --sidebar: oklch(0.14 0.02 230);
+  --sidebar-foreground: oklch(0.95 0.01 230);
+  --sidebar-primary: oklch(0.75 0.15 195);
+  --sidebar-primary-foreground: oklch(0.12 0.02 230);
+  --sidebar-accent: oklch(0.22 0.02 230);
+  --sidebar-accent-foreground: oklch(0.95 0.01 230);
+  --sidebar-border: oklch(0.28 0.03 230);
+  --sidebar-ring: oklch(0.75 0.15 195);
+}
+
+.dark {
+  /* Same futuristic theme for dark mode */
+  --background: oklch(0.12 0.02 230);
+  --foreground: oklch(0.95 0.01 230);
+  --card: oklch(0.16 0.02 230);
+  --card-foreground: oklch(0.95 0.01 230);
+  --popover: oklch(0.14 0.02 230);
+  --popover-foreground: oklch(0.95 0.01 230);
+  --primary: oklch(0.75 0.15 195);
+  --primary-foreground: oklch(0.12 0.02 230);
+  --secondary: oklch(0.20 0.02 230);
+  --secondary-foreground: oklch(0.95 0.01 230);
+  --muted: oklch(0.22 0.02 230);
+  --muted-foreground: oklch(0.65 0.02 230);
+  --accent: oklch(0.75 0.15 195);
+  --accent-foreground: oklch(0.12 0.02 230);
+  --destructive: oklch(0.60 0.20 25);
+  --destructive-foreground: oklch(0.98 0.01 0);
+  --border: oklch(0.28 0.03 230);
+  --input: oklch(0.20 0.02 230);
+  --ring: oklch(0.75 0.15 195);
+  --chart-1: oklch(0.75 0.15 195);
+  --chart-2: oklch(0.70 0.12 280);
+  --chart-3: oklch(0.65 0.15 160);
+  --chart-4: oklch(0.70 0.10 50);
+  --chart-5: oklch(0.60 0.18 320);
+  --sidebar: oklch(0.14 0.02 230);
+  --sidebar-foreground: oklch(0.95 0.01 230);
+  --sidebar-primary: oklch(0.75 0.15 195);
+  --sidebar-primary-foreground: oklch(0.12 0.02 230);
+  --sidebar-accent: oklch(0.22 0.02 230);
+  --sidebar-accent-foreground: oklch(0.95 0.01 230);
+  --sidebar-border: oklch(0.28 0.03 230);
+  --sidebar-ring: oklch(0.75 0.15 195);
+}
+
+@theme inline {
+  /* optional: --font-sans, --font-serif, --font-mono if they are applied in the layout.tsx */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* Custom animations for smooth card interactions */
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
+@keyframes slideInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Added barSlideUp animation for modern analytics chart */
+@keyframes barSlideUp {
+  from {
+    transform: scaleY(0);
+    opacity: 0;
+  }
+  to {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+}
+
+@keyframes pulse-ring {
+  0% {
+    box-shadow: 0 0 0 0 rgba(66, 153, 225, 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(66, 153, 225, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(66, 153, 225, 0);
+  }
+}
+
+/* Added shimmer and fade-in animations for chart interactions */
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+.animate-slide-in-up {
+  animation: slideInUp 0.5s ease-out forwards;
+}
+
+/* Added utility classes for new animations */
+.animate-shimmer {
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+.animate-fade-in {
+  animation: fade-in 0.2s ease-out forwards;
+}
+
+/* Futuristic glow effects */
+@keyframes glow-pulse {
+  0%, 100% {
+    box-shadow: 0 0 5px rgba(0, 212, 255, 0.3), 0 0 20px rgba(0, 212, 255, 0.1);
+  }
+  50% {
+    box-shadow: 0 0 15px rgba(0, 212, 255, 0.5), 0 0 40px rgba(0, 212, 255, 0.2);
+  }
+}
+
+@keyframes scan-line {
+  0% {
+    transform: translateY(-100%);
+  }
+  100% {
+    transform: translateY(100vh);
+  }
+}
+
+@keyframes text-glow {
+  0%, 100% {
+    text-shadow: 0 0 5px rgba(0, 212, 255, 0.5);
+  }
+  50% {
+    text-shadow: 0 0 20px rgba(0, 212, 255, 0.8), 0 0 40px rgba(0, 212, 255, 0.4);
+  }
+}
+
+@keyframes border-glow {
+  0%, 100% {
+    border-color: rgba(0, 212, 255, 0.3);
+  }
+  50% {
+    border-color: rgba(0, 212, 255, 0.6);
+  }
+}
+
+.animate-glow-pulse {
+  animation: glow-pulse 2s ease-in-out infinite;
+}
+
+.animate-text-glow {
+  animation: text-glow 2s ease-in-out infinite;
+}
+
+.animate-border-glow {
+  animation: border-glow 2s ease-in-out infinite;
+}
+
+/* Glass morphism utilities */
+.glass {
+  background: rgba(22, 33, 62, 0.6);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(0, 212, 255, 0.1);
+}
+
+.glass-card {
+  background: linear-gradient(135deg, rgba(22, 33, 62, 0.8) 0%, rgba(15, 23, 42, 0.9) 100%);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(0, 212, 255, 0.15);
+}
+
+/* Futuristic grid background */
+.futuristic-grid {
+  background-image: 
+    linear-gradient(rgba(0, 212, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 212, 255, 0.03) 1px, transparent 1px);
+  background-size: 50px 50px;
+}
+
+/* Neon text utilities */
+.neon-text {
+  color: #00d4ff;
+  text-shadow: 0 0 10px rgba(0, 212, 255, 0.5), 0 0 20px rgba(0, 212, 255, 0.3);
+}
+
+.neon-border {
+  border-color: rgba(0, 212, 255, 0.4);
+  box-shadow: 0 0 10px rgba(0, 212, 255, 0.2), inset 0 0 10px rgba(0, 212, 255, 0.05);
+}
