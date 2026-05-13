@@ -1,5 +1,5 @@
 import { Sidebar } from "@/components/dashboard/sidebar"
-import { Header } from "@/components/dashboard/header"
+import { HeaderWithUser as Header } from "@/components/dashboard/header-with-user"
 import { EmailInterface } from "@/components/emails/email-interface"
 import { getInbox, getSentEmails, getEmailableUsers } from "@/lib/actions/email-actions"
 import { requireSession } from "@/lib/auth"

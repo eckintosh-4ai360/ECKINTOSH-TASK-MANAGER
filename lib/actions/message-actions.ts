@@ -23,6 +23,7 @@ export async function getConversation(otherUserId: string) {
       receiverId: true,
       createdAt: true,
       replyToId: true,
+      edited: true,
       mediaUrl: true,
       mediaType: true,
       mediaName: true,

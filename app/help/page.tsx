@@ -1,5 +1,5 @@
 import { Sidebar } from "@/components/dashboard/sidebar"
-import { Header } from "@/components/dashboard/header"
+import { HeaderWithUser as Header } from "@/components/dashboard/header-with-user"
 import { HelpContent } from "@/components/help/help-content"
 
 export default function HelpPage() {

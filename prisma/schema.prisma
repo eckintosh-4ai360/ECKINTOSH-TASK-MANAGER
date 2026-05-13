@@ -206,6 +206,7 @@ model Message {
     senderId   String
     receiverId String
     read       Boolean  @default(false)
+    edited     Boolean  @default(false)
     replyToId  String?
     mediaUrl   String?  // path to uploaded file
     mediaType  String?  // image | video | audio | document

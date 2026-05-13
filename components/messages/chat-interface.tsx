@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import {
   Send, Search, MessageSquare, Reply, X,
-  CheckCheck, MoreVertical, Phone, Video, Smile, Image
+  CheckCheck, MoreVertical, Phone, Video, Trash2, Pencil, Check
 } from "lucide-react"
 import { getConversation, getChatUsers, markMessagesRead, getUnreadCounts } from "@/lib/actions/message-actions"
 import { MediaBubble } from "@/components/messages/media-bubble"
@@ -23,6 +23,7 @@ type Message = {
   content?: string | null
   senderName: string
   createdAt: string
+  edited?: boolean
   replyToId?: string | null
   replyTo?: ReplyPreview
   mediaUrl?: string | null
@@ -47,6 +48,8 @@ export function ChatInterface({ currentUserId, currentUserName }: ChatInterfaceP
   const [replyingTo, setReplyingTo] = useState<Message | null>(null)
   const [hoveredMsg, setHoveredMsg] = useState<string | null>(null)
   const [mediaUploading, setMediaUploading] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editInput, setEditInput] = useState("")
   const wsRef = useRef<WebSocket | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -75,6 +78,12 @@ export function ChatInterface({ currentUserId, currentUserName }: ChatInterfaceP
             setUnread((prev) => ({ ...prev, [data.from]: (prev[data.from] ?? 0) + 1 }))
           }
         }
+        if (data.type === "delete_message") {
+          setMessages((prev) => prev.filter((m) => m.id !== data.id))
+        }
+        if (data.type === "edit_message") {
+          setMessages((prev) => prev.map((m) => m.id === data.id ? { ...m, content: data.content, edited: true } : m))
+        }
         if (data.type === "presence") {
           setOnlineUsers((prev) => {
             const next = new Set(prev)
@@ -95,6 +104,7 @@ export function ChatInterface({ currentUserId, currentUserName }: ChatInterfaceP
     setSelectedUser(user)
     setMessages([])
     setReplyingTo(null)
+    setEditingId(null)
     const history = await getConversation(user.id)
     setMessages(
       history.map((m) => ({
@@ -112,6 +122,7 @@ export function ChatInterface({ currentUserId, currentUserName }: ChatInterfaceP
         mediaType: m.mediaType,
         mediaName: m.mediaName,
         mediaSize: m.mediaSize,
+        edited: m.edited,
       }))
     )
     await markMessagesRead(user.id)
@@ -161,6 +172,26 @@ export function ChatInterface({ currentUserId, currentUserName }: ChatInterfaceP
     }))
     setInput("")
     setReplyingTo(null)
+  }
+
+  const sendDelete = (msgId: string) => {
+    if (wsRef.current?.readyState !== WebSocket.OPEN) return
+    if (!confirm("Delete this message for everyone?")) return
+    wsRef.current.send(JSON.stringify({ type: "delete_message", id: msgId }))
+  }
+
+  const startEdit = (msg: Message) => {
+    setEditingId(msg.id)
+    setEditInput(msg.content ?? "")
+    setHoveredMsg(null)
+  }
+
+  const submitEdit = (msgId: string) => {
+    const content = editInput.trim()
+    if (!content || wsRef.current?.readyState !== WebSocket.OPEN) { setEditingId(null); return }
+    wsRef.current.send(JSON.stringify({ type: "edit_message", id: msgId, content }))
+    setMessages((prev) => prev.map((m) => m.id === msgId ? { ...m, content, edited: true } : m))
+    setEditingId(null)
   }
 
   const scrollToMessage = (id: string) => {
@@ -326,13 +357,27 @@ export function ChatInterface({ currentUserId, currentUserName }: ChatInterfaceP
                         </div>
                       )}
 
-                      {/* Reply button on hover */}
-                      {hoveredMsg === msg.id && (
+                      {/* Context menu on hover (own messages only) */}
+                      {hoveredMsg === msg.id && isMine && (
+                        <div className="flex-shrink-0 flex items-center gap-1">
+                          {!msg.mediaUrl && (
+                            <button onClick={() => startEdit(msg)}
+                              className="w-7 h-7 rounded-full flex items-center justify-center bg-white/10 hover:bg-blue-500/20 text-muted-foreground hover:text-blue-400 transition-colors">
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                          <button onClick={() => sendDelete(msg.id)}
+                            className="w-7 h-7 rounded-full flex items-center justify-center bg-white/10 hover:bg-red-500/20 text-muted-foreground hover:text-red-400 transition-colors">
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Reply button on hover (all messages) */}
+                      {hoveredMsg === msg.id && !isMine && (
                         <button
                           onClick={() => { setReplyingTo(msg); inputRef.current?.focus() }}
-                          className={cn("flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity w-7 h-7 rounded-full flex items-center justify-center",
-                            "bg-white/10 hover:bg-white/20 text-muted-foreground hover:text-foreground"
-                          )}
+                          className="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center bg-white/10 hover:bg-white/20 text-muted-foreground hover:text-foreground transition-colors"
                         >
                           <Reply className="w-3.5 h-3.5" />
                         </button>
@@ -374,8 +419,33 @@ export function ChatInterface({ currentUserId, currentUserName }: ChatInterfaceP
                               isMine={isMine}
                             />
                           )}
-                          {msg.content && (
-                            <p className={msg.mediaUrl ? "px-2 pb-1 pt-1 text-sm" : ""}>{msg.content}</p>
+                          {/* Inline edit or content */}
+                          {editingId === msg.id ? (
+                            <div className="flex items-center gap-2 px-2 py-1">
+                              <input
+                                autoFocus
+                                value={editInput}
+                                onChange={(e) => setEditInput(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") submitEdit(msg.id)
+                                  if (e.key === "Escape") setEditingId(null)
+                                }}
+                                className="flex-1 bg-transparent outline-none text-sm min-w-0 border-b border-primary/50 pb-0.5"
+                              />
+                              <button onClick={() => submitEdit(msg.id)} className="text-emerald-400 hover:text-emerald-300">
+                                <Check className="w-4 h-4" />
+                              </button>
+                              <button onClick={() => setEditingId(null)} className="text-muted-foreground hover:text-foreground">
+                                <X className="w-4 h-4" />
+                              </button>
+                            </div>
+                          ) : (
+                            msg.content && (
+                              <p className={msg.mediaUrl ? "px-2 pb-1 pt-1 text-sm" : ""}>
+                                {msg.content}
+                                {msg.edited && <span className="text-[9px] opacity-50 ml-1 font-mono">(edited)</span>}
+                              </p>
+                            )
                           )}
                         </div>
 

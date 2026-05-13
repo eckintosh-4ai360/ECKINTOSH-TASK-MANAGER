@@ -1,5 +1,5 @@
 import { Sidebar } from "@/components/dashboard/sidebar"
-import { Header } from "@/components/dashboard/header"
+import { HeaderWithUser as Header } from "@/components/dashboard/header-with-user"
 import { UserManagement } from "@/components/admin/user-management"
 import { getUsers } from "@/lib/actions/auth-actions"
 import { requireAdmin } from "@/lib/auth"

@@ -1,5 +1,5 @@
 import { Sidebar } from "@/components/dashboard/sidebar"
-import { Header } from "@/components/dashboard/header"
+import { HeaderWithUser as Header } from "@/components/dashboard/header-with-user"
 import { TasksContent } from "@/components/tasks/tasks-content"
 import { Button } from "@/components/ui/button"
 import { AddTaskModal } from "@/components/modals/add-task-modal"

@@ -1,5 +1,5 @@
 import { Sidebar } from "@/components/dashboard/sidebar"
-import { Header } from "@/components/dashboard/header"
+import { HeaderWithUser as Header } from "@/components/dashboard/header-with-user"
 import { StatsCards } from "@/components/dashboard/stats-cards"
 import { ProjectAnalytics } from "@/components/dashboard/project-analytics"
 import { Reminders } from "@/components/dashboard/reminders"

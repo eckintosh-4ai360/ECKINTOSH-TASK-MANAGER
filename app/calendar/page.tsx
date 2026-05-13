@@ -1,5 +1,5 @@
 import { Sidebar } from "@/components/dashboard/sidebar"
-import { Header } from "@/components/dashboard/header"
+import { HeaderWithUser as Header } from "@/components/dashboard/header-with-user"
 import { CalendarContent } from "@/components/calendar/calendar-content"
 import { Button } from "@/components/ui/button"
 import { AddEventModal } from "@/components/modals/add-event-modal"

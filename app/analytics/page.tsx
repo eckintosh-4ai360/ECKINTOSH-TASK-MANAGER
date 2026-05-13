@@ -1,5 +1,5 @@
 import { Sidebar } from "@/components/dashboard/sidebar"
-import { Header } from "@/components/dashboard/header"
+import { HeaderWithUser as Header } from "@/components/dashboard/header-with-user"
 import { AnalyticsContent } from "@/components/analytics/analytics-content"
 import { Button } from "@/components/ui/button"
 import { ExportReportModal } from "@/components/modals/export-report-modal"

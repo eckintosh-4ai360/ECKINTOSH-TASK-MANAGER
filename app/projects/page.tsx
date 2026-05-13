@@ -1,5 +1,5 @@
 import { Sidebar } from "@/components/dashboard/sidebar"
-import { Header } from "@/components/dashboard/header"
+import { HeaderWithUser as Header } from "@/components/dashboard/header-with-user"
 import { ProjectsContent } from "@/components/projects/projects-content"
 import { Button } from "@/components/ui/button"
 import { AddProjectModal } from "@/components/modals/add-project-modal"

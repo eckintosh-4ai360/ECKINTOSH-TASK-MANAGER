@@ -1,5 +1,5 @@
 import { Sidebar } from "@/components/dashboard/sidebar"
-import { Header } from "@/components/dashboard/header"
+import { HeaderWithUser as Header } from "@/components/dashboard/header-with-user"
 import { ChatInterface } from "@/components/messages/chat-interface"
 import { requireSession } from "@/lib/auth"
 

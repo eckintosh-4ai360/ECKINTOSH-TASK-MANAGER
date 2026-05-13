@@ -123,6 +123,48 @@ app.prepare().then(() => {
           // Echo back to sender
           ws.send(payload)
         }
+
+        // ── Delete message ─────────────────────────────────────────────────────
+        if (data.type === "delete_message") {
+          const { id } = data as { id: string }
+          if (!id) return
+
+          // Verify ownership
+          const msg = await prisma.message.findUnique({ where: { id }, select: { senderId: true, receiverId: true } })
+          if (!msg || msg.senderId !== userId) return
+
+          await prisma.message.delete({ where: { id } })
+
+          // Notify both sides
+          const deletePayload = JSON.stringify({ type: "delete_message", id })
+          ws.send(deletePayload)
+          const otherWs = clients.get(msg.receiverId)
+          if (otherWs?.readyState === WebSocket.OPEN) otherWs.send(deletePayload)
+          console.log(`[WS] Message deleted: ${id}`)
+        }
+
+        // ── Edit message ───────────────────────────────────────────────────────
+        if (data.type === "edit_message") {
+          const { id, content } = data as { id: string; content: string }
+          if (!id || !content?.trim()) return
+
+          // Verify ownership
+          const msg = await prisma.message.findUnique({ where: { id }, select: { senderId: true, receiverId: true } })
+          if (!msg || msg.senderId !== userId) return
+
+          const updated = await prisma.message.update({
+            where: { id },
+            data: { content: content.trim(), edited: true },
+          })
+
+          // Notify both sides
+          const editPayload = JSON.stringify({ type: "edit_message", id, content: updated.content, edited: true })
+          ws.send(editPayload)
+          const otherWs = clients.get(msg.receiverId)
+          if (otherWs?.readyState === WebSocket.OPEN) otherWs.send(editPayload)
+          console.log(`[WS] Message edited: ${id}`)
+        }
+
       } catch (err) {
         console.error("[WS] message error:", err)
       }
