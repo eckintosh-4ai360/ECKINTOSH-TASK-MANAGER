@@ -6,80 +6,21 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Search, MoreHorizontal, Clock, Users, CheckCircle2, ArrowUpRight } from "lucide-react"
 import { useState } from "react"
 
-const projects = [
-  {
-    id: 1,
-    name: "Website Redesign",
-    description: "Complete overhaul of the company website with modern design",
-    progress: 75,
-    status: "In Progress",
-    priority: "High",
-    dueDate: "Dec 30, 2026",
-    team: [
-      { name: "Alexandra", avatar: "/avatars/avatar-1.jpg", initials: "AD" },
-      { name: "Edwin", avatar: "/avatars/avatar-2.jpg", initials: "EA" },
-      { name: "David", avatar: "/avatars/avatar-4.jpg", initials: "DO" },
-    ],
-    tasks: { completed: 18, total: 24 },
-  },
-  {
-    id: 2,
-    name: "Mobile App Development",
-    description: "Cross-platform mobile application for iOS and Android",
-    progress: 45,
-    status: "In Progress",
-    priority: "High",
-    dueDate: "Jan 15, 2027",
-    team: [
-      { name: "Isaac", avatar: "/avatars/avatar-3.jpg", initials: "IO" },
-      { name: "Edwin", avatar: "/avatars/avatar-2.jpg", initials: "EA" },
-    ],
-    tasks: { completed: 12, total: 28 },
-  },
-  {
-    id: 3,
-    name: "API Development",
-    description: "RESTful API for third-party integrations",
-    progress: 90,
-    status: "Review",
-    priority: "Medium",
-    dueDate: "Dec 20, 2026",
-    team: [
-      { name: "Isaac", avatar: "/avatars/avatar-3.jpg", initials: "IO" },
-    ],
-    tasks: { completed: 27, total: 30 },
-  },
-  {
-    id: 4,
-    name: "Dashboard Analytics",
-    description: "Real-time analytics dashboard with data visualization",
-    progress: 30,
-    status: "In Progress",
-    priority: "Medium",
-    dueDate: "Feb 1, 2027",
-    team: [
-      { name: "Alexandra", avatar: "/avatars/avatar-1.jpg", initials: "AD" },
-      { name: "David", avatar: "/avatars/avatar-4.jpg", initials: "DO" },
-    ],
-    tasks: { completed: 6, total: 20 },
-  },
-  {
-    id: 5,
-    name: "Security Audit",
-    description: "Comprehensive security review and vulnerability assessment",
-    progress: 100,
-    status: "Completed",
-    priority: "High",
-    dueDate: "Dec 10, 2026",
-    team: [
-      { name: "Edwin", avatar: "/avatars/avatar-2.jpg", initials: "EA" },
-      { name: "Isaac", avatar: "/avatars/avatar-3.jpg", initials: "IO" },
-    ],
-    tasks: { completed: 15, total: 15 },
-  },
-]
+interface Project {
+  id: string
+  name: string
+  description: string | null
+  status: string
+  priority: string
+  endDate: Date | null
+  progress: number
+}
 
-export function ProjectsContent() {
+interface ProjectsContentProps {
+  projects: Project[]
+}
+
+export function ProjectsContent({ projects }: ProjectsContentProps) {
   const [filter, setFilter] = useState("all")
 
   const filteredProjects = filter === "all" 
@@ -87,12 +28,13 @@ export function ProjectsContent() {
     : projects.filter((p) => p.status.toLowerCase().replace(" ", "-") === filter)
 
   const getStatusStyle = (status: string) => {
-    switch (status) {
-      case "Completed":
+    switch (status.toLowerCase()) {
+      case "completed":
         return "bg-primary/20 text-primary border-primary/30"
-      case "In Progress":
+      case "active":
+      case "in-progress":
         return "bg-chart-4/20 text-chart-4 border-chart-4/30"
-      case "Review":
+      case "review":
         return "bg-purple-500/20 text-purple-400 border-purple-500/30"
       default:
         return "bg-muted text-muted-foreground border-border/30"
@@ -100,10 +42,10 @@ export function ProjectsContent() {
   }
 
   const getPriorityStyle = (priority: string) => {
-    switch (priority) {
-      case "High":
+    switch (priority.toLowerCase()) {
+      case "high":
         return "text-destructive"
-      case "Medium":
+      case "medium":
         return "text-chart-4"
       default:
         return "text-primary"
@@ -125,9 +67,8 @@ export function ProjectsContent() {
       <div className="flex gap-2 flex-wrap">
         {[
           { key: "all", label: `All (${projects.length})` },
-          { key: "in-progress", label: `In Progress (${projects.filter((p) => p.status === "In Progress").length})` },
-          { key: "review", label: `Review (${projects.filter((p) => p.status === "Review").length})` },
-          { key: "completed", label: `Completed (${projects.filter((p) => p.status === "Completed").length})` },
+          { key: "active", label: `Active (${projects.filter((p) => p.status === "active").length})` },
+          { key: "completed", label: `Completed (${projects.filter((p) => p.status === "completed").length})` },
         ].map((tab) => (
           <Button
             key={tab.key}
@@ -145,6 +86,11 @@ export function ProjectsContent() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {projects.length === 0 && (
+          <div className="lg:col-span-2 text-center py-12 glass-card rounded-xl">
+            <p className="text-muted-foreground italic">No projects found. Create one to see it here!</p>
+          </div>
+        )}
         {filteredProjects.map((project, index) => (
           <div
             key={project.id}
@@ -159,7 +105,7 @@ export function ProjectsContent() {
                   </h3>
                   <ArrowUpRight className="w-4 h-4 text-primary opacity-0 group-hover:opacity-100 transition-opacity" />
                 </div>
-                <p className="text-sm text-muted-foreground line-clamp-1">{project.description}</p>
+                <p className="text-sm text-muted-foreground line-clamp-1">{project.description || "No description provided."}</p>
               </div>
               <Button variant="ghost" size="icon" className="opacity-0 group-hover:opacity-100 transition-opacity">
                 <MoreHorizontal className="w-4 h-4" />
@@ -171,7 +117,7 @@ export function ProjectsContent() {
                 <span className={`text-[10px] px-2 py-0.5 rounded border font-mono uppercase ${getStatusStyle(project.status)}`}>
                   {project.status}
                 </span>
-                <span className={`text-xs font-mono ${getPriorityStyle(project.priority)}`}>
+                <span className={`text-xs font-mono uppercase ${getPriorityStyle(project.priority)}`}>
                   {project.priority} Priority
                 </span>
               </div>
@@ -192,32 +138,20 @@ export function ProjectsContent() {
               <div className="flex items-center justify-between pt-2 border-t border-border/50">
                 <div className="flex items-center gap-3">
                   <div className="flex -space-x-2">
-                    {project.team.slice(0, 3).map((member, i) => (
-                      <Avatar key={i} className="w-7 h-7 border-2 border-card">
-                        <AvatarImage src={member.avatar} alt={member.name} />
-                        <AvatarFallback className="text-[10px] bg-primary/10 text-primary">{member.initials}</AvatarFallback>
-                      </Avatar>
-                    ))}
-                    {project.team.length > 3 && (
-                      <div className="w-7 h-7 rounded-full bg-primary/20 border-2 border-card flex items-center justify-center text-[10px] font-mono text-primary">
-                        +{project.team.length - 3}
-                      </div>
-                    )}
+                    <Avatar className="w-7 h-7 border-2 border-card">
+                      <AvatarFallback className="text-[10px] bg-primary/10 text-primary">U</AvatarFallback>
+                    </Avatar>
                   </div>
                   <span className="text-xs text-muted-foreground flex items-center gap-1">
                     <Users className="w-3.5 h-3.5" />
-                    {project.team.length}
+                    1
                   </span>
                 </div>
 
-                <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                <div className="flex items-center gap-4 text-xs text-muted-foreground font-mono">
                   <span className="flex items-center gap-1">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-primary" />
-                    {project.tasks.completed}/{project.tasks.total}
-                  </span>
-                  <span className="flex items-center gap-1 font-mono">
                     <Clock className="w-3.5 h-3.5" />
-                    {project.dueDate}
+                    {project.endDate ? new Date(project.endDate).toLocaleDateString() : "No date"}
                   </span>
                 </div>
               </div>

@@ -9,26 +9,44 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Plus, Layers, Calendar, Users, AlertCircle } from "lucide-react"
 
+import { useTransition } from "react"
+import { createProject } from "@/lib/actions/project-actions"
+import { toast } from "sonner"
+
 interface AddProjectModalProps {
   children: React.ReactNode
 }
 
 export function AddProjectModal({ children }: AddProjectModalProps) {
   const [open, setOpen] = useState(false)
+  const [isPending, startTransition] = useTransition()
   const [formData, setFormData] = useState({
     name: "",
     description: "",
-    priority: "",
+    priority: "medium",
     dueDate: "",
     team: "",
   })
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    // Handle form submission
-    console.log("Project created:", formData)
-    setOpen(false)
-    setFormData({ name: "", description: "", priority: "", dueDate: "", team: "" })
+    
+    startTransition(async () => {
+      const result = await createProject({
+        name: formData.name,
+        description: formData.description,
+        priority: formData.priority,
+        dueDate: formData.dueDate,
+      })
+
+      if (result.success) {
+        toast.success("Project created successfully!")
+        setOpen(false)
+        setFormData({ name: "", description: "", priority: "medium", dueDate: "", team: "" })
+      } else {
+        toast.error("Failed to create project")
+      }
+    })
   }
 
   return (
@@ -137,10 +155,17 @@ export function AddProjectModal({ children }: AddProjectModalProps) {
             </Button>
             <Button
               type="submit"
+              disabled={isPending}
               className="flex-1 bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 shadow-lg shadow-primary/20"
             >
-              <Plus className="w-4 h-4 mr-2" />
-              Create Project
+              {isPending ? (
+                "Creating..."
+              ) : (
+                <>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Create Project
+                </>
+              )}
             </Button>
           </div>
         </form>

@@ -4,7 +4,12 @@ import { TasksContent } from "@/components/tasks/tasks-content"
 import { Button } from "@/components/ui/button"
 import { AddTaskModal } from "@/components/modals/add-task-modal"
 
-export default function TasksPage() {
+import { getProjects, getTasks } from "@/lib/actions/project-actions"
+
+export default async function TasksPage() {
+  const projects = await getProjects()
+  const tasks = await getTasks()
+
   return (
     <div className="flex min-h-screen bg-background">
       <div className="hidden lg:block">
@@ -16,7 +21,7 @@ export default function TasksPage() {
           title="Task Control"
           description="Manage and organize your tasks efficiently."
           actions={
-            <AddTaskModal>
+            <AddTaskModal projects={projects}>
               <Button className="w-full sm:w-auto h-10 text-sm bg-gradient-to-r from-primary to-primary/80 text-primary-foreground hover:from-primary/90 hover:to-primary/70 transition-all duration-300 shadow-lg shadow-primary/30 hover:shadow-xl hover:shadow-primary/40 hover:scale-105 border border-primary/50">
                 + Add Task
               </Button>
@@ -25,7 +30,7 @@ export default function TasksPage() {
         />
 
         <div className="mt-6">
-          <TasksContent />
+          <TasksContent tasks={tasks} />
         </div>
       </main>
     </div>

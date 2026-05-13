@@ -2,83 +2,46 @@
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Search, Filter, Calendar, Tag, SlidersHorizontal } from "lucide-react"
-import { useState } from "react"
+import { Search, Calendar, Tag, SlidersHorizontal } from "lucide-react"
+import { useState, useTransition } from "react"
+import { toggleTaskStatus } from "@/lib/actions/project-actions"
 
-const tasks = [
-  {
-    id: 1,
-    title: "Design landing page mockup",
-    project: "Website Redesign",
-    priority: "High",
-    dueDate: "Dec 24, 2026",
-    completed: false,
-    tags: ["Design", "UI/UX"],
-  },
-  {
-    id: 2,
-    title: "Implement authentication flow",
-    project: "Mobile App",
-    priority: "High",
-    dueDate: "Dec 25, 2026",
-    completed: false,
-    tags: ["Backend", "Security"],
-  },
-  {
-    id: 3,
-    title: "Review pull requests",
-    project: "Github Project",
-    priority: "Medium",
-    dueDate: "Dec 23, 2026",
-    completed: true,
-    tags: ["Code Review"],
-  },
-  {
-    id: 4,
-    title: "Update documentation",
-    project: "API Development",
-    priority: "Low",
-    dueDate: "Dec 26, 2026",
-    completed: false,
-    tags: ["Documentation"],
-  },
-  {
-    id: 5,
-    title: "Fix responsive layout issues",
-    project: "Website Redesign",
-    priority: "High",
-    dueDate: "Dec 24, 2026",
-    completed: false,
-    tags: ["Frontend", "Bug"],
-  },
-  {
-    id: 6,
-    title: "Database optimization",
-    project: "Backend System",
-    priority: "Medium",
-    dueDate: "Dec 27, 2026",
-    completed: false,
-    tags: ["Database", "Performance"],
-  },
-]
+interface Task {
+  id: string
+  title: string
+  priority: string
+  dueDate: Date | null
+  status: string
+  project?: { name: string }
+}
 
-export function TasksContent() {
+interface TasksContentProps {
+  tasks: Task[]
+}
+
+export function TasksContent({ tasks }: TasksContentProps) {
   const [filter, setFilter] = useState("all")
+  const [isPending, startTransition] = useTransition()
+
+  const handleToggle = (taskId: string, currentStatus: string) => {
+    startTransition(async () => {
+      await toggleTaskStatus(taskId, currentStatus !== "COMPLETED")
+    })
+  }
 
   const filteredTasks =
     filter === "all"
       ? tasks
       : filter === "completed"
-        ? tasks.filter((t) => t.completed)
-        : tasks.filter((t) => !t.completed)
+        ? tasks.filter((t) => t.status === "COMPLETED")
+        : tasks.filter((t) => t.status !== "COMPLETED")
 
   const getPriorityStyle = (priority: string) => {
-    switch (priority) {
-      case "High":
+    switch (priority.toUpperCase()) {
+      case "HIGH":
         return "bg-destructive/20 text-destructive border-destructive/30"
-      case "Medium":
+      case "MEDIUM":
         return "bg-chart-4/20 text-chart-4 border-chart-4/30"
       default:
         return "bg-primary/20 text-primary border-primary/30"
@@ -110,8 +73,8 @@ export function TasksContent() {
       <div className="flex gap-2 flex-wrap">
         {[
           { key: "all", label: `All (${tasks.length})` },
-          { key: "active", label: `Active (${tasks.filter((t) => !t.completed).length})` },
-          { key: "completed", label: `Completed (${tasks.filter((t) => t.completed).length})` },
+          { key: "active", label: `Active (${tasks.filter((t) => t.status !== "COMPLETED").length})` },
+          { key: "completed", label: `Completed (${tasks.filter((t) => t.status === "COMPLETED").length})` },
         ].map((tab) => (
           <Button
             key={tab.key}
@@ -129,6 +92,9 @@ export function TasksContent() {
       </div>
 
       <div className="grid gap-3">
+        {tasks.length === 0 && (
+          <p className="text-sm text-muted-foreground text-center py-8 italic">No tasks found. Create one to get started!</p>
+        )}
         {filteredTasks.map((task, index) => (
           <div
             key={task.id}
@@ -137,12 +103,14 @@ export function TasksContent() {
           >
             <div className="flex items-start gap-4">
               <Checkbox 
-                checked={task.completed} 
+                checked={task.status === "COMPLETED"} 
+                onCheckedChange={() => handleToggle(task.id, task.status)}
+                disabled={isPending}
                 className="mt-1 border-primary/30 data-[state=checked]:bg-primary data-[state=checked]:border-primary" 
               />
               <div className="flex-1 space-y-2">
                 <div className="flex items-start justify-between gap-4">
-                  <h3 className={`font-semibold text-foreground ${task.completed ? "line-through opacity-60" : ""}`}>
+                  <h3 className={`font-semibold text-foreground ${task.status === "COMPLETED" ? "line-through opacity-60" : ""}`}>
                     {task.title}
                   </h3>
                   <span className={`text-[10px] px-2 py-0.5 rounded border font-mono uppercase ${getPriorityStyle(task.priority)}`}>
@@ -150,21 +118,16 @@ export function TasksContent() {
                   </span>
                 </div>
                 <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
-                  <span className="flex items-center gap-1.5 font-mono text-xs">
-                    <Tag className="w-3.5 h-3.5 text-primary" />
-                    {task.project}
-                  </span>
+                  {task.project && (
+                    <span className="flex items-center gap-1.5 font-mono text-xs">
+                      <Tag className="w-3.5 h-3.5 text-primary" />
+                      {task.project.name}
+                    </span>
+                  )}
                   <span className="flex items-center gap-1.5 font-mono text-xs">
                     <Calendar className="w-3.5 h-3.5 text-primary" />
-                    {task.dueDate}
+                    {task.dueDate ? new Date(task.dueDate).toLocaleDateString() : "No date"}
                   </span>
-                </div>
-                <div className="flex gap-2">
-                  {task.tags.map((tag) => (
-                    <Badge key={tag} variant="outline" className="text-[10px] glass border-border/30 font-mono">
-                      {tag}
-                    </Badge>
-                  ))}
                 </div>
               </div>
             </div>

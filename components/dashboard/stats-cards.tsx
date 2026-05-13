@@ -3,51 +3,62 @@
 import { Cpu, CheckCircle2, Activity, Clock } from "lucide-react"
 import { useState } from "react"
 
-const stats = [
-  {
-    title: "Total Projects",
-    value: "24",
-    percentage: "87%",
-    subtitle: "12 Core Systems",
-    icon: Cpu,
-    isPrimary: true,
-    delay: "0ms",
-  },
-  {
-    title: "Completed",
-    value: "10",
-    percentage: "73%",
-    subtitle: "This Quarter",
-    icon: CheckCircle2,
-    isPrimary: false,
-    delay: "100ms",
-  },
-  {
-    title: "In Progress",
-    value: "12",
-    percentage: "92%",
-    subtitle: "Active Now",
-    icon: Activity,
-    isPrimary: false,
-    delay: "200ms",
-  },
-  {
-    title: "Pending",
-    value: "2",
-    percentage: "15%",
-    subtitle: "Awaiting Review",
-    icon: Clock,
-    isPrimary: false,
-    delay: "300ms",
-  },
-]
+interface DashboardStats {
+  totalProjects: number
+  completedProjects: number
+  activeProjects: number
+  pendingTasks: number
+}
 
-export function StatsCards() {
+interface StatsCardsProps {
+  stats: DashboardStats
+}
+
+export function StatsCards({ stats }: StatsCardsProps) {
   const [hoveredCard, setHoveredCard] = useState<number | null>(null)
+
+  const cards = [
+    {
+      title: "Total Projects",
+      value: stats.totalProjects.toString(),
+      percentage: "100%",
+      subtitle: "All Systems",
+      icon: Cpu,
+      isPrimary: true,
+      delay: "0ms",
+    },
+    {
+      title: "Completed",
+      value: stats.completedProjects.toString(),
+      percentage: stats.totalProjects > 0 ? `${Math.round((stats.completedProjects / stats.totalProjects) * 100)}%` : "0%",
+      subtitle: "Finished",
+      icon: CheckCircle2,
+      isPrimary: false,
+      delay: "100ms",
+    },
+    {
+      title: "Active Now",
+      value: stats.activeProjects.toString(),
+      percentage: stats.totalProjects > 0 ? `${Math.round((stats.activeProjects / stats.totalProjects) * 100)}%` : "0%",
+      subtitle: "In Progress",
+      icon: Activity,
+      isPrimary: false,
+      delay: "200ms",
+    },
+    {
+      title: "Pending Tasks",
+      value: stats.pendingTasks.toString(),
+      percentage: stats.pendingTasks > 0 ? "!" : "0",
+      subtitle: "Awaiting Action",
+      icon: Clock,
+      isPrimary: false,
+      delay: "300ms",
+    },
+  ]
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-      {stats.map((stat, index) => (
+      {cards.map((stat, index) => (
         <div
           key={stat.title}
           onMouseEnter={() => setHoveredCard(index)}

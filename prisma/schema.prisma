@@ -1,0 +1,197 @@
+datasource db {
+    provider = "postgresql"
+}
+
+generator client {
+    provider = "prisma-client-js"
+}
+
+// User model
+model User {
+    id        String   @id @default(cuid())
+    email     String   @unique
+    name      String?
+    password  String?
+    avatar    String?
+    role      UserRole @default(USER)
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    projects      Project[]
+    tasks         Task[]
+    teamMembers   TeamMember[]
+    notifications Notification[]
+    timeEntries   TimeEntry[]
+
+    @@map("users")
+}
+
+enum UserRole {
+    ADMIN
+    USER
+    GUEST
+}
+
+model Project {
+    id          String    @id @default(cuid())
+    name        String
+    description String?
+    status      String    @default("active")
+    priority    String    @default("medium")
+    startDate   DateTime?
+    endDate     DateTime?
+    progress    Int       @default(0)
+    owner       User      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+    ownerId     String
+    createdAt   DateTime  @default(now())
+    updatedAt   DateTime  @updatedAt
+
+    tasks     Task[]
+    members   ProjectMember[]
+    analytics Analytics?
+
+    @@map("projects")
+}
+
+model ProjectMember {
+    id        String   @id @default(cuid())
+    project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+    projectId String
+    role      String   @default("member")
+    joinedAt  DateTime @default(now())
+
+    @@unique([projectId])
+    @@map("project_members")
+}
+
+model Task {
+    id          String     @id @default(cuid())
+    title       String
+    description String?
+    status      TaskStatus @default(TODO)
+    priority    String     @default("medium")
+    dueDate     DateTime?
+    project     Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+    projectId   String
+    assignee    User?      @relation(fields: [assigneeId], references: [id], onDelete: SetNull)
+    assigneeId  String?
+    createdAt   DateTime   @default(now())
+    updatedAt   DateTime   @updatedAt
+
+    subtasks    Subtask[]
+    reminders   Reminder[]
+    timeEntries TimeEntry[]
+
+    @@map("tasks")
+}
+
+enum TaskStatus {
+    TODO
+    IN_PROGRESS
+    IN_REVIEW
+    COMPLETED
+    ARCHIVED
+}
+
+model Subtask {
+    id        String   @id @default(cuid())
+    title     String
+    completed Boolean  @default(false)
+    task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+    taskId    String
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    @@map("subtasks")
+}
+
+model Team {
+    id          String   @id @default(cuid())
+    name        String
+    description String?
+    createdAt   DateTime @default(now())
+    updatedAt   DateTime @updatedAt
+
+    @@map("teams")
+}
+
+model TeamMember {
+    id     String @id @default(cuid())
+    user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+    userId String
+    role   String @default("member")
+
+    @@unique([userId])
+    @@map("team_members")
+}
+
+model CalendarEvent {
+    id          String   @id @default(cuid())
+    title       String
+    description String?
+    startTime   DateTime
+    endTime     DateTime
+    allDay      Boolean  @default(false)
+    type        String   @default("task")
+    createdAt   DateTime @default(now())
+    updatedAt   DateTime @updatedAt
+
+    @@map("calendar_events")
+}
+
+model TimeEntry {
+    id        String   @id @default(cuid())
+    task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+    taskId    String
+    user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+    userId    String
+    duration  Int
+    notes     String?
+    startTime DateTime
+    endTime   DateTime
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    @@map("time_entries")
+}
+
+model Reminder {
+    id        String   @id @default(cuid())
+    task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+    taskId    String
+    message   String
+    dueTime   DateTime
+    sent      Boolean  @default(false)
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    @@map("reminders")
+}
+
+model Notification {
+    id        String   @id @default(cuid())
+    user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+    userId    String
+    title     String
+    message   String
+    type      String   @default("info")
+    read      Boolean  @default(false)
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    @@map("notifications")
+}
+
+model Analytics {
+    id             String   @id @default(cuid())
+    project        Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+    projectId      String   @unique
+    tasksCompleted Int      @default(0)
+    tasksTotal     Int      @default(0)
+    timeSpent      Int      @default(0)
+    teamSize       Int      @default(0)
+    createdAt      DateTime @default(now())
+    updatedAt      DateTime @updatedAt
+
+    @@map("analytics")
+}

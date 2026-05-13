@@ -4,7 +4,11 @@ import { ProjectsContent } from "@/components/projects/projects-content"
 import { Button } from "@/components/ui/button"
 import { AddProjectModal } from "@/components/modals/add-project-modal"
 
-export default function ProjectsPage() {
+import { getProjects } from "@/lib/actions/project-actions"
+
+export default async function ProjectsPage() {
+  const projects = await getProjects()
+
   return (
     <div className="flex min-h-screen bg-background">
       <div className="hidden lg:block">
@@ -25,7 +29,7 @@ export default function ProjectsPage() {
         />
 
         <div className="mt-6">
-          <ProjectsContent />
+          <ProjectsContent projects={projects} />
         </div>
       </main>
     </div>

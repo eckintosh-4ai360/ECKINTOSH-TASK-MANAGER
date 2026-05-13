@@ -12,7 +12,14 @@ import { Button } from "@/components/ui/button"
 import { AddProjectModal } from "@/components/modals/add-project-modal"
 import { ImportDataModal } from "@/components/modals/import-data-modal"
 
-export default function DashboardPage() {
+import { getDashboardStats, getProjects } from "@/lib/actions/project-actions"
+
+export default async function DashboardPage() {
+  const [projects, stats] = await Promise.all([
+    getProjects(),
+    getDashboardStats(),
+  ])
+
   return (
     <div className="flex min-h-screen bg-background">
       <div className="hidden lg:block">
@@ -43,7 +50,7 @@ export default function DashboardPage() {
         />
 
         <div className="mt-4 md:mt-5 space-y-3 md:space-y-4">
-          <StatsCards />
+          <StatsCards stats={stats} />
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 md:gap-4">
             <div className="lg:col-span-2 space-y-3 md:space-y-4">
@@ -58,7 +65,7 @@ export default function DashboardPage() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
-            <ProjectList />
+            <ProjectList projects={projects} />
             <MobileAppCard />
             <TimeTracker />
           </div>

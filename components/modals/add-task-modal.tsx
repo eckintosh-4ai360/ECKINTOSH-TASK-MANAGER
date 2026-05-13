@@ -9,26 +9,56 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Plus, CheckSquare, Calendar, Tag, Folder } from "lucide-react"
 
-interface AddTaskModalProps {
-  children: React.ReactNode
+import { useTransition } from "react"
+import { createTask } from "@/lib/actions/project-actions"
+import { toast } from "sonner"
+
+interface Project {
+  id: string
+  name: string
 }
 
-export function AddTaskModal({ children }: AddTaskModalProps) {
+interface AddTaskModalProps {
+  children: React.ReactNode
+  projects: Project[]
+}
+
+export function AddTaskModal({ children, projects }: AddTaskModalProps) {
   const [open, setOpen] = useState(false)
+  const [isPending, startTransition] = useTransition()
   const [formData, setFormData] = useState({
     title: "",
     description: "",
-    project: "",
-    priority: "",
+    projectId: "",
+    priority: "medium",
     dueDate: "",
     tags: "",
   })
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    console.log("Task created:", formData)
-    setOpen(false)
-    setFormData({ title: "", description: "", project: "", priority: "", dueDate: "", tags: "" })
+    
+    if (!formData.projectId) {
+      toast.error("Please select a project")
+      return
+    }
+
+    startTransition(async () => {
+      const result = await createTask({
+        title: formData.title,
+        projectId: formData.projectId,
+        priority: formData.priority,
+        dueDate: formData.dueDate,
+      })
+
+      if (result.success) {
+        toast.success("Task added successfully!")
+        setOpen(false)
+        setFormData({ title: "", description: "", projectId: "", priority: "medium", dueDate: "", tags: "" })
+      } else {
+        toast.error("Failed to add task")
+      }
+    })
   }
 
   return (
@@ -79,17 +109,21 @@ export function AddTaskModal({ children }: AddTaskModalProps) {
                 Project
               </Label>
               <Select
-                value={formData.project}
-                onValueChange={(value) => setFormData({ ...formData, project: value })}
+                value={formData.projectId}
+                onValueChange={(value) => setFormData({ ...formData, projectId: value })}
               >
                 <SelectTrigger className="glass border-border/50 focus:border-primary/50 h-11">
                   <SelectValue placeholder="Select project" />
                 </SelectTrigger>
                 <SelectContent className="glass-card border-primary/20">
-                  <SelectItem value="website">Website Redesign</SelectItem>
-                  <SelectItem value="mobile">Mobile App</SelectItem>
-                  <SelectItem value="api">API Development</SelectItem>
-                  <SelectItem value="backend">Backend System</SelectItem>
+                  {projects.map((project) => (
+                    <SelectItem key={project.id} value={project.id}>
+                      {project.name}
+                    </SelectItem>
+                  ))}
+                  {projects.length === 0 && (
+                    <SelectItem value="none" disabled>No projects found</SelectItem>
+                  )}
                 </SelectContent>
               </Select>
             </div>
@@ -155,10 +189,17 @@ export function AddTaskModal({ children }: AddTaskModalProps) {
             </Button>
             <Button
               type="submit"
+              disabled={isPending}
               className="flex-1 bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 shadow-lg shadow-primary/20"
             >
-              <Plus className="w-4 h-4 mr-2" />
-              Add Task
+              {isPending ? (
+                "Adding..."
+              ) : (
+                <>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Task
+                </>
+              )}
             </Button>
           </div>
         </form>
