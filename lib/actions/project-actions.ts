@@ -52,14 +52,10 @@ export async function getProjects() {
     const projects = await prisma.project.findMany({
       include: {
         _count: {
-          select: { tasks: true, members: true, sprints: true },
+          select: { tasks: true, members: true },
         },
         tasks: {
           where: { status: "COMPLETED" },
-          select: { id: true },
-        },
-        sprints: {
-          where: { status: "ACTIVE" },
           select: { id: true },
         },
       },
@@ -148,15 +144,22 @@ export async function updateTaskStatus(taskId: string, status: string) {
 
 export async function getDashboardStats() {
   try {
-    const [totalProjects, completedProjects, activeProjects, pendingTasks, activeSprints, teamMembers] =
+    const [totalProjects, completedProjects, activeProjects, pendingTasks, teamMembers] =
       await Promise.all([
         prisma.project.count(),
         prisma.project.count({ where: { status: "completed" } }),
         prisma.project.count({ where: { status: "active" } }),
         prisma.task.count({ where: { status: { in: ["TODO", "BACKLOG"] } } }),
-        prisma.sprint.count({ where: { status: "ACTIVE" } }),
         prisma.user.count(),
       ])
+
+    // Sprint count
+    let activeSprints = 0
+    try {
+      activeSprints = await prisma.sprint.count({ where: { status: "ACTIVE" } })
+    } catch {
+      // fallback if schema not synced
+    }
 
     return {
       totalProjects,

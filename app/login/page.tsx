@@ -12,7 +12,7 @@ export default function LoginPage() {
     setLoading(true)
     setError(null)
     try {
-      await signIn("github", { callbackUrl: "/" })
+      await signIn("github", { callbackUrl: "/auth/complete" })
     } catch {
       setError("Sign-in failed. Please try again.")
       setLoading(false)

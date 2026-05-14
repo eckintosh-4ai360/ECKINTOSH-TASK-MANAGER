@@ -16,6 +16,7 @@ export interface SessionUser {
 }
 
 // ─── Create + store session ───────────────────────────────────────────────────
+// Called by: email/password loginAction AND /auth/complete (OAuth bridge)
 export async function createSession(user: SessionUser) {
   const token = await new SignJWT({ user })
     .setProtectedHeader({ alg: "HS256" })
@@ -34,6 +35,8 @@ export async function createSession(user: SessionUser) {
 }
 
 // ─── Read session ─────────────────────────────────────────────────────────────
+// Reads the custom JWT cookie set by createSession().
+// Both email/password login and GitHub OAuth (via /auth/complete) set this cookie.
 export async function getSession(): Promise<SessionUser | null> {
   try {
     const cookieStore = await cookies()

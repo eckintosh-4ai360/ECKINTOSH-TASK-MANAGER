@@ -7,7 +7,7 @@ const sprints = [
   {
     id: 1,
     name: "Sprint 7 – Auth & Dashboard",
-    project: "DevFlow Platform",
+    project: "Eckintosh Platform",
     projectColor: "#a855f7",
     status: "ACTIVE",
     daysLeft: 4,

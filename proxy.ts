@@ -6,8 +6,10 @@ const JWT_SECRET = new TextEncoder().encode(
 )
 const COOKIE_NAME = "eckintosh_session"
 
-// Public routes that do not require authentication
-const PUBLIC_ROUTES = ["/login"]
+// Routes that do NOT require the custom eckintosh_session cookie.
+// /auth/complete is the OAuth bridge that creates the cookie after GitHub login.
+// /api/auth is NextAuth's endpoint (callback, signin, etc.).
+const PUBLIC_ROUTES = ["/login", "/auth/complete", "/api/auth"]
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
@@ -46,3 +48,4 @@ export const config = {
     "/((?!api|_next/static|_next/image|favicon.ico|.*\\.(?:png|jpg|jpeg|svg|gif|webp|ico)).*)",
   ],
 }
+
