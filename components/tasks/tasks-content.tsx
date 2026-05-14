@@ -6,6 +6,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Search, Calendar, Tag, SlidersHorizontal } from "lucide-react"
 import { useState, useTransition } from "react"
 import { toggleTaskStatus } from "@/lib/actions/project-actions"
+import { useSearch } from "@/components/dashboard/search-context"
 
 interface Task {
   id: string
@@ -23,6 +24,7 @@ interface TasksContentProps {
 export function TasksContent({ tasks }: TasksContentProps) {
   const [filter, setFilter] = useState("all")
   const [isPending, startTransition] = useTransition()
+  const { query, setQuery, matches } = useSearch()
 
   const handleToggle = (taskId: string, currentStatus: string) => {
     startTransition(async () => {
@@ -30,12 +32,16 @@ export function TasksContent({ tasks }: TasksContentProps) {
     })
   }
 
-  const filteredTasks =
+  const baseTasks =
     filter === "all"
       ? tasks
       : filter === "completed"
         ? tasks.filter((t) => t.status === "COMPLETED")
         : tasks.filter((t) => t.status !== "COMPLETED")
+
+  const filteredTasks = baseTasks.filter((t) =>
+    matches(t.title, t.project?.name, t.priority, t.status)
+  )
 
   const getPriorityStyle = (priority: string) => {
     switch (priority.toUpperCase()) {
@@ -55,6 +61,8 @@ export function TasksContent({ tasks }: TasksContentProps) {
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-primary/60" />
           <Input 
             placeholder="Search tasks..." 
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
             className="pl-10 glass border-primary/20 focus:border-primary/50 h-11" 
           />
         </div>

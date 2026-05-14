@@ -2,6 +2,7 @@
 
 import { ClipboardList, Plus, ChevronRight, Smile, Meh, Frown } from "lucide-react"
 import Link from "next/link"
+import { useSearch } from "./search-context"
 
 const standups = [
   {
@@ -51,6 +52,12 @@ const moodMap = {
 }
 
 export function StandupFeed() {
+  const { matches, isSearching } = useSearch()
+
+  const filtered = standups.filter((s) =>
+    matches(s.user, s.project, s.did, s.doing, s.blockers)
+  )
+
   return (
     <div
       className="glass-card rounded-xl p-5 transition-all duration-500 hover:border-primary/30 animate-slide-in-up border border-white/5 h-full"
@@ -72,7 +79,10 @@ export function StandupFeed() {
       </div>
 
       <div className="space-y-3">
-        {standups.map((standup) => {
+        {filtered.length === 0 && isSearching && (
+          <p className="text-xs text-muted-foreground text-center py-6 italic">No standups match your search.</p>
+        )}
+        {filtered.map((standup) => {
           const mood = moodMap[standup.mood as keyof typeof moodMap] ?? moodMap[3]
           const MoodIcon = mood.icon
           return (

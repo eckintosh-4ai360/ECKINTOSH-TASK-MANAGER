@@ -2,10 +2,11 @@
 
 import { useState, useRef, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { Search, Bell, Moon, Sun, LogOut, User, Settings, ShieldCheck, ChevronDown } from "lucide-react"
+import { Search, Bell, Moon, Sun, LogOut, User, Settings, ShieldCheck, ChevronDown, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { MobileNav } from "./mobile-nav"
+import { useSearch } from "./search-context"
 import { cn } from "@/lib/utils"
 import type { ReactNode } from "react"
 
@@ -31,7 +32,25 @@ export function Header({ title, description, actions, user }: HeaderProps) {
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const [darkMode, setDarkMode] = useState(true)
   const dropdownRef = useRef<HTMLDivElement>(null)
+  const searchInputRef = useRef<HTMLInputElement>(null)
   const router = useRouter()
+  const { query, setQuery, isSearching } = useSearch()
+
+  // ⌘F / Ctrl+F keyboard shortcut to focus the search bar
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key === "f") {
+        e.preventDefault()
+        searchInputRef.current?.focus()
+      }
+      if (e.key === "Escape" && isSearching) {
+        setQuery("")
+        searchInputRef.current?.blur()
+      }
+    }
+    document.addEventListener("keydown", handleKeyDown)
+    return () => document.removeEventListener("keydown", handleKeyDown)
+  }, [isSearching, setQuery])
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -59,14 +78,34 @@ export function Header({ title, description, actions, user }: HeaderProps) {
         <div className="flex items-center gap-3 flex-1">
           <MobileNav />
           <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-primary/60" />
+            <Search className={cn(
+              "absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 transition-colors duration-200",
+              isSearching ? "text-primary" : "text-primary/60"
+            )} />
             <Input
-              placeholder="Search systems..."
-              className="pl-10 pr-3 md:pr-16 h-10 text-sm glass border-primary/20 transition-all duration-300 focus:border-primary/50 focus:shadow-lg focus:shadow-primary/20 placeholder:text-muted-foreground/50"
+              ref={searchInputRef}
+              placeholder="Search projects, sprints, team…"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              className={cn(
+                "pl-10 h-10 text-sm glass transition-all duration-300 placeholder:text-muted-foreground/50",
+                isSearching
+                  ? "pr-9 border-primary/50 shadow-lg shadow-primary/20 bg-primary/5"
+                  : "pr-3 md:pr-16 border-primary/20 focus:border-primary/50 focus:shadow-lg focus:shadow-primary/20"
+              )}
             />
-            <kbd className="hidden md:inline-block absolute right-3 top-1/2 -translate-y-1/2 px-2 py-0.5 text-[10px] font-mono font-semibold text-primary/60 bg-primary/10 rounded border border-primary/20">
-              ⌘F
-            </kbd>
+            {isSearching ? (
+              <button
+                onClick={() => { setQuery(""); searchInputRef.current?.focus() }}
+                className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-primary/20 hover:bg-primary/30 flex items-center justify-center transition-all duration-200"
+              >
+                <X className="w-3 h-3 text-primary" />
+              </button>
+            ) : (
+              <kbd className="hidden md:inline-block absolute right-3 top-1/2 -translate-y-1/2 px-2 py-0.5 text-[10px] font-mono font-semibold text-primary/60 bg-primary/10 rounded border border-primary/20">
+                ⌘F
+              </kbd>
+            )}
           </div>
         </div>
 

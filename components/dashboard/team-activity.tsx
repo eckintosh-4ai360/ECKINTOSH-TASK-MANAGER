@@ -2,6 +2,7 @@
 
 import { Users, GitCommit, Clock, CheckCircle2 } from "lucide-react"
 import Link from "next/link"
+import { useSearch } from "./search-context"
 
 const teamMembers = [
   {
@@ -55,6 +56,12 @@ const teamMembers = [
 ]
 
 export function TeamActivity() {
+  const { matches, isSearching } = useSearch()
+
+  const filtered = teamMembers.filter((m) =>
+    matches(m.name, m.role, m.project)
+  )
+
   return (
     <div
       className="glass-card rounded-xl p-5 transition-all duration-500 hover:border-primary/30 animate-slide-in-up border border-white/5"
@@ -73,7 +80,7 @@ export function TeamActivity() {
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1 text-[10px] text-emerald-400">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            {teamMembers.filter((m) => m.online).length} online
+            {filtered.filter((m) => m.online).length} online
           </div>
           <Link href="/team" className="text-xs text-primary hover:text-primary/80 transition-colors ml-2">
             Manage →
@@ -82,7 +89,10 @@ export function TeamActivity() {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-        {teamMembers.map((member) => (
+        {filtered.length === 0 && isSearching && (
+          <p className="text-xs text-muted-foreground text-center py-6 italic col-span-full">No team members match your search.</p>
+        )}
+        {filtered.map((member) => (
           <div
             key={member.id}
             className="rounded-xl p-4 border border-white/5 bg-white/[0.02] hover:bg-white/[0.04] hover:border-white/15 transition-all duration-200 cursor-pointer group"

@@ -2,6 +2,7 @@
 
 import { Rocket, CheckCircle2, XCircle, Clock, RefreshCw, ChevronRight } from "lucide-react"
 import Link from "next/link"
+import { useSearch } from "./search-context"
 
 const deployments = [
   {
@@ -84,6 +85,12 @@ const envConfig: Record<string, string> = {
 }
 
 export function DeploymentFeed() {
+  const { matches, isSearching } = useSearch()
+
+  const filtered = deployments.filter((d) =>
+    matches(d.project, d.version, d.environment, d.status)
+  )
+
   return (
     <div
       className="glass-card rounded-xl p-5 transition-all duration-500 hover:border-primary/30 animate-slide-in-up border border-white/5 h-full"
@@ -108,7 +115,10 @@ export function DeploymentFeed() {
       </div>
 
       <div className="space-y-2.5">
-        {deployments.map((deploy) => {
+        {filtered.length === 0 && isSearching && (
+          <p className="text-xs text-muted-foreground text-center py-6 italic">No deployments match your search.</p>
+        )}
+        {filtered.map((deploy) => {
           const cfg = statusConfig[deploy.status as keyof typeof statusConfig]
           const StatusIcon = cfg.icon
           const isRunning = deploy.status === "running"

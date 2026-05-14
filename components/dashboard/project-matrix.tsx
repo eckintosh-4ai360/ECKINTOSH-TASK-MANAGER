@@ -2,6 +2,7 @@
 
 import { Layers, ChevronRight, ExternalLink } from "lucide-react"
 import Link from "next/link"
+import { useSearch } from "./search-context"
 
 interface Project {
   id: string
@@ -40,7 +41,12 @@ const fallbackProjects = [
 ]
 
 export function ProjectMatrix({ projects }: ProjectMatrixProps) {
-  const displayProjects = projects.length > 0 ? projects : fallbackProjects
+  const { matches, isSearching } = useSearch()
+
+  const allProjects = projects.length > 0 ? projects : fallbackProjects
+  const displayProjects = allProjects.filter((p) =>
+    matches(p.name, p.status, p.priority)
+  )
 
   return (
     <div
@@ -63,6 +69,9 @@ export function ProjectMatrix({ projects }: ProjectMatrixProps) {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {displayProjects.length === 0 && isSearching && (
+          <p className="text-xs text-muted-foreground text-center py-6 italic col-span-full">No projects match your search.</p>
+        )}
         {displayProjects.slice(0, 6).map((project, i) => {
           const color = projectColors[i % projectColors.length]
           const progress = project.progress ?? 0

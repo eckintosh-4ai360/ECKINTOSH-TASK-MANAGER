@@ -142,6 +142,23 @@ export async function updateTaskStatus(taskId: string, status: string) {
   }
 }
 
+export async function toggleTaskStatus(taskId: string, isCompleted: boolean) {
+  try {
+    const task = await prisma.task.update({
+      where: { id: taskId },
+      data: { status: isCompleted ? "COMPLETED" : "TODO" },
+    })
+
+    revalidatePath("/")
+    revalidatePath("/tasks")
+
+    return { success: true, task }
+  } catch (error) {
+    console.error("Failed to toggle task status:", error)
+    return { success: false }
+  }
+}
+
 export async function getDashboardStats() {
   try {
     const [totalProjects, completedProjects, activeProjects, pendingTasks, teamMembers] =

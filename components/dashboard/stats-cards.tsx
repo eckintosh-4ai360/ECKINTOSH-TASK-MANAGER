@@ -27,6 +27,8 @@ export function StatsCards({ stats }: StatsCardsProps) {
       color: "primary",
       gradient: "from-primary/20 to-primary/5",
       iconBg: "from-primary to-primary/60",
+      borderDefault: "border-primary/20",
+      borderHover: "border-primary/50 shadow-primary/20",
       delay: "0ms",
     },
     {
@@ -38,6 +40,8 @@ export function StatsCards({ stats }: StatsCardsProps) {
       color: "chart-2",
       gradient: "from-chart-2/20 to-chart-2/5",
       iconBg: "from-chart-2 to-chart-2/60",
+      borderDefault: "border-chart-2/20",
+      borderHover: "border-chart-2/50 shadow-chart-2/20",
       delay: "80ms",
     },
     {
@@ -49,6 +53,8 @@ export function StatsCards({ stats }: StatsCardsProps) {
       color: "chart-3",
       gradient: "from-chart-3/20 to-chart-3/5",
       iconBg: "from-chart-3 to-chart-3/60",
+      borderDefault: "border-chart-3/20",
+      borderHover: "border-chart-3/50 shadow-chart-3/20",
       delay: "160ms",
     },
     {
@@ -60,6 +66,8 @@ export function StatsCards({ stats }: StatsCardsProps) {
       color: "chart-4",
       gradient: "from-chart-4/20 to-chart-4/5",
       iconBg: "from-chart-4 to-chart-4/60",
+      borderDefault: "border-chart-4/20",
+      borderHover: "border-chart-4/50 shadow-chart-4/20",
       delay: "240ms",
     },
     {
@@ -71,6 +79,8 @@ export function StatsCards({ stats }: StatsCardsProps) {
       color: "chart-5",
       gradient: "from-chart-5/20 to-chart-5/5",
       iconBg: "from-chart-5 to-chart-5/60",
+      borderDefault: "border-chart-5/20",
+      borderHover: "border-chart-5/50 shadow-chart-5/20",
       delay: "320ms",
     },
     {
@@ -82,6 +92,8 @@ export function StatsCards({ stats }: StatsCardsProps) {
       color: "primary",
       gradient: "from-primary/10 to-transparent",
       iconBg: "from-primary/80 to-primary/40",
+      borderDefault: "border-primary/20",
+      borderHover: "border-primary/50 shadow-primary/20",
       delay: "400ms",
     },
   ]
@@ -96,8 +108,8 @@ export function StatsCards({ stats }: StatsCardsProps) {
           style={{ animationDelay: stat.delay }}
           className={`glass-card rounded-xl p-4 transition-all duration-300 ease-out animate-slide-in-up cursor-pointer relative overflow-hidden border ${
             hoveredCard === index
-              ? "scale-[1.03] shadow-2xl shadow-primary/20 border-primary/40"
-              : "border-white/5"
+              ? `scale-[1.03] shadow-sm ${stat.borderHover}`
+              : stat.borderDefault
           }`}
         >
           <div className={`absolute inset-0 bg-gradient-to-br ${stat.gradient} pointer-events-none opacity-60`} />

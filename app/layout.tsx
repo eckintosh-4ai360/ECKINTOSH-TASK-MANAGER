@@ -4,6 +4,7 @@ import { Geist, Geist_Mono } from "next/font/google"
 import { Analytics } from "@vercel/analytics/next"
 import { ThemeProvider } from "@/components/theme-provider"
 import { AuthProvider } from "@/components/auth-provider"
+import { SearchProvider } from "@/components/dashboard/search-context"
 import "./globals.css"
 
 const _geist = Geist({ subsets: ["latin"] })
@@ -42,7 +43,9 @@ export default function RootLayout({
       <body className={`font-sans antialiased bg-background futuristic-grid`}>
         <ThemeProvider defaultTheme="dark" storageKey="eckintosh-theme">
           <AuthProvider>
-            {children}
+            <SearchProvider>
+              {children}
+            </SearchProvider>
           </AuthProvider>
         </ThemeProvider>
         <Analytics />

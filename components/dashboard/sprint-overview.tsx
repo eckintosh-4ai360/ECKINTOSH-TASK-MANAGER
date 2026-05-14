@@ -2,6 +2,7 @@
 
 import { Zap, Calendar, ChevronRight, Clock, CheckCircle2, Circle, AlertCircle } from "lucide-react"
 import Link from "next/link"
+import { useSearch } from "./search-context"
 
 const sprints = [
   {
@@ -46,6 +47,9 @@ const sprints = [
 ]
 
 export function SprintOverview() {
+  const { matches, isSearching } = useSearch()
+
+  const filtered = sprints.filter((s) => matches(s.name, s.project, s.status))
   return (
     <div
       className="glass-card rounded-xl p-5 transition-all duration-500 hover:border-primary/30 animate-slide-in-up border border-white/5"
@@ -70,7 +74,10 @@ export function SprintOverview() {
       </div>
 
       <div className="space-y-3">
-        {sprints.map((sprint) => {
+        {filtered.length === 0 && isSearching && (
+          <p className="text-xs text-muted-foreground text-center py-6 italic">No sprints match your search.</p>
+        )}
+        {filtered.map((sprint) => {
           const progress = sprint.totalTasks > 0 ? Math.round((sprint.doneTasks / sprint.totalTasks) * 100) : 0
           const isUrgent = sprint.daysLeft <= 3 && sprint.status === "ACTIVE"
 
