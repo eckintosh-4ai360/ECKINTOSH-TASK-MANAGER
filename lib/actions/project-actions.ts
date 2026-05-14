@@ -3,15 +3,15 @@
 import prisma from "@/lib/prisma"
 import { revalidatePath } from "next/cache"
 
-// Helper to get or create a default user for demonstration purposes
-// In a real app, this would use the authenticated user's ID
+// Helper to get or create a default user
 async function getDefaultUser() {
   let user = await prisma.user.findFirst()
   if (!user) {
     user = await prisma.user.create({
       data: {
-        email: "default@example.com",
-        name: "Default User",
+        email: "eckintosh@devflow.dev",
+        name: "Eckintosh",
+        title: "Lead Dev / Full Stack",
       },
     })
   }
@@ -26,7 +26,7 @@ export async function createProject(formData: {
 }) {
   try {
     const user = await getDefaultUser()
-    
+
     const project = await prisma.project.create({
       data: {
         name: formData.name,
@@ -39,7 +39,7 @@ export async function createProject(formData: {
 
     revalidatePath("/")
     revalidatePath("/projects")
-    
+
     return { success: true, project }
   } catch (error) {
     console.error("Failed to create project:", error)
@@ -52,25 +52,28 @@ export async function getProjects() {
     const projects = await prisma.project.findMany({
       include: {
         _count: {
-          select: { tasks: true }
+          select: { tasks: true, members: true, sprints: true },
         },
         tasks: {
           where: { status: "COMPLETED" },
-          select: { id: true }
-        }
+          select: { id: true },
+        },
+        sprints: {
+          where: { status: "ACTIVE" },
+          select: { id: true },
+        },
       },
       orderBy: { createdAt: "desc" },
     })
-    
-    // Map to include calculated progress
-    return projects.map(project => {
+
+    return projects.map((project) => {
       const totalTasks = project._count.tasks
       const completedTasks = project.tasks.length
       const progress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0
-      
+
       return {
         ...project,
-        progress
+        progress,
       }
     })
   } catch (error) {
@@ -98,7 +101,7 @@ export async function createTask(formData: {
     revalidatePath("/")
     revalidatePath("/tasks")
     revalidatePath(`/projects/${formData.projectId}`)
-    
+
     return { success: true, task }
   } catch (error) {
     console.error("Failed to create task:", error)
@@ -111,8 +114,11 @@ export async function getTasks() {
     const tasks = await prisma.task.findMany({
       include: {
         project: {
-          select: { name: true }
-        }
+          select: { name: true, color: true },
+        },
+        assignee: {
+          select: { name: true, avatar: true },
+        },
       },
       orderBy: { createdAt: "desc" },
     })
@@ -123,19 +129,16 @@ export async function getTasks() {
   }
 }
 
-export async function toggleTaskStatus(taskId: string, isCompleted: boolean) {
+export async function updateTaskStatus(taskId: string, status: string) {
   try {
     const task = await prisma.task.update({
       where: { id: taskId },
-      data: {
-        status: isCompleted ? "COMPLETED" : "TODO"
-      },
-      include: { projectId: true }
+      data: { status: status as any },
     })
 
     revalidatePath("/")
     revalidatePath("/tasks")
-    
+
     return { success: true, task }
   } catch (error) {
     console.error("Failed to update task:", error)
@@ -145,18 +148,23 @@ export async function toggleTaskStatus(taskId: string, isCompleted: boolean) {
 
 export async function getDashboardStats() {
   try {
-    const [totalProjects, completedProjects, activeProjects, pendingTasks] = await Promise.all([
-      prisma.project.count(),
-      prisma.project.count({ where: { status: "completed" } }),
-      prisma.project.count({ where: { status: "active" } }),
-      prisma.task.count({ where: { status: "TODO" } }),
-    ])
+    const [totalProjects, completedProjects, activeProjects, pendingTasks, activeSprints, teamMembers] =
+      await Promise.all([
+        prisma.project.count(),
+        prisma.project.count({ where: { status: "completed" } }),
+        prisma.project.count({ where: { status: "active" } }),
+        prisma.task.count({ where: { status: { in: ["TODO", "BACKLOG"] } } }),
+        prisma.sprint.count({ where: { status: "ACTIVE" } }),
+        prisma.user.count(),
+      ])
 
     return {
       totalProjects,
       completedProjects,
       activeProjects,
       pendingTasks,
+      activeSprints,
+      teamMembers,
     }
   } catch (error) {
     console.error("Failed to fetch dashboard stats:", error)
@@ -165,6 +173,8 @@ export async function getDashboardStats() {
       completedProjects: 0,
       activeProjects: 0,
       pendingTasks: 0,
+      activeSprints: 0,
+      teamMembers: 0,
     }
   }
 }

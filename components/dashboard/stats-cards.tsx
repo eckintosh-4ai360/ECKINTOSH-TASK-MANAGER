@@ -1,6 +1,6 @@
 "use client"
 
-import { Cpu, CheckCircle2, Activity, Clock } from "lucide-react"
+import { Cpu, CheckCircle2, Zap, Rocket, GitBranch, Users } from "lucide-react"
 import { useState } from "react"
 
 interface DashboardStats {
@@ -21,94 +21,102 @@ export function StatsCards({ stats }: StatsCardsProps) {
     {
       title: "Total Projects",
       value: stats.totalProjects.toString(),
-      percentage: "100%",
-      subtitle: "All Systems",
+      badge: "ALL TIME",
+      subtitle: "Across all teams",
       icon: Cpu,
-      isPrimary: true,
+      color: "primary",
+      gradient: "from-primary/20 to-primary/5",
+      iconBg: "from-primary to-primary/60",
       delay: "0ms",
     },
     {
-      title: "Completed",
-      value: stats.completedProjects.toString(),
-      percentage: stats.totalProjects > 0 ? `${Math.round((stats.completedProjects / stats.totalProjects) * 100)}%` : "0%",
-      subtitle: "Finished",
-      icon: CheckCircle2,
-      isPrimary: false,
-      delay: "100ms",
-    },
-    {
-      title: "Active Now",
+      title: "Active Sprints",
       value: stats.activeProjects.toString(),
-      percentage: stats.totalProjects > 0 ? `${Math.round((stats.activeProjects / stats.totalProjects) * 100)}%` : "0%",
-      subtitle: "In Progress",
-      icon: Activity,
-      isPrimary: false,
-      delay: "200ms",
+      badge: "LIVE",
+      subtitle: "In progress now",
+      icon: Zap,
+      color: "chart-2",
+      gradient: "from-chart-2/20 to-chart-2/5",
+      iconBg: "from-chart-2 to-chart-2/60",
+      delay: "80ms",
     },
     {
-      title: "Pending Tasks",
+      title: "Deployments",
+      value: "14",
+      badge: "THIS WEEK",
+      subtitle: "Staging & Production",
+      icon: Rocket,
+      color: "chart-3",
+      gradient: "from-chart-3/20 to-chart-3/5",
+      iconBg: "from-chart-3 to-chart-3/60",
+      delay: "160ms",
+    },
+    {
+      title: "Open Tasks",
       value: stats.pendingTasks.toString(),
-      percentage: stats.pendingTasks > 0 ? "!" : "0",
-      subtitle: "Awaiting Action",
-      icon: Clock,
-      isPrimary: false,
-      delay: "300ms",
+      badge: "PENDING",
+      subtitle: "Awaiting action",
+      icon: CheckCircle2,
+      color: "chart-4",
+      gradient: "from-chart-4/20 to-chart-4/5",
+      iconBg: "from-chart-4 to-chart-4/60",
+      delay: "240ms",
+    },
+    {
+      title: "Team Members",
+      value: "6",
+      badge: "ONLINE 4",
+      subtitle: "Active contributors",
+      icon: Users,
+      color: "chart-5",
+      gradient: "from-chart-5/20 to-chart-5/5",
+      iconBg: "from-chart-5 to-chart-5/60",
+      delay: "320ms",
+    },
+    {
+      title: "Commits Today",
+      value: "23",
+      badge: "TODAY",
+      subtitle: "Across all repos",
+      icon: GitBranch,
+      color: "primary",
+      gradient: "from-primary/10 to-transparent",
+      iconBg: "from-primary/80 to-primary/40",
+      delay: "400ms",
     },
   ]
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
       {cards.map((stat, index) => (
         <div
           key={stat.title}
           onMouseEnter={() => setHoveredCard(index)}
           onMouseLeave={() => setHoveredCard(null)}
           style={{ animationDelay: stat.delay }}
-          className={`glass-card rounded-xl p-5 transition-all duration-500 ease-out animate-slide-in-up cursor-pointer relative overflow-hidden ${
-            hoveredCard === index ? "scale-[1.02] shadow-2xl shadow-primary/20 border-primary/40" : ""
-          } ${stat.isPrimary ? "border-primary/30" : "border-border/50"}`}
+          className={`glass-card rounded-xl p-4 transition-all duration-300 ease-out animate-slide-in-up cursor-pointer relative overflow-hidden border ${
+            hoveredCard === index
+              ? "scale-[1.03] shadow-2xl shadow-primary/20 border-primary/40"
+              : "border-white/5"
+          }`}
         >
-          {/* Glow effect for primary card */}
-          {stat.isPrimary && (
-            <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-transparent pointer-events-none"></div>
-          )}
-          
-          <div className="flex items-start justify-between mb-4 relative">
-            <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-              stat.isPrimary 
-                ? "bg-gradient-to-br from-primary to-primary/60 shadow-lg shadow-primary/30" 
-                : "bg-secondary/80 border border-border/50"
-            }`}>
-              <stat.icon className={`w-5 h-5 ${stat.isPrimary ? "text-primary-foreground" : "text-primary"}`} />
+          <div className={`absolute inset-0 bg-gradient-to-br ${stat.gradient} pointer-events-none opacity-60`} />
+
+          <div className="relative">
+            <div className="flex items-center justify-between mb-3">
+              <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${stat.iconBg} flex items-center justify-center shadow-lg`}>
+                <stat.icon className="w-4 h-4 text-primary-foreground" />
+              </div>
+              <span className="text-[8px] font-bold font-mono px-1.5 py-0.5 rounded-full bg-white/5 text-muted-foreground border border-white/10">
+                {stat.badge}
+              </span>
             </div>
-            <span className={`text-xs font-mono px-2 py-1 rounded ${
-              stat.isPrimary 
-                ? "bg-primary/20 text-primary" 
-                : "bg-secondary text-muted-foreground"
-            }`}>
-              {stat.percentage}
-            </span>
-          </div>
-          
-          <p className={`text-4xl font-bold mb-1 font-mono tracking-tight ${
-            stat.isPrimary ? "text-primary animate-text-glow" : "text-foreground"
-          }`}>
-            {stat.value}
-          </p>
-          
-          <h3 className="text-sm font-medium text-foreground mb-1">{stat.title}</h3>
-          <p className="text-xs text-muted-foreground">{stat.subtitle}</p>
-          
-          {/* Progress bar */}
-          <div className="mt-4 w-full h-1 bg-secondary rounded-full overflow-hidden">
-            <div 
-              className={`h-full rounded-full transition-all duration-1000 ${
-                stat.isPrimary 
-                  ? "bg-gradient-to-r from-primary to-primary/60" 
-                  : "bg-muted-foreground/30"
-              }`}
-              style={{ width: stat.percentage }}
-            ></div>
+
+            <p className="text-2xl font-extrabold font-mono text-foreground tracking-tight mb-0.5">
+              {stat.value}
+            </p>
+            <p className="text-[11px] font-semibold text-foreground mb-0.5">{stat.title}</p>
+            <p className="text-[10px] text-muted-foreground">{stat.subtitle}</p>
           </div>
         </div>
       ))}

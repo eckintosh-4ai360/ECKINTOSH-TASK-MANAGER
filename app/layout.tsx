@@ -3,15 +3,16 @@ import type { Metadata } from "next"
 import { Geist, Geist_Mono } from "next/font/google"
 import { Analytics } from "@vercel/analytics/next"
 import { ThemeProvider } from "@/components/theme-provider"
+import { AuthProvider } from "@/components/auth-provider"
 import "./globals.css"
 
 const _geist = Geist({ subsets: ["latin"] })
 const _geistMono = Geist_Mono({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "Eckintosh - Project Management Dashboard",
-  description: "Plan, prioritize, and accomplish your tasks with ease",
-  generator: "v0.app",
+  title: "Eckintosh – Engineering Digital Solutions",
+  description: "Developer team operations hub: sprints, standups, deployments and projects — powered by Eckintosh.",
+  generator: "Eckintosh",
   icons: {
     icon: [
       {
@@ -39,8 +40,10 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark bg-background" suppressHydrationWarning>
       <body className={`font-sans antialiased bg-background futuristic-grid`}>
-        <ThemeProvider defaultTheme="dark" storageKey="tasko-theme">
-          {children}
+        <ThemeProvider defaultTheme="dark" storageKey="eckintosh-theme">
+          <AuthProvider>
+            {children}
+          </AuthProvider>
         </ThemeProvider>
         <Analytics />
       </body>

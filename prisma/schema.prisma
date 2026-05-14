@@ -6,7 +6,8 @@ generator client {
     provider = "prisma-client-js"
 }
 
-// User model
+// ─── User ────────────────────────────────────────────────────────────────────
+
 model User {
     id        String   @id @default(cuid())
     email     String   @unique
@@ -14,18 +15,23 @@ model User {
     password  String?
     avatar    String?
     role      UserRole @default(USER)
+    title     String?  // e.g. "Senior Backend Engineer"
+    timezone  String?  @default("UTC")
     createdAt DateTime @default(now())
     updatedAt DateTime @updatedAt
 
     projects         Project[]
+    projectMembers   ProjectMember[]
     tasks            Task[]
     teamMembers      TeamMember[]
     notifications    Notification[]
     timeEntries      TimeEntry[]
-    sentMessages     Message[]        @relation("MessageSender")
-    receivedMessages Message[]        @relation("MessageReceiver")
-    sentEmails       InternalEmail[]  @relation("EmailFrom")
-    receivedEmails   InternalEmail[]  @relation("EmailTo")
+    sentMessages     Message[]       @relation("MessageSender")
+    receivedMessages Message[]       @relation("MessageReceiver")
+    sentEmails       InternalEmail[] @relation("EmailFrom")
+    receivedEmails   InternalEmail[] @relation("EmailTo")
+    standups         Standup[]
+    deployments      Deployment[]    @relation("DeployedBy")
 
     @@map("users")
 }
@@ -36,12 +42,16 @@ enum UserRole {
     GUEST
 }
 
+// ─── Project ─────────────────────────────────────────────────────────────────
+
 model Project {
     id          String    @id @default(cuid())
     name        String
     description String?
-    status      String    @default("active")
-    priority    String    @default("medium")
+    status      String    @default("active") // active | paused | completed | archived
+    priority    String    @default("medium")  // low | medium | high | critical
+    color       String    @default("#00d4ff") // accent color per project
+    tech        String[]  // e.g. ["Next.js", "Prisma", "Postgres"]
     startDate   DateTime?
     endDate     DateTime?
     progress    Int       @default(0)
@@ -50,23 +60,33 @@ model Project {
     createdAt   DateTime  @default(now())
     updatedAt   DateTime  @updatedAt
 
-    tasks     Task[]
-    members   ProjectMember[]
-    analytics Analytics?
+    tasks       Task[]
+    members     ProjectMember[]
+    analytics   Analytics?
+    sprints     Sprint[]
+    standups    Standup[]
+    repository  Repository?
+    deployments Deployment[]
 
     @@map("projects")
 }
+
+// ─── Project Members ─────────────────────────────────────────────────────────
 
 model ProjectMember {
     id        String   @id @default(cuid())
     project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
     projectId String
-    role      String   @default("member")
+    user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+    userId    String
+    role      String   @default("member") // lead | backend | frontend | design | devops | member
     joinedAt  DateTime @default(now())
 
-    @@unique([projectId])
+    @@unique([projectId, userId])
     @@map("project_members")
 }
+
+// ─── Task ────────────────────────────────────────────────────────────────────
 
 model Task {
     id          String     @id @default(cuid())
@@ -75,10 +95,14 @@ model Task {
     status      TaskStatus @default(TODO)
     priority    String     @default("medium")
     dueDate     DateTime?
+    estimate    Int?       // estimated hours
     project     Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
     projectId   String
+    sprint      Sprint?    @relation(fields: [sprintId], references: [id], onDelete: SetNull)
+    sprintId    String?
     assignee    User?      @relation(fields: [assigneeId], references: [id], onDelete: SetNull)
     assigneeId  String?
+    tags        String[]   // e.g. ["bug", "feature", "frontend"]
     createdAt   DateTime   @default(now())
     updatedAt   DateTime   @updatedAt
 
@@ -90,12 +114,15 @@ model Task {
 }
 
 enum TaskStatus {
+    BACKLOG
     TODO
     IN_PROGRESS
     IN_REVIEW
     COMPLETED
     ARCHIVED
 }
+
+// ─── Subtask ─────────────────────────────────────────────────────────────────
 
 model Subtask {
     id        String   @id @default(cuid())
@@ -109,6 +136,86 @@ model Subtask {
     @@map("subtasks")
 }
 
+// ─── Sprint ──────────────────────────────────────────────────────────────────
+
+model Sprint {
+    id        String       @id @default(cuid())
+    name      String       // e.g. "Sprint 12 – Auth Module"
+    goal      String?
+    project   Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+    projectId String
+    status    SprintStatus @default(PLANNING)
+    startDate DateTime?
+    endDate   DateTime?
+    createdAt DateTime     @default(now())
+    updatedAt DateTime     @updatedAt
+
+    tasks Task[]
+
+    @@map("sprints")
+}
+
+enum SprintStatus {
+    PLANNING
+    ACTIVE
+    COMPLETED
+    CANCELLED
+}
+
+// ─── Standup ─────────────────────────────────────────────────────────────────
+
+model Standup {
+    id           String   @id @default(cuid())
+    user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+    userId       String
+    project      Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+    projectId    String?
+    didYesterday String
+    doingToday   String
+    blockers     String?
+    mood         Int      @default(3) // 1–5 emoji mood score
+    date         DateTime @default(now())
+    createdAt    DateTime @default(now())
+
+    @@map("standups")
+}
+
+// ─── Repository ──────────────────────────────────────────────────────────────
+
+model Repository {
+    id             String   @id @default(cuid())
+    name           String
+    url            String
+    provider       String   @default("github") // github | gitlab | bitbucket
+    defaultBranch  String   @default("main")
+    project        Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+    projectId      String   @unique
+    createdAt      DateTime @default(now())
+    updatedAt      DateTime @updatedAt
+
+    @@map("repositories")
+}
+
+// ─── Deployment ──────────────────────────────────────────────────────────────
+
+model Deployment {
+    id          String   @id @default(cuid())
+    version     String   // e.g. "v1.2.3"
+    environment String   @default("staging") // development | staging | production
+    status      String   @default("pending")  // pending | running | success | failed | rolled_back
+    project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+    projectId   String
+    deployedBy  User     @relation("DeployedBy", fields: [deployedById], references: [id], onDelete: Cascade)
+    deployedById String
+    deployedAt  DateTime @default(now())
+    notes       String?
+    duration    Int?     // seconds
+
+    @@map("deployments")
+}
+
+// ─── Team ────────────────────────────────────────────────────────────────────
+
 model Team {
     id          String   @id @default(cuid())
     name        String
@@ -116,18 +223,24 @@ model Team {
     createdAt   DateTime @default(now())
     updatedAt   DateTime @updatedAt
 
+    members TeamMember[]
+
     @@map("teams")
 }
 
 model TeamMember {
     id     String @id @default(cuid())
+    team   Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
+    teamId String
     user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
     userId String
     role   String @default("member")
 
-    @@unique([userId])
+    @@unique([teamId, userId])
     @@map("team_members")
 }
+
+// ─── Calendar ────────────────────────────────────────────────────────────────
 
 model CalendarEvent {
     id          String   @id @default(cuid())
@@ -136,12 +249,16 @@ model CalendarEvent {
     startTime   DateTime
     endTime     DateTime
     allDay      Boolean  @default(false)
-    type        String   @default("task")
+    type        String   @default("task") // task | meeting | deadline | sprint | release
+    color       String?
+    projectId   String?
     createdAt   DateTime @default(now())
     updatedAt   DateTime @updatedAt
 
     @@map("calendar_events")
 }
+
+// ─── Time Tracking ───────────────────────────────────────────────────────────
 
 model TimeEntry {
     id        String   @id @default(cuid())
@@ -149,7 +266,7 @@ model TimeEntry {
     taskId    String
     user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
     userId    String
-    duration  Int
+    duration  Int      // minutes
     notes     String?
     startTime DateTime
     endTime   DateTime
@@ -158,6 +275,8 @@ model TimeEntry {
 
     @@map("time_entries")
 }
+
+// ─── Reminder ────────────────────────────────────────────────────────────────
 
 model Reminder {
     id        String   @id @default(cuid())
@@ -172,19 +291,24 @@ model Reminder {
     @@map("reminders")
 }
 
+// ─── Notifications ───────────────────────────────────────────────────────────
+
 model Notification {
     id        String   @id @default(cuid())
     user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
     userId    String
     title     String
     message   String
-    type      String   @default("info")
+    type      String   @default("info") // info | success | warning | error | deploy | sprint
     read      Boolean  @default(false)
+    link      String?  // optional deep-link
     createdAt DateTime @default(now())
     updatedAt DateTime @updatedAt
 
     @@map("notifications")
 }
+
+// ─── Analytics ───────────────────────────────────────────────────────────────
 
 model Analytics {
     id             String   @id @default(cuid())
@@ -192,35 +316,40 @@ model Analytics {
     projectId      String   @unique
     tasksCompleted Int      @default(0)
     tasksTotal     Int      @default(0)
-    timeSpent      Int      @default(0)
+    timeSpent      Int      @default(0) // minutes
     teamSize       Int      @default(0)
+    velocity       Float    @default(0) // avg tasks/sprint
     createdAt      DateTime @default(now())
     updatedAt      DateTime @updatedAt
 
     @@map("analytics")
 }
 
+// ─── Messaging ───────────────────────────────────────────────────────────────
+
 model Message {
     id         String   @id @default(cuid())
-    content    String?  // optional - can be media-only
+    content    String?
     senderId   String
     receiverId String
     read       Boolean  @default(false)
     edited     Boolean  @default(false)
     replyToId  String?
-    mediaUrl   String?  // path to uploaded file
+    mediaUrl   String?
     mediaType  String?  // image | video | audio | document
-    mediaName  String?  // original filename
-    mediaSize  Int?     // size in bytes
+    mediaName  String?
+    mediaSize  Int?
     createdAt  DateTime @default(now())
 
-    sender   User     @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
-    receiver User     @relation("MessageReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
+    sender   User      @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+    receiver User      @relation("MessageReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
     replyTo  Message?  @relation("MessageReplies", fields: [replyToId], references: [id], onDelete: SetNull)
     replies  Message[] @relation("MessageReplies")
 
     @@map("messages")
 }
+
+// ─── Internal Email ──────────────────────────────────────────────────────────
 
 model InternalEmail {
     id        String   @id @default(cuid())
