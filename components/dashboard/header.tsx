@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { MobileNav } from "./mobile-nav"
 import { useSearch } from "./search-context"
+import { useTheme } from "@/components/theme-provider"
 import { cn } from "@/lib/utils"
 import type { ReactNode } from "react"
 
@@ -30,13 +31,20 @@ const ROLE_COLORS: Record<string, string> = {
 
 export function Header({ title, description, actions, user }: HeaderProps) {
   const [dropdownOpen, setDropdownOpen] = useState(false)
-  const [darkMode, setDarkMode] = useState(true)
+  const [mounted, setMounted] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
   const router = useRouter()
   const { query, setQuery, isSearching } = useSearch()
+  const { theme, resolvedTheme, setTheme } = useTheme()
+  const activeTheme = mounted ? resolvedTheme ?? theme : "dark"
+  const isDarkMode = activeTheme === "dark"
 
   // ⌘F / Ctrl+F keyboard shortcut to focus the search bar
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if ((e.metaKey || e.ctrlKey) && e.key === "f") {
@@ -125,10 +133,11 @@ export function Header({ title, description, actions, user }: HeaderProps) {
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => setDarkMode((v) => !v)}
+            onClick={() => setTheme(isDarkMode ? "light" : "dark")}
             className="glass border border-primary/20 hover:border-primary/40 hover:bg-primary/10 transition-all duration-300 h-9 w-9"
+            aria-label={isDarkMode ? "Switch to light mode" : "Switch to dark mode"}
           >
-            {darkMode ? <Moon className="w-4 h-4 text-foreground" /> : <Sun className="w-4 h-4 text-foreground" />}
+            {isDarkMode ? <Moon className="w-4 h-4 text-foreground" /> : <Sun className="w-4 h-4 text-foreground" />}
           </Button>
 
           {/* ── Profile dropdown ─────────────────────────────────────── */}
@@ -161,7 +170,7 @@ export function Header({ title, description, actions, user }: HeaderProps) {
             {/* Dropdown panel */}
             {dropdownOpen && (
               <div className="absolute right-4 mt-2 w-64 z-50 rounded-2xl border border-primary/20 shadow-2xl shadow-black/40 overflow-hidden"
-                style={{ background: "hsl(222 20% 10%)" }}
+                style={{ background: "color-mix(in oklab, var(--card) 96%, transparent)" }}
               >
                 {/* User info block */}
                 <div className="px-4 py-4 border-b border-white/5">

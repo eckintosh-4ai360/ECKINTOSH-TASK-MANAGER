@@ -39,9 +39,9 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" className="dark bg-background" suppressHydrationWarning>
+    <html lang="en" className="bg-background" suppressHydrationWarning>
       <body className={`font-sans antialiased bg-background futuristic-grid`}>
-        <ThemeProvider defaultTheme="dark" storageKey="eckintosh-theme">
+        <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false} storageKey="eckintosh-theme">
           <AuthProvider>
             <SearchProvider>
               {children}

@@ -1,21 +1,51 @@
 "use client"
 
-import { useState } from "react"
+import { type ReactNode, useState } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Download, FileText, FileSpreadsheet, FileJson, Calendar } from "lucide-react"
+import { AlertTriangle, CheckCircle2, Download, FileText, FileSpreadsheet, FileJson, Calendar } from "lucide-react"
 
 interface ExportReportModalProps {
-  children: React.ReactNode
+  children: ReactNode
+}
+
+type ExportConfig = {
+  format: "" | "pdf" | "xlsx" | "json"
+  dateRange: "" | "week" | "month" | "quarter" | "year" | "all"
+  includeProjects: boolean
+  includeTasks: boolean
+  includeTeam: boolean
+  includeAnalytics: boolean
+}
+
+function getDownloadFilename(response: Response, format: ExportConfig["format"]) {
+  const disposition = response.headers.get("content-disposition")
+  const match = disposition?.match(/filename="([^"]+)"/)
+  if (match?.[1]) return match[1]
+
+  const extension = format === "xlsx" ? "xls" : format || "txt"
+  return `eckintosh-report.${extension}`
+}
+
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement("a")
+  link.href = url
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(url)
 }
 
 export function ExportReportModal({ children }: ExportReportModalProps) {
   const [open, setOpen] = useState(false)
   const [exporting, setExporting] = useState(false)
-  const [config, setConfig] = useState({
+  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
+  const [config, setConfig] = useState<ExportConfig>({
     format: "",
     dateRange: "",
     includeProjects: true,
@@ -24,12 +54,51 @@ export function ExportReportModal({ children }: ExportReportModalProps) {
     includeAnalytics: true,
   })
 
-  const handleExport = () => {
+  const selectedSectionCount = [
+    config.includeProjects,
+    config.includeTasks,
+    config.includeTeam,
+    config.includeAnalytics,
+  ].filter(Boolean).length
+
+  const handleExport = async () => {
+    if (!config.format || !config.dateRange) {
+      setMessage({ type: "error", text: "Choose an export format and date range first." })
+      return
+    }
+
+    if (selectedSectionCount === 0) {
+      setMessage({ type: "error", text: "Select at least one section to include in the report." })
+      return
+    }
+
     setExporting(true)
-    setTimeout(() => {
-      setExporting(false)
+    setMessage(null)
+
+    try {
+      const response = await fetch("/api/reports/export", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(config),
+      })
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => null)
+        throw new Error(error?.error ?? "Export failed. Please try again.")
+      }
+
+      const blob = await response.blob()
+      downloadBlob(blob, getDownloadFilename(response, config.format))
+      setMessage({ type: "success", text: "Report generated and downloaded." })
       setOpen(false)
-    }, 2000)
+    } catch (error) {
+      setMessage({
+        type: "error",
+        text: error instanceof Error ? error.message : "Export failed. Please try again.",
+      })
+    } finally {
+      setExporting(false)
+    }
   }
 
   const formats = [
@@ -57,8 +126,9 @@ export function ExportReportModal({ children }: ExportReportModalProps) {
             <div className="grid grid-cols-3 gap-3">
               {formats.map((format) => (
                 <button
+                  type="button"
                   key={format.value}
-                  onClick={() => setConfig({ ...config, format: format.value })}
+                  onClick={() => setConfig({ ...config, format: format.value as ExportConfig["format"] })}
                   className={`glass rounded-lg p-4 border flex flex-col items-center gap-2 transition-all ${
                     config.format === format.value
                       ? "border-primary/50 bg-primary/10"
@@ -79,7 +149,7 @@ export function ExportReportModal({ children }: ExportReportModalProps) {
             </Label>
             <Select
               value={config.dateRange}
-              onValueChange={(value) => setConfig({ ...config, dateRange: value })}
+              onValueChange={(value) => setConfig({ ...config, dateRange: value as ExportConfig["dateRange"] })}
             >
               <SelectTrigger className="glass border-border/50 focus:border-primary/50 h-11">
                 <SelectValue placeholder="Select date range" />
@@ -107,7 +177,7 @@ export function ExportReportModal({ children }: ExportReportModalProps) {
                   <Checkbox
                     id={item.key}
                     checked={config[item.key as keyof typeof config] as boolean}
-                    onCheckedChange={(checked) => setConfig({ ...config, [item.key]: checked })}
+                    onCheckedChange={(checked) => setConfig({ ...config, [item.key]: checked === true })}
                     className="border-primary/30 data-[state=checked]:bg-primary data-[state=checked]:border-primary"
                   />
                   <Label htmlFor={item.key} className="text-sm cursor-pointer">
@@ -117,6 +187,19 @@ export function ExportReportModal({ children }: ExportReportModalProps) {
               ))}
             </div>
           </div>
+
+          {message && (
+            <div
+              className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm ${
+                message.type === "success"
+                  ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-500"
+                  : "border-destructive/30 bg-destructive/10 text-destructive"
+              }`}
+            >
+              {message.type === "success" ? <CheckCircle2 className="w-4 h-4" /> : <AlertTriangle className="w-4 h-4" />}
+              {message.text}
+            </div>
+          )}
 
           <div className="flex gap-3 pt-2">
             <Button
@@ -129,7 +212,7 @@ export function ExportReportModal({ children }: ExportReportModalProps) {
             </Button>
             <Button
               onClick={handleExport}
-              disabled={!config.format || !config.dateRange || exporting}
+              disabled={!config.format || !config.dateRange || selectedSectionCount === 0 || exporting}
               className="flex-1 bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 shadow-lg shadow-primary/20 disabled:opacity-50"
             >
               {exporting ? (

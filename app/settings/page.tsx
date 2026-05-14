@@ -1,8 +1,11 @@
 import { Sidebar } from "@/components/dashboard/sidebar"
 import { HeaderWithUser as Header } from "@/components/dashboard/header-with-user"
 import { SettingsContent } from "@/components/settings/settings-content"
+import { getSettingsPageData } from "@/lib/actions/settings-actions"
 
-export default function SettingsPage() {
+export default async function SettingsPage() {
+  const settings = await getSettingsPageData()
+
   return (
     <div className="flex min-h-screen bg-background">
       <div className="hidden lg:block">
@@ -13,7 +16,7 @@ export default function SettingsPage() {
         <Header title="System Config" description="Manage your account preferences and application settings." />
 
         <div className="mt-6">
-          <SettingsContent />
+          <SettingsContent settings={settings} />
         </div>
       </main>
     </div>

@@ -1,6 +1,7 @@
 import { auth } from "@/auth"
 import { createSession } from "@/lib/auth"
 import prisma from "@/lib/prisma"
+import type { Session } from "next-auth"
 import { NextResponse } from "next/server"
 
 /**
@@ -17,7 +18,7 @@ import { NextResponse } from "next/server"
 export async function GET() {
   console.log("[auth/complete] Bridge route hit — reading NextAuth session…")
 
-  let session: Awaited<ReturnType<typeof auth>> = null
+  let session: Session | null = null
 
   try {
     session = await auth()
