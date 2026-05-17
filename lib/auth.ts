@@ -1,5 +1,7 @@
 import { cookies } from "next/headers"
 import { redirect } from "next/navigation"
+import { auth } from "@/auth"
+import prisma from "@/lib/prisma"
 import { type Permission, hasPermission } from "@/lib/rbac"
 import {
   SESSION_COOKIE_NAME,
@@ -27,9 +29,29 @@ export async function getSession(): Promise<SessionUser | null> {
   try {
     const cookieStore = await cookies()
     const token = cookieStore.get(SESSION_COOKIE_NAME)?.value
-    if (!token) return null
 
-    return verifySessionToken(token)
+    if (token) {
+      const session = await verifySessionToken(token)
+      if (session) return session
+    }
+
+    const authSession = await auth()
+    const email = authSession?.user?.email
+    if (!email) return null
+
+    const dbUser = await prisma.user.findUnique({
+      where: { email },
+      select: { id: true, email: true, name: true, role: true },
+    })
+
+    if (!dbUser) return null
+
+    return {
+      id: dbUser.id,
+      email: dbUser.email,
+      name: dbUser.name ?? "User",
+      role: dbUser.role,
+    }
   } catch {
     return null
   }
