@@ -83,7 +83,6 @@ export function Header({ title, description, actions, user }: HeaderProps) {
   return (
     <header className="relative z-[100] space-y-4 md:space-y-5 animate-slide-in-up">
       <div className="flex items-center justify-between gap-4">
-        {/* Left: Mobile nav + Search */}
         <div className="flex items-center gap-3 flex-1">
           <MobileNav role={role} />
           <div className="relative flex-1 max-w-md">
