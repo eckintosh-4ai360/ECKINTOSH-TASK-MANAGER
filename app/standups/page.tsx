@@ -1,12 +1,17 @@
-import { Sidebar } from "@/components/dashboard/sidebar"
+import { SidebarWithUser as Sidebar } from "@/components/dashboard/sidebar-with-user"
 import { HeaderWithUser as Header } from "@/components/dashboard/header-with-user"
 import { StandupsView } from "@/components/standups/standups-view"
 import { Button } from "@/components/ui/button"
 import { AddStandupModal } from "@/components/modals/add-standup-modal"
 import { getProjects } from "@/lib/actions/project-actions"
 import { getStandups } from "@/lib/actions/standup-actions"
+import { requireSession } from "@/lib/auth"
+import { hasPermission } from "@/lib/rbac"
 
 export default async function StandupsPage() {
+  const session = await requireSession()
+  const canPostStandups = hasPermission(session.role, "post_standups")
+  const canManageAllStandups = hasPermission(session.role, "manage_projects")
   const [standups, projects] = await Promise.all([
     getStandups(),
     getProjects(),
@@ -26,7 +31,7 @@ export default async function StandupsPage() {
         <Header
           title="Daily Standups"
           description="What did you do? What are you doing? Any blockers? Keep the team in sync."
-          actions={
+          actions={canPostStandups ? (
             <AddStandupModal projects={projectOptions}>
               <Button
                 id="post-standup-btn"
@@ -35,10 +40,16 @@ export default async function StandupsPage() {
                 + Post Standup
               </Button>
             </AddStandupModal>
-          }
+          ) : undefined}
         />
         <div className="mt-5">
-          <StandupsView standups={standups} projects={projectOptions} />
+          <StandupsView
+            standups={standups}
+            projects={projectOptions}
+            currentUserId={session.id}
+            canPostStandups={canPostStandups}
+            canManageAllStandups={canManageAllStandups}
+          />
         </div>
       </main>
     </div>

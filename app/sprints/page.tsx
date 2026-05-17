@@ -1,12 +1,16 @@
-import { Sidebar } from "@/components/dashboard/sidebar"
+import { SidebarWithUser as Sidebar } from "@/components/dashboard/sidebar-with-user"
 import { HeaderWithUser as Header } from "@/components/dashboard/header-with-user"
 import { SprintsBoard } from "@/components/sprints/sprints-board"
 import { Button } from "@/components/ui/button"
 import { AddSprintModal } from "@/components/modals/add-sprint-modal"
 import { getProjects } from "@/lib/actions/project-actions"
 import { getSprints } from "@/lib/actions/sprint-actions"
+import { requireSession } from "@/lib/auth"
+import { hasPermission } from "@/lib/rbac"
 
 export default async function SprintsPage() {
+  const session = await requireSession()
+  const canManageSprints = hasPermission(session.role, "manage_sprints")
   const [projects, sprints] = await Promise.all([
     getProjects(),
     getSprints(),
@@ -26,7 +30,7 @@ export default async function SprintsPage() {
         <Header
           title="Sprints"
           description="Manage your team's sprint cycles across all active projects."
-          actions={
+          actions={canManageSprints ? (
             <AddSprintModal projects={projectOptions}>
               <Button
                 id="new-sprint-btn"
@@ -35,10 +39,10 @@ export default async function SprintsPage() {
                 + New Sprint
               </Button>
             </AddSprintModal>
-          }
+          ) : undefined}
         />
         <div className="mt-5">
-          <SprintsBoard sprints={sprints} />
+          <SprintsBoard sprints={sprints} projects={projectOptions} canManageSprints={canManageSprints} />
         </div>
       </main>
     </div>

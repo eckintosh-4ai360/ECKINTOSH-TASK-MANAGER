@@ -1,4 +1,4 @@
-import { Sidebar } from "@/components/dashboard/sidebar"
+import { SidebarWithUser as Sidebar } from "@/components/dashboard/sidebar-with-user"
 import { HeaderWithUser as Header } from "@/components/dashboard/header-with-user"
 import { Badge } from "@/components/ui/badge"
 import { GitBranch, GitCommit, UserRound } from "lucide-react"

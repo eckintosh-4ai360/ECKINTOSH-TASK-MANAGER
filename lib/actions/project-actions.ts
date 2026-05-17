@@ -1,22 +1,9 @@
 "use server"
 
 import prisma from "@/lib/prisma"
+import { requireSession } from "@/lib/auth"
+import { canUpdateTaskStatus, getPermissionError, hasPermission } from "@/lib/rbac"
 import { revalidatePath } from "next/cache"
-
-// Helper to get or create a default user
-async function getDefaultUser() {
-  let user = await prisma.user.findFirst()
-  if (!user) {
-    user = await prisma.user.create({
-      data: {
-        email: "eckintosh@devflow.dev",
-        name: "Eckintosh",
-        title: "Lead Dev / Full Stack",
-      },
-    })
-  }
-  return user
-}
 
 export async function createProject(formData: {
   name: string
@@ -25,7 +12,10 @@ export async function createProject(formData: {
   dueDate?: string
 }) {
   try {
-    const user = await getDefaultUser()
+    const session = await requireSession()
+    if (!hasPermission(session.role, "manage_projects")) {
+      return { success: false, error: getPermissionError("manage_projects") }
+    }
 
     const project = await prisma.project.create({
       data: {
@@ -34,7 +24,7 @@ export async function createProject(formData: {
         priority: (formData.priority || "medium").toLowerCase(),
         endDate: formData.dueDate ? new Date(formData.dueDate) : null,
         tech: [],
-        ownerId: user.id,
+        ownerId: session.id,
       },
     })
 
@@ -48,8 +38,70 @@ export async function createProject(formData: {
   }
 }
 
+export async function updateProject(input: {
+  id: string
+  name: string
+  description?: string
+  priority?: string
+  status?: string
+  dueDate?: string
+}) {
+  try {
+    const session = await requireSession()
+    if (!hasPermission(session.role, "manage_projects")) {
+      return { success: false, error: getPermissionError("manage_projects") }
+    }
+
+    const project = await prisma.project.update({
+      where: { id: input.id },
+      data: {
+        name: input.name.trim(),
+        description: input.description?.trim() || "",
+        priority: (input.priority || "medium").toLowerCase(),
+        status: (input.status || "active").toLowerCase(),
+        endDate: input.dueDate ? new Date(input.dueDate) : null,
+      },
+    })
+
+    revalidatePath("/")
+    revalidatePath("/projects")
+    revalidatePath("/tasks")
+    revalidatePath("/sprints")
+
+    return { success: true, project }
+  } catch (error) {
+    console.error("Failed to update project:", error)
+    return { success: false, error: "Failed to update project" }
+  }
+}
+
+export async function deleteProject(projectId: string) {
+  try {
+    const session = await requireSession()
+    if (!hasPermission(session.role, "manage_projects")) {
+      return { success: false, error: getPermissionError("manage_projects") }
+    }
+
+    await prisma.project.delete({
+      where: { id: projectId },
+    })
+
+    revalidatePath("/")
+    revalidatePath("/projects")
+    revalidatePath("/tasks")
+    revalidatePath("/sprints")
+    revalidatePath("/standups")
+
+    return { success: true }
+  } catch (error) {
+    console.error("Failed to delete project:", error)
+    return { success: false, error: "Failed to delete project" }
+  }
+}
+
 export async function getProjects() {
   try {
+    await requireSession()
     const projects = await prisma.project.findMany({
       include: {
         _count: {
@@ -88,6 +140,11 @@ export async function createTask(formData: {
   tags?: string
 }) {
   try {
+    const session = await requireSession()
+    if (!hasPermission(session.role, "manage_tasks")) {
+      return { success: false, error: getPermissionError("manage_tasks") }
+    }
+
     const task = await prisma.task.create({
       data: {
         title: formData.title,
@@ -112,8 +169,77 @@ export async function createTask(formData: {
   }
 }
 
+export async function updateTask(input: {
+  id: string
+  title: string
+  description?: string
+  projectId: string
+  priority?: string
+  dueDate?: string
+  tags?: string
+  status?: string
+  assigneeId?: string
+}) {
+  try {
+    const session = await requireSession()
+    if (!hasPermission(session.role, "manage_tasks")) {
+      return { success: false, error: getPermissionError("manage_tasks") }
+    }
+
+    const task = await prisma.task.update({
+      where: { id: input.id },
+      data: {
+        title: input.title.trim(),
+        description: input.description?.trim() || "",
+        projectId: input.projectId,
+        priority: (input.priority || "medium").toLowerCase(),
+        dueDate: input.dueDate ? new Date(input.dueDate) : null,
+        status: (input.status as any) || "TODO",
+        assigneeId: input.assigneeId || null,
+        tags: input.tags
+          ? input.tags.split(",").map((tag) => tag.trim()).filter(Boolean)
+          : [],
+      },
+    })
+
+    revalidatePath("/")
+    revalidatePath("/tasks")
+    revalidatePath("/projects")
+    revalidatePath("/sprints")
+
+    return { success: true, task }
+  } catch (error) {
+    console.error("Failed to update task:", error)
+    return { success: false, error: "Failed to update task" }
+  }
+}
+
+export async function deleteTask(taskId: string) {
+  try {
+    const session = await requireSession()
+    if (!hasPermission(session.role, "manage_tasks")) {
+      return { success: false, error: getPermissionError("manage_tasks") }
+    }
+
+    await prisma.task.delete({
+      where: { id: taskId },
+    })
+
+    revalidatePath("/")
+    revalidatePath("/tasks")
+    revalidatePath("/projects")
+    revalidatePath("/sprints")
+
+    return { success: true }
+  } catch (error) {
+    console.error("Failed to delete task:", error)
+    return { success: false, error: "Failed to delete task" }
+  }
+}
+
 export async function getTasks() {
   try {
+    await requireSession()
     const tasks = await prisma.task.findMany({
       include: {
         project: {
@@ -132,8 +258,40 @@ export async function getTasks() {
   }
 }
 
+export async function getWorkspaceUsers() {
+  try {
+    await requireSession()
+    return await prisma.user.findMany({
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+      },
+      orderBy: [{ role: "asc" }, { name: "asc" }],
+    })
+  } catch (error) {
+    console.error("Failed to fetch workspace users:", error)
+    return []
+  }
+}
+
 export async function updateTaskStatus(taskId: string, status: string) {
   try {
+    const session = await requireSession()
+    const existingTask = await prisma.task.findUnique({
+      where: { id: taskId },
+      select: { assigneeId: true },
+    })
+
+    if (!existingTask) {
+      return { success: false, error: "Task not found" }
+    }
+
+    if (!canUpdateTaskStatus(session, { assigneeId: existingTask.assigneeId })) {
+      return { success: false, error: getPermissionError("update_assigned_task_status") }
+    }
+
     const task = await prisma.task.update({
       where: { id: taskId },
       data: { status: status as any },
@@ -145,12 +303,26 @@ export async function updateTaskStatus(taskId: string, status: string) {
     return { success: true, task }
   } catch (error) {
     console.error("Failed to update task:", error)
-    return { success: false }
+    return { success: false, error: "Failed to update task" }
   }
 }
 
 export async function toggleTaskStatus(taskId: string, isCompleted: boolean) {
   try {
+    const session = await requireSession()
+    const existingTask = await prisma.task.findUnique({
+      where: { id: taskId },
+      select: { assigneeId: true },
+    })
+
+    if (!existingTask) {
+      return { success: false, error: "Task not found" }
+    }
+
+    if (!canUpdateTaskStatus(session, { assigneeId: existingTask.assigneeId })) {
+      return { success: false, error: getPermissionError("update_assigned_task_status") }
+    }
+
     const task = await prisma.task.update({
       where: { id: taskId },
       data: { status: isCompleted ? "COMPLETED" : "TODO" },
@@ -162,12 +334,13 @@ export async function toggleTaskStatus(taskId: string, isCompleted: boolean) {
     return { success: true, task }
   } catch (error) {
     console.error("Failed to toggle task status:", error)
-    return { success: false }
+    return { success: false, error: "Failed to update task status" }
   }
 }
 
 export async function getDashboardStats() {
   try {
+    await requireSession()
     const weekAgo = new Date()
     weekAgo.setDate(weekAgo.getDate() - 7)
 

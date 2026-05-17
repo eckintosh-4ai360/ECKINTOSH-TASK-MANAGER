@@ -1,13 +1,32 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState, useTransition } from "react"
+import { useRouter } from "next/navigation"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
-import { CalendarClock, ChevronLeft, ChevronRight, Clock, MapPin, Video } from "lucide-react"
-import type { CalendarEventItem } from "@/lib/actions/calendar-actions"
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Textarea } from "@/components/ui/textarea"
+import { deleteCalendarEvent, updateCalendarEvent, type CalendarEventItem } from "@/lib/actions/calendar-actions"
+import { CalendarClock, ChevronLeft, ChevronRight, Clock, MapPin, MoreHorizontal, Pencil, Trash2, Video } from "lucide-react"
+import { toast } from "sonner"
 
 const weekDays = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"]
+
+const EMPTY_FORM = {
+  title: "",
+  description: "",
+  date: "",
+  startTime: "",
+  endTime: "",
+  type: "meeting",
+  location: "",
+}
 
 function sameDay(a: Date, b: Date) {
   return a.getFullYear() === b.getFullYear()
@@ -47,7 +66,27 @@ function getMonthDays(monthDate: Date) {
   ]
 }
 
-function EventCard({ event, compact = false }: { event: CalendarEventItem; compact?: boolean }) {
+function getDateField(value: string) {
+  return new Date(value).toISOString().slice(0, 10)
+}
+
+function getTimeField(value: string) {
+  return new Date(value).toISOString().slice(11, 16)
+}
+
+function EventCard({
+  event,
+  compact = false,
+  canManageCalendar,
+  onEdit,
+  onDelete,
+}: {
+  event: CalendarEventItem
+  compact?: boolean
+  canManageCalendar: boolean
+  onEdit: (event: CalendarEventItem) => void
+  onDelete: (event: CalendarEventItem) => void
+}) {
   const color = event.color ?? "#00d4ff"
 
   return (
@@ -72,6 +111,25 @@ function EventCard({ event, compact = false }: { event: CalendarEventItem; compa
             <Badge variant="secondary" className="ml-auto text-[9px] capitalize glass border-border/30 font-mono">
               {event.type}
             </Badge>
+            {canManageCalendar && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-8 w-8 -mr-2">
+                    <MoreHorizontal className="w-4 h-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="glass-card border-primary/20">
+                  <DropdownMenuItem onClick={() => onEdit(event)}>
+                    <Pencil className="w-4 h-4 text-primary" />
+                    Edit event
+                  </DropdownMenuItem>
+                  <DropdownMenuItem variant="destructive" onClick={() => onDelete(event)}>
+                    <Trash2 className="w-4 h-4" />
+                    Delete event
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
           </div>
           <p className="text-xs text-muted-foreground font-mono">
             {compact ? formatDate(event.startTime) : formatTime(event.startTime)} - {formatTime(event.endTime)}
@@ -102,10 +160,38 @@ function EventCard({ event, compact = false }: { event: CalendarEventItem; compa
   )
 }
 
-export function CalendarContent({ events }: { events: CalendarEventItem[] }) {
+export function CalendarContent({
+  events,
+  canManageCalendar,
+}: {
+  events: CalendarEventItem[]
+  canManageCalendar: boolean
+}) {
   const today = new Date()
   const [monthDate, setMonthDate] = useState(new Date(today.getFullYear(), today.getMonth(), 1))
   const [selectedDate, setSelectedDate] = useState(today)
+  const [editingEvent, setEditingEvent] = useState<CalendarEventItem | null>(null)
+  const [deletingEvent, setDeletingEvent] = useState<CalendarEventItem | null>(null)
+  const [formData, setFormData] = useState(EMPTY_FORM)
+  const [isPending, startTransition] = useTransition()
+  const router = useRouter()
+
+  useEffect(() => {
+    if (!editingEvent) {
+      setFormData(EMPTY_FORM)
+      return
+    }
+
+    setFormData({
+      title: editingEvent.title,
+      description: editingEvent.description ?? "",
+      date: getDateField(editingEvent.startTime),
+      startTime: getTimeField(editingEvent.startTime),
+      endTime: getTimeField(editingEvent.endTime),
+      type: editingEvent.type,
+      location: editingEvent.location ?? "",
+    })
+  }, [editingEvent])
 
   const monthDays = useMemo(() => getMonthDays(monthDate), [monthDate])
   const selectedEvents = events.filter((event) => sameDay(new Date(event.startTime), selectedDate))
@@ -115,6 +201,40 @@ export function CalendarContent({ events }: { events: CalendarEventItem[] }) {
 
   function moveMonth(offset: number) {
     setMonthDate((current) => new Date(current.getFullYear(), current.getMonth() + offset, 1))
+  }
+
+  const handleSave = () => {
+    if (!editingEvent) return
+
+    startTransition(async () => {
+      const result = await updateCalendarEvent(editingEvent.id, formData)
+
+      if (!result.success) {
+        toast.error(result.error ?? "Could not update event.")
+        return
+      }
+
+      toast.success("Event updated")
+      setEditingEvent(null)
+      router.refresh()
+    })
+  }
+
+  const handleDelete = () => {
+    if (!deletingEvent) return
+
+    startTransition(async () => {
+      const result = await deleteCalendarEvent(deletingEvent.id)
+
+      if (!result.success) {
+        toast.error(result.error ?? "Could not delete event.")
+        return
+      }
+
+      toast.success("Event deleted")
+      setDeletingEvent(null)
+      router.refresh()
+    })
   }
 
   return (
@@ -215,7 +335,13 @@ export function CalendarContent({ events }: { events: CalendarEventItem[] }) {
               </div>
             )}
             {selectedEvents.map((event) => (
-              <EventCard key={event.id} event={event} />
+              <EventCard
+                key={event.id}
+                event={event}
+                canManageCalendar={canManageCalendar}
+                onEdit={setEditingEvent}
+                onDelete={setDeletingEvent}
+              />
             ))}
           </div>
         </div>
@@ -239,10 +365,154 @@ export function CalendarContent({ events }: { events: CalendarEventItem[] }) {
             </div>
           )}
           {upcomingEvents.map((event) => (
-            <EventCard key={event.id} event={event} compact />
+            <EventCard
+              key={event.id}
+              event={event}
+              compact
+              canManageCalendar={canManageCalendar}
+              onEdit={setEditingEvent}
+              onDelete={setDeletingEvent}
+            />
           ))}
         </div>
       </div>
+
+      <Dialog open={Boolean(editingEvent)} onOpenChange={(open) => !open && setEditingEvent(null)}>
+        <DialogContent className="glass-card border-primary/20 sm:max-w-[520px]">
+          <DialogHeader>
+            <DialogTitle>Edit Event</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-event-title">Event Title</Label>
+              <Input
+                id="edit-event-title"
+                value={formData.title}
+                onChange={(event) => setFormData((current) => ({ ...current, title: event.target.value }))}
+                className="glass border-border/50 focus:border-primary/50 h-11"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="edit-event-description">Description</Label>
+              <Textarea
+                id="edit-event-description"
+                value={formData.description}
+                onChange={(event) => setFormData((current) => ({ ...current, description: event.target.value }))}
+                className="glass border-border/50 focus:border-primary/50 min-h-[96px] resize-none"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="edit-event-date">Date</Label>
+              <Input
+                id="edit-event-date"
+                type="date"
+                value={formData.date}
+                onChange={(event) => setFormData((current) => ({ ...current, date: event.target.value }))}
+                className="glass border-border/50 focus:border-primary/50 h-11"
+              />
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="edit-event-start">Start Time</Label>
+                <Input
+                  id="edit-event-start"
+                  type="time"
+                  value={formData.startTime}
+                  onChange={(event) => setFormData((current) => ({ ...current, startTime: event.target.value }))}
+                  className="glass border-border/50 focus:border-primary/50 h-11"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="edit-event-end">End Time</Label>
+                <Input
+                  id="edit-event-end"
+                  type="time"
+                  value={formData.endTime}
+                  onChange={(event) => setFormData((current) => ({ ...current, endTime: event.target.value }))}
+                  className="glass border-border/50 focus:border-primary/50 h-11"
+                />
+              </div>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Type</Label>
+                <Select value={formData.type} onValueChange={(value) => setFormData((current) => ({ ...current, type: value }))}>
+                  <SelectTrigger className="glass border-border/50 focus:border-primary/50 h-11">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="glass-card border-primary/20">
+                    <SelectItem value="meeting">Meeting</SelectItem>
+                    <SelectItem value="call">Call</SelectItem>
+                    <SelectItem value="presentation">Presentation</SelectItem>
+                    <SelectItem value="workshop">Workshop</SelectItem>
+                    <SelectItem value="review">Review</SelectItem>
+                    <SelectItem value="deadline">Deadline</SelectItem>
+                    <SelectItem value="sprint">Sprint</SelectItem>
+                    <SelectItem value="task">Task</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="edit-event-location">Location</Label>
+                <Input
+                  id="edit-event-location"
+                  value={formData.location}
+                  onChange={(event) => setFormData((current) => ({ ...current, location: event.target.value }))}
+                  className="glass border-border/50 focus:border-primary/50 h-11"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="flex-1 glass border-border/50 hover:border-primary/30 hover:bg-primary/5"
+                onClick={() => setEditingEvent(null)}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                disabled={isPending || !formData.title.trim() || !formData.date}
+                className="flex-1 bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70"
+                onClick={handleSave}
+              >
+                Save Changes
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={Boolean(deletingEvent)} onOpenChange={(open) => !open && setDeletingEvent(null)}>
+        <AlertDialogContent className="glass-card border-primary/20">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Event</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deletingEvent ? `Delete "${deletingEvent.title}" from the calendar? This cannot be undone.` : ""}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="glass border-border/50 hover:border-primary/30 hover:bg-primary/5">
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={handleDelete}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

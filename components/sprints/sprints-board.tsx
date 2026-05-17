@@ -1,16 +1,29 @@
 "use client"
 
 import Link from "next/link"
-import { useState } from "react"
+import { useEffect, useState, useTransition } from "react"
+import { useRouter } from "next/navigation"
 import {
   AlertCircle,
   Calendar,
   ChevronDown,
   ChevronUp,
   Clock,
+  MoreHorizontal,
+  Pencil,
   Plus,
+  Trash2,
 } from "lucide-react"
-import type { SprintBoardItem } from "@/lib/actions/sprint-actions"
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
+import { Button } from "@/components/ui/button"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Textarea } from "@/components/ui/textarea"
+import { deleteSprint, updateSprint, type SprintBoardItem } from "@/lib/actions/sprint-actions"
+import { toast } from "sonner"
 
 const statusColors: Record<string, string> = {
   COMPLETED: "bg-emerald-500/10 text-emerald-500 border-emerald-500/20",
@@ -27,6 +40,21 @@ const priorityColors: Record<string, string> = {
   low: "#34d399",
 }
 
+type ProjectOption = {
+  id: string
+  name: string
+}
+
+const EMPTY_FORM = {
+  id: "",
+  name: "",
+  goal: "",
+  projectId: "",
+  status: "PLANNING" as "PLANNING" | "ACTIVE" | "COMPLETED" | "CANCELLED",
+  startDate: "",
+  endDate: "",
+}
+
 function formatShortDate(value: string | null) {
   if (!value) return "Unscheduled"
   return new Intl.DateTimeFormat("en", { month: "short", day: "numeric" }).format(new Date(value))
@@ -41,11 +69,73 @@ function getDaysLeft(value: string | null) {
   return Math.ceil((end.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
 }
 
-export function SprintsBoard({ sprints }: { sprints: SprintBoardItem[] }) {
+export function SprintsBoard({
+  sprints,
+  projects,
+  canManageSprints,
+}: {
+  sprints: SprintBoardItem[]
+  projects: ProjectOption[]
+  canManageSprints: boolean
+}) {
   const [expandedSprint, setExpandedSprint] = useState<string | null>(sprints[0]?.id ?? null)
   const [filter, setFilter] = useState<string>("all")
+  const [editingSprint, setEditingSprint] = useState<SprintBoardItem | null>(null)
+  const [deletingSprint, setDeletingSprint] = useState<SprintBoardItem | null>(null)
+  const [formData, setFormData] = useState(EMPTY_FORM)
+  const [isPending, startTransition] = useTransition()
+  const router = useRouter()
+
+  useEffect(() => {
+    if (!editingSprint) {
+      setFormData(EMPTY_FORM)
+      return
+    }
+
+    setFormData({
+      id: editingSprint.id,
+      name: editingSprint.name,
+      goal: editingSprint.goal ?? "",
+      projectId: editingSprint.project.id,
+      status: editingSprint.status as "PLANNING" | "ACTIVE" | "COMPLETED" | "CANCELLED",
+      startDate: editingSprint.startDate ? editingSprint.startDate.slice(0, 10) : "",
+      endDate: editingSprint.endDate ? editingSprint.endDate.slice(0, 10) : "",
+    })
+  }, [editingSprint])
 
   const filtered = filter === "all" ? sprints : sprints.filter((sprint) => sprint.status === filter)
+
+  const handleSaveSprint = () => {
+    startTransition(async () => {
+      const result = await updateSprint(formData)
+
+      if (!result.success) {
+        toast.error(result.error ?? "Could not update sprint.")
+        return
+      }
+
+      toast.success("Sprint updated")
+      setEditingSprint(null)
+      router.refresh()
+    })
+  }
+
+  const handleDeleteSprint = () => {
+    if (!deletingSprint) return
+
+    startTransition(async () => {
+      const result = await deleteSprint(deletingSprint.id)
+
+      if (!result.success) {
+        toast.error(result.error ?? "Could not delete sprint.")
+        return
+      }
+
+      toast.success("Sprint deleted")
+      setDeletingSprint(null)
+      router.refresh()
+    })
+  }
 
   return (
     <div className="space-y-4">
@@ -118,6 +208,31 @@ export function SprintsBoard({ sprints }: { sprints: SprintBoardItem[] }) {
                   >
                     {sprint.status}
                   </span>
+                  {canManageSprints && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={(event) => event.stopPropagation()}
+                        >
+                          <MoreHorizontal className="w-4 h-4 text-muted-foreground" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="glass-card border-primary/20">
+                        <DropdownMenuItem onClick={() => setEditingSprint(sprint)}>
+                          <Pencil className="w-4 h-4 text-primary" />
+                          Edit sprint
+                        </DropdownMenuItem>
+                        <DropdownMenuItem variant="destructive" onClick={() => setDeletingSprint(sprint)}>
+                          <Trash2 className="w-4 h-4" />
+                          Delete sprint
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
                   {isExpanded ? (
                     <ChevronUp className="w-4 h-4 text-muted-foreground" />
                   ) : (
@@ -201,6 +316,139 @@ export function SprintsBoard({ sprints }: { sprints: SprintBoardItem[] }) {
           </div>
         )
       })}
+
+      <Dialog open={Boolean(editingSprint)} onOpenChange={(open) => !open && setEditingSprint(null)}>
+        <DialogContent className="glass-card border-primary/20 sm:max-w-[520px]">
+          <DialogHeader>
+            <DialogTitle>Edit Sprint</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-sprint-name">Sprint Name</Label>
+              <Input
+                id="edit-sprint-name"
+                value={formData.name}
+                onChange={(event) => setFormData((current) => ({ ...current, name: event.target.value }))}
+                className="glass border-border/50 focus:border-primary/50 h-11"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="edit-sprint-goal">Goal</Label>
+              <Textarea
+                id="edit-sprint-goal"
+                value={formData.goal}
+                onChange={(event) => setFormData((current) => ({ ...current, goal: event.target.value }))}
+                className="glass border-border/50 focus:border-primary/50 min-h-[96px] resize-none"
+              />
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Project</Label>
+                <Select value={formData.projectId} onValueChange={(value) => setFormData((current) => ({ ...current, projectId: value }))}>
+                  <SelectTrigger className="glass border-border/50 focus:border-primary/50 h-11">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="glass-card border-primary/20">
+                    {projects.map((project) => (
+                      <SelectItem key={project.id} value={project.id}>
+                        {project.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Status</Label>
+                <Select
+                  value={formData.status}
+                  onValueChange={(value: "PLANNING" | "ACTIVE" | "COMPLETED" | "CANCELLED") =>
+                    setFormData((current) => ({ ...current, status: value }))
+                  }
+                >
+                  <SelectTrigger className="glass border-border/50 focus:border-primary/50 h-11">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="glass-card border-primary/20">
+                    <SelectItem value="PLANNING">Planning</SelectItem>
+                    <SelectItem value="ACTIVE">Active</SelectItem>
+                    <SelectItem value="COMPLETED">Completed</SelectItem>
+                    <SelectItem value="CANCELLED">Cancelled</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="edit-sprint-start">Start Date</Label>
+                <Input
+                  id="edit-sprint-start"
+                  type="date"
+                  value={formData.startDate}
+                  onChange={(event) => setFormData((current) => ({ ...current, startDate: event.target.value }))}
+                  className="glass border-border/50 focus:border-primary/50 h-11"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="edit-sprint-end">End Date</Label>
+                <Input
+                  id="edit-sprint-end"
+                  type="date"
+                  value={formData.endDate}
+                  onChange={(event) => setFormData((current) => ({ ...current, endDate: event.target.value }))}
+                  className="glass border-border/50 focus:border-primary/50 h-11"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="flex-1 glass border-border/50 hover:border-primary/30 hover:bg-primary/5"
+                onClick={() => setEditingSprint(null)}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                disabled={isPending || !formData.name.trim() || !formData.projectId}
+                className="flex-1 bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70"
+                onClick={handleSaveSprint}
+              >
+                Save Changes
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={Boolean(deletingSprint)} onOpenChange={(open) => !open && setDeletingSprint(null)}>
+        <AlertDialogContent className="glass-card border-primary/20">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Sprint</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deletingSprint ? `Delete "${deletingSprint.name}"? Tasks assigned to it will lose their sprint link.` : ""}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="glass border-border/50 hover:border-primary/30 hover:bg-primary/5">
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={handleDeleteSprint}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

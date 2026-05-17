@@ -2,6 +2,7 @@
 
 import prisma from "@/lib/prisma"
 import { requireSession } from "@/lib/auth"
+import { getPermissionError, hasPermission } from "@/lib/rbac"
 import { revalidatePath } from "next/cache"
 
 type CalendarEventInput = {
@@ -81,6 +82,7 @@ function formatEventBody(input: CalendarEventInput, startTime: Date, endTime: Da
 export type CalendarEventItem = ReturnType<typeof serializeCalendarEvent>
 
 export async function getCalendarEvents() {
+  await requireSession()
   const events = await prisma.calendarEvent.findMany({
     orderBy: { startTime: "asc" },
   })
@@ -90,6 +92,9 @@ export async function getCalendarEvents() {
 
 export async function createCalendarEvent(input: CalendarEventInput) {
   const session = await requireSession()
+  if (!hasPermission(session.role, "manage_calendar")) {
+    return { success: false, error: getPermissionError("manage_calendar") }
+  }
 
   if (!input.title.trim() || !input.date) {
     return { success: false, error: "Event title and date are required" }
@@ -149,4 +154,53 @@ export async function createCalendarEvent(input: CalendarEventInput) {
   revalidatePath("/calendar")
   revalidatePath("/emails")
   return { success: true, event: serializeCalendarEvent(event) }
+}
+
+export async function updateCalendarEvent(eventId: string, input: CalendarEventInput) {
+  const session = await requireSession()
+  if (!hasPermission(session.role, "manage_calendar")) {
+    return { success: false, error: getPermissionError("manage_calendar") }
+  }
+
+  if (!input.title.trim() || !input.date) {
+    return { success: false, error: "Event title and date are required" }
+  }
+
+  const startTime = toDateTime(input.date, input.startTime, "09:00")
+  let endTime = input.endTime ? toDateTime(input.date, input.endTime, "09:30") : addMinutes(startTime, 30)
+
+  if (endTime <= startTime) {
+    endTime = addMinutes(startTime, 30)
+  }
+
+  const eventType = input.type || "meeting"
+  const event = await prisma.calendarEvent.update({
+    where: { id: eventId },
+    data: {
+      title: input.title.trim(),
+      description: input.description?.trim() || null,
+      startTime,
+      endTime,
+      type: eventType,
+      color: TYPE_COLORS[eventType] ?? TYPE_COLORS.meeting,
+      location: input.location?.trim() || null,
+    },
+  })
+
+  revalidatePath("/calendar")
+  return { success: true, event: serializeCalendarEvent(event) }
+}
+
+export async function deleteCalendarEvent(eventId: string) {
+  const session = await requireSession()
+  if (!hasPermission(session.role, "manage_calendar")) {
+    return { success: false, error: getPermissionError("manage_calendar") }
+  }
+
+  await prisma.calendarEvent.delete({
+    where: { id: eventId },
+  })
+
+  revalidatePath("/calendar")
+  return { success: true }
 }

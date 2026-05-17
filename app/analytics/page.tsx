@@ -1,10 +1,15 @@
-import { Sidebar } from "@/components/dashboard/sidebar"
+import { SidebarWithUser as Sidebar } from "@/components/dashboard/sidebar-with-user"
 import { HeaderWithUser as Header } from "@/components/dashboard/header-with-user"
 import { AnalyticsContent } from "@/components/analytics/analytics-content"
 import { Button } from "@/components/ui/button"
 import { ExportReportModal } from "@/components/modals/export-report-modal"
+import { requirePermission } from "@/lib/auth"
+import { hasPermission } from "@/lib/rbac"
 
-export default function AnalyticsPage() {
+export default async function AnalyticsPage() {
+  const session = await requirePermission("view_analytics")
+  const canExportReports = hasPermission(session.role, "export_reports")
+
   return (
     <div className="flex min-h-screen bg-background">
       <div className="hidden lg:block">
@@ -15,7 +20,7 @@ export default function AnalyticsPage() {
         <Header
           title="Analytics Hub"
           description="Track your performance and productivity metrics."
-          actions={
+          actions={canExportReports ? (
             <ExportReportModal>
               <Button
                 variant="outline"
@@ -24,7 +29,7 @@ export default function AnalyticsPage() {
                 Export Report
               </Button>
             </ExportReportModal>
-          }
+          ) : undefined}
         />
 
         <div className="mt-6">

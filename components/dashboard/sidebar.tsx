@@ -25,8 +25,16 @@ import { cn } from "@/lib/utils"
 import { useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import { hasPermission, type AppRole } from "@/lib/rbac"
 
-const workspaceItems = [
+type NavItem = {
+  icon: typeof LayoutDashboard
+  label: string
+  href: string
+  badge?: string | null
+}
+
+const workspaceItems: NavItem[] = [
   { icon: LayoutDashboard, label: "Overview", href: "/", badge: null },
   { icon: Layers, label: "Projects", href: "/projects", badge: null },
   { icon: Zap, label: "Sprints", href: "/sprints", badge: "New" },
@@ -35,18 +43,18 @@ const workspaceItems = [
   { icon: BarChart3, label: "Analytics", href: "/analytics", badge: null },
 ]
 
-const teamItems = [
+const teamItems: NavItem[] = [
   { icon: Users, label: "Team", href: "/team", badge: null },
   { icon: ClipboardList, label: "Standups", href: "/standups", badge: "New" },
   { icon: Calendar, label: "Calendar", href: "/calendar", badge: null },
 ]
 
-const commsItems = [
+const commsItems: NavItem[] = [
   { icon: MessageSquare, label: "Messages", href: "/messages", badge: null },
   { icon: Mail, label: "Emails", href: "/emails", badge: null },
 ]
 
-const systemItems = [
+const systemItems: NavItem[] = [
   { icon: ShieldCheck, label: "Admin", href: "/admin/users" },
   { icon: Settings, label: "Settings", href: "/settings" },
   { icon: HelpCircle, label: "Help", href: "/help" },
@@ -60,9 +68,11 @@ const recentProjects = [
   { name: "Mobile App v2", color: "#10b981", status: "paused" },
 ]
 
-function NavSection({ title, items }: { title: string; items: typeof workspaceItems }) {
+function NavSection({ title, items }: { title: string; items: NavItem[] }) {
   const pathname = usePathname()
   const [hovered, setHovered] = useState<string | null>(null)
+
+  if (items.length === 0) return null
 
   return (
     <div>
@@ -105,8 +115,24 @@ function NavSection({ title, items }: { title: string; items: typeof workspaceIt
   )
 }
 
-export function Sidebar() {
+export function Sidebar({ role }: { role: AppRole }) {
   const pathname = usePathname()
+  const visibleWorkspaceItems = workspaceItems.filter((item) => {
+    if (item.href === "/jot-it") return hasPermission(role, "manage_own_notes")
+    if (item.href === "/analytics") return hasPermission(role, "view_analytics")
+    return true
+  })
+
+  const visibleCommsItems = commsItems.filter((item) => {
+    if (item.href === "/messages") return hasPermission(role, "use_messages")
+    if (item.href === "/emails") return hasPermission(role, "use_email")
+    return true
+  })
+
+  const visibleSystemItems = systemItems.filter((item) => {
+    if (item.href === "/admin/users") return hasPermission(role, "manage_users")
+    return true
+  })
 
   return (
     <aside className="fixed top-0 left-0 w-64 h-screen overflow-y-auto flex flex-col glass-card border-r border-primary/10 lg:block">
@@ -136,9 +162,9 @@ export function Sidebar() {
 
       {/* ── Navigation ───────────────────────────────────── */}
       <div className="flex-1 px-3 py-4 space-y-5 overflow-y-auto">
-        <NavSection title="Workspace" items={workspaceItems} />
+        <NavSection title="Workspace" items={visibleWorkspaceItems} />
         <NavSection title="Team" items={teamItems} />
-        <NavSection title="Communication" items={commsItems} />
+        <NavSection title="Communication" items={visibleCommsItems} />
 
         {/* ── Recent Projects ──────────────────────────── */}
         <div>
@@ -182,7 +208,7 @@ export function Sidebar() {
             System
           </p>
           <nav className="space-y-0.5">
-            {systemItems.map((item) => {
+            {visibleSystemItems.map((item) => {
               const isActive = pathname === item.href
               const isDanger = item.label === "Sign Out"
               return (

@@ -1,6 +1,7 @@
 import { SignJWT, jwtVerify } from "jose"
 import { cookies } from "next/headers"
 import { redirect } from "next/navigation"
+import { type AppRole, type Permission, hasPermission } from "@/lib/rbac"
 
 const JWT_SECRET = new TextEncoder().encode(
   process.env.JWT_SECRET ?? "eckintosh-secret-key-2026-change-in-production"
@@ -12,7 +13,7 @@ export interface SessionUser {
   id: string
   email: string
   name: string
-  role: "ADMIN" | "USER" | "GUEST"
+  role: AppRole
 }
 
 // ─── Create + store session ───────────────────────────────────────────────────
@@ -61,6 +62,12 @@ export async function requireSession(): Promise<SessionUser> {
 export async function requireAdmin(): Promise<SessionUser> {
   const session = await requireSession()
   if (session.role !== "ADMIN") redirect("/")
+  return session
+}
+
+export async function requirePermission(permission: Permission, redirectTo = "/"): Promise<SessionUser> {
+  const session = await requireSession()
+  if (!hasPermission(session.role, permission)) redirect(redirectTo)
   return session
 }
 

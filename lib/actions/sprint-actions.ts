@@ -1,6 +1,8 @@
 "use server"
 
 import prisma from "@/lib/prisma"
+import { requireSession } from "@/lib/auth"
+import { getPermissionError, hasPermission } from "@/lib/rbac"
 import { revalidatePath } from "next/cache"
 
 type SprintInput = {
@@ -75,6 +77,7 @@ function getInitials(value: string) {
 export type SprintBoardItem = ReturnType<typeof serializeSprint>
 
 export async function getSprints() {
+  await requireSession()
   const sprints = await prisma.sprint.findMany({
     include: {
       project: { select: { id: true, name: true, color: true } },
@@ -96,6 +99,11 @@ export async function getSprints() {
 }
 
 export async function createSprint(input: SprintInput) {
+  const session = await requireSession()
+  if (!hasPermission(session.role, "manage_sprints")) {
+    return { success: false, error: getPermissionError("manage_sprints") }
+  }
+
   if (!input.name.trim() || !input.projectId) {
     return { success: false, error: "Sprint name and project are required" }
   }
@@ -114,4 +122,50 @@ export async function createSprint(input: SprintInput) {
   revalidatePath("/")
   revalidatePath("/sprints")
   return { success: true, sprint }
+}
+
+export async function updateSprint(input: SprintInput & { id: string }) {
+  const session = await requireSession()
+  if (!hasPermission(session.role, "manage_sprints")) {
+    return { success: false, error: getPermissionError("manage_sprints") }
+  }
+
+  if (!input.name.trim() || !input.projectId) {
+    return { success: false, error: "Sprint name and project are required" }
+  }
+
+  const sprint = await prisma.sprint.update({
+    where: { id: input.id },
+    data: {
+      name: input.name.trim(),
+      goal: input.goal?.trim() || null,
+      projectId: input.projectId,
+      status: input.status ?? "PLANNING",
+      startDate: input.startDate ? new Date(input.startDate) : null,
+      endDate: input.endDate ? new Date(input.endDate) : null,
+    },
+  })
+
+  revalidatePath("/")
+  revalidatePath("/sprints")
+  revalidatePath("/tasks")
+
+  return { success: true, sprint }
+}
+
+export async function deleteSprint(sprintId: string) {
+  const session = await requireSession()
+  if (!hasPermission(session.role, "manage_sprints")) {
+    return { success: false, error: getPermissionError("manage_sprints") }
+  }
+
+  await prisma.sprint.delete({
+    where: { id: sprintId },
+  })
+
+  revalidatePath("/")
+  revalidatePath("/sprints")
+  revalidatePath("/tasks")
+
+  return { success: true }
 }

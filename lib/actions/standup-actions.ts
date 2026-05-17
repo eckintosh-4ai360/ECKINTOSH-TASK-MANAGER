@@ -2,6 +2,7 @@
 
 import prisma from "@/lib/prisma"
 import { requireSession } from "@/lib/auth"
+import { canManageStandup, getPermissionError, hasPermission } from "@/lib/rbac"
 import { revalidatePath } from "next/cache"
 
 type StandupInput = {
@@ -24,6 +25,8 @@ function getInitials(name: string) {
 
 function serializeStandup(standup: {
   id: string
+  userId: string
+  projectId: string | null
   didYesterday: string
   doingToday: string
   blockers: string | null
@@ -37,6 +40,8 @@ function serializeStandup(standup: {
 
   return {
     id: standup.id,
+    userId: standup.userId,
+    projectId: standup.projectId,
     user: name,
     initials: getInitials(name),
     role: standup.user.title ?? "Team member",
@@ -54,6 +59,7 @@ function serializeStandup(standup: {
 export type StandupItem = ReturnType<typeof serializeStandup>
 
 export async function getStandups() {
+  await requireSession()
   const standups = await prisma.standup.findMany({
     include: {
       user: { select: { name: true, email: true, title: true } },
@@ -68,6 +74,9 @@ export async function getStandups() {
 
 export async function createStandup(input: StandupInput) {
   const session = await requireSession()
+  if (!hasPermission(session.role, "post_standups")) {
+    return { success: false, error: getPermissionError("post_standups") }
+  }
 
   if (!input.didYesterday.trim() || !input.doingToday.trim()) {
     return { success: false, error: "Yesterday and today updates are required" }
@@ -84,6 +93,63 @@ export async function createStandup(input: StandupInput) {
       blockers: input.blockers?.trim() || null,
       mood,
     },
+  })
+
+  revalidatePath("/")
+  revalidatePath("/standups")
+  return { success: true }
+}
+
+export async function updateStandup(standupId: string, input: StandupInput) {
+  const session = await requireSession()
+  const standup = await prisma.standup.findUnique({
+    where: { id: standupId },
+    select: { userId: true },
+  })
+
+  if (!standup) {
+    return { success: false, error: "Standup not found" }
+  }
+
+  if (!canManageStandup(session, standup.userId)) {
+    return { success: false, error: "You can only edit your own standups." }
+  }
+
+  const mood = Math.max(1, Math.min(5, Number(input.mood) || 3))
+
+  await prisma.standup.update({
+    where: { id: standupId },
+    data: {
+      projectId: input.projectId || null,
+      didYesterday: input.didYesterday.trim(),
+      doingToday: input.doingToday.trim(),
+      blockers: input.blockers?.trim() || null,
+      mood,
+    },
+  })
+
+  revalidatePath("/")
+  revalidatePath("/standups")
+  return { success: true }
+}
+
+export async function deleteStandup(standupId: string) {
+  const session = await requireSession()
+  const standup = await prisma.standup.findUnique({
+    where: { id: standupId },
+    select: { userId: true },
+  })
+
+  if (!standup) {
+    return { success: false, error: "Standup not found" }
+  }
+
+  if (!canManageStandup(session, standup.userId)) {
+    return { success: false, error: "You can only delete your own standups." }
+  }
+
+  await prisma.standup.delete({
+    where: { id: standupId },
   })
 
   revalidatePath("/")

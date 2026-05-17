@@ -2,11 +2,13 @@
 
 import prisma from "@/lib/prisma"
 import { requireSession } from "@/lib/auth"
+import { hasPermission } from "@/lib/rbac"
 import { revalidatePath } from "next/cache"
 
 // Get conversation history between current user and another user
 export async function getConversation(otherUserId: string) {
   const session = await requireSession()
+  if (!hasPermission(session.role, "use_messages")) return []
   const me = session.id
 
   return prisma.message.findMany({
@@ -47,6 +49,7 @@ export async function getConversation(otherUserId: string) {
 // Get all users to chat with (everyone except self)
 export async function getChatUsers() {
   const session = await requireSession()
+  if (!hasPermission(session.role, "use_messages")) return []
   return prisma.user.findMany({
     where: { id: { not: session.id } },
     select: { id: true, name: true, email: true, role: true },
@@ -57,6 +60,7 @@ export async function getChatUsers() {
 // Mark messages from a user as read
 export async function markMessagesRead(fromUserId: string) {
   const session = await requireSession()
+  if (!hasPermission(session.role, "use_messages")) return
   await prisma.message.updateMany({
     where: { senderId: fromUserId, receiverId: session.id, read: false },
     data: { read: true },
@@ -66,6 +70,7 @@ export async function markMessagesRead(fromUserId: string) {
 // Get unread message counts per sender
 export async function getUnreadCounts() {
   const session = await requireSession()
+  if (!hasPermission(session.role, "use_messages")) return {}
   const messages = await prisma.message.findMany({
     where: { receiverId: session.id, read: false },
     select: { senderId: true },

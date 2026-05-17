@@ -1,9 +1,11 @@
 import { HeaderWithUser as Header } from "@/components/dashboard/header-with-user"
-import { Sidebar } from "@/components/dashboard/sidebar"
+import { SidebarWithUser as Sidebar } from "@/components/dashboard/sidebar-with-user"
 import { JotItContent } from "@/components/notes/jot-it-content"
 import { getNotes } from "@/lib/actions/note-actions"
+import { requirePermission } from "@/lib/auth"
 
 export default async function JotItPage() {
+  await requirePermission("manage_own_notes")
   const notes = await getNotes()
 
   return (

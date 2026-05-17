@@ -4,8 +4,9 @@ import { Menu } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { Sidebar } from "./sidebar"
+import type { AppRole } from "@/lib/rbac"
 
-export function MobileNav() {
+export function MobileNav({ role }: { role: AppRole }) {
   return (
     <Sheet>
       <SheetTrigger asChild>
@@ -19,7 +20,7 @@ export function MobileNav() {
         </Button>
       </SheetTrigger>
       <SheetContent side="left" className="p-0 w-64 glass-card border-r border-primary/20">
-        <Sidebar />
+        <Sidebar role={role} />
       </SheetContent>
     </Sheet>
   )

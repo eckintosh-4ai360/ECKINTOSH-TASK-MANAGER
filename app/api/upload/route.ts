@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { writeFile, mkdir } from "fs/promises"
 import path from "path"
 import { getSession } from "@/lib/auth"
+import { hasPermission } from "@/lib/rbac"
 
 // 50MB max
 const MAX_SIZE = 50 * 1024 * 1024
@@ -41,6 +42,9 @@ export async function POST(request: NextRequest) {
   try {
     const session = await getSession()
     if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    if (!hasPermission(session.role, "use_messages")) {
+      return NextResponse.json({ error: "Your role does not allow message uploads." }, { status: 403 })
+    }
 
     const formData = await request.formData()
     const file = formData.get("file") as File | null

@@ -10,6 +10,7 @@ import { useSearch } from "./search-context"
 import { useTheme } from "@/components/theme-provider"
 import { cn } from "@/lib/utils"
 import type { ReactNode } from "react"
+import type { AppRole } from "@/lib/rbac"
 
 interface HeaderProps {
   title: string
@@ -19,7 +20,7 @@ interface HeaderProps {
     id: string
     name: string
     email: string
-    role: string
+    role: AppRole
   }
 }
 
@@ -84,7 +85,7 @@ export function Header({ title, description, actions, user }: HeaderProps) {
       <div className="flex items-center justify-between gap-4">
         {/* Left: Mobile nav + Search */}
         <div className="flex items-center gap-3 flex-1">
-          <MobileNav />
+          <MobileNav role={role} />
           <div className="relative flex-1 max-w-md">
             <Search className={cn(
               "absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 transition-colors duration-200",

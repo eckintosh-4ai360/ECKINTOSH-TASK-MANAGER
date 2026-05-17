@@ -1,4 +1,4 @@
-import { Sidebar } from "@/components/dashboard/sidebar"
+import { SidebarWithUser as Sidebar } from "@/components/dashboard/sidebar-with-user"
 import { HeaderWithUser as Header } from "@/components/dashboard/header-with-user"
 import { StatsCards } from "@/components/dashboard/stats-cards"
 import { ProjectMatrix } from "@/components/dashboard/project-matrix"
@@ -10,8 +10,12 @@ import { Button } from "@/components/ui/button"
 import { AddProjectModal } from "@/components/modals/add-project-modal"
 
 import { getDashboardStats, getProjects } from "@/lib/actions/project-actions"
+import { requireSession } from "@/lib/auth"
+import { hasPermission } from "@/lib/rbac"
 
 export default async function DashboardPage() {
+  const session = await requireSession()
+  const canManageProjects = hasPermission(session.role, "manage_projects")
   const [projects, stats] = await Promise.all([
     getProjects(),
     getDashboardStats(),
@@ -27,7 +31,7 @@ export default async function DashboardPage() {
         <Header
             title="Command Center"
             description="Your dev team's operations hub — sprints, deploys, standups, all in one place."
-            actions={
+            actions={canManageProjects ? (
               <>
                 <AddProjectModal>
                   <Button
@@ -38,7 +42,7 @@ export default async function DashboardPage() {
                   </Button>
                 </AddProjectModal>
               </>
-            }
+            ) : undefined}
           />
 
           <div className="mt-5 space-y-4">

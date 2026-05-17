@@ -1,4 +1,4 @@
-import { Sidebar } from "@/components/dashboard/sidebar"
+import { SidebarWithUser as Sidebar } from "@/components/dashboard/sidebar-with-user"
 import { HeaderWithUser as Header } from "@/components/dashboard/header-with-user"
 import { SettingsContent } from "@/components/settings/settings-content"
 import { getSettingsPageData } from "@/lib/actions/settings-actions"

@@ -1,34 +1,102 @@
 "use client"
 
+import { useEffect, useState, useTransition } from "react"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Search, Calendar, Tag, SlidersHorizontal } from "lucide-react"
-import { useState, useTransition } from "react"
-import { toggleTaskStatus } from "@/lib/actions/project-actions"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Textarea } from "@/components/ui/textarea"
+import { Search, Calendar, Tag, SlidersHorizontal, MoreHorizontal, Pencil, Trash2 } from "lucide-react"
+import { deleteTask, toggleTaskStatus, updateTask } from "@/lib/actions/project-actions"
 import { useSearch } from "@/components/dashboard/search-context"
+import { toast } from "sonner"
 
 interface Task {
   id: string
   title: string
+  description?: string | null
   priority: string
-  dueDate: Date | null
+  dueDate: Date | string | null
   status: string
+  projectId: string
+  assigneeId?: string | null
+  tags?: string[]
   project?: { name: string }
+}
+
+interface ProjectOption {
+  id: string
+  name: string
+}
+
+interface UserOption {
+  id: string
+  name: string | null
+  email: string
 }
 
 interface TasksContentProps {
   tasks: Task[]
+  projects: ProjectOption[]
+  users: UserOption[]
+  currentUserId: string
+  canManageTasks: boolean
 }
 
-export function TasksContent({ tasks }: TasksContentProps) {
+const EMPTY_FORM = {
+  id: "",
+  title: "",
+  description: "",
+  projectId: "",
+  priority: "medium",
+  dueDate: "",
+  tags: "",
+  status: "TODO",
+  assigneeId: "unassigned",
+}
+
+export function TasksContent({ tasks, projects, users, currentUserId, canManageTasks }: TasksContentProps) {
   const [filter, setFilter] = useState("all")
   const [isPending, startTransition] = useTransition()
+  const [editingTask, setEditingTask] = useState<Task | null>(null)
+  const [deletingTask, setDeletingTask] = useState<Task | null>(null)
+  const [formData, setFormData] = useState(EMPTY_FORM)
   const { query, setQuery, matches } = useSearch()
+  const router = useRouter()
+
+  useEffect(() => {
+    if (!editingTask) {
+      setFormData(EMPTY_FORM)
+      return
+    }
+
+    setFormData({
+      id: editingTask.id,
+      title: editingTask.title,
+      description: editingTask.description ?? "",
+      projectId: editingTask.projectId,
+      priority: editingTask.priority,
+      dueDate: editingTask.dueDate ? new Date(editingTask.dueDate).toISOString().slice(0, 10) : "",
+      tags: editingTask.tags?.join(", ") ?? "",
+      status: editingTask.status,
+      assigneeId: editingTask.assigneeId ?? "unassigned",
+    })
+  }, [editingTask])
 
   const handleToggle = (taskId: string, currentStatus: string) => {
     startTransition(async () => {
-      await toggleTaskStatus(taskId, currentStatus !== "COMPLETED")
+      const result = await toggleTaskStatus(taskId, currentStatus !== "COMPLETED")
+      if (!result.success) {
+        toast.error(result.error ?? "Could not update task status.")
+        return
+      }
+
+      router.refresh()
     })
   }
 
@@ -42,6 +110,41 @@ export function TasksContent({ tasks }: TasksContentProps) {
   const filteredTasks = baseTasks.filter((t) =>
     matches(t.title, t.project?.name, t.priority, t.status)
   )
+
+  const handleSaveTask = () => {
+    startTransition(async () => {
+      const result = await updateTask({
+        ...formData,
+        assigneeId: formData.assigneeId === "unassigned" ? undefined : formData.assigneeId,
+      })
+
+      if (!result.success) {
+        toast.error(result.error ?? "Could not update task.")
+        return
+      }
+
+      toast.success("Task updated")
+      setEditingTask(null)
+      router.refresh()
+    })
+  }
+
+  const handleDeleteTask = () => {
+    if (!deletingTask) return
+
+    startTransition(async () => {
+      const result = await deleteTask(deletingTask.id)
+
+      if (!result.success) {
+        toast.error(result.error ?? "Could not delete task.")
+        return
+      }
+
+      toast.success("Task deleted")
+      setDeletingTask(null)
+      router.refresh()
+    })
+  }
 
   const getPriorityStyle = (priority: string) => {
     switch (priority.toUpperCase()) {
@@ -113,7 +216,7 @@ export function TasksContent({ tasks }: TasksContentProps) {
               <Checkbox 
                 checked={task.status === "COMPLETED"} 
                 onCheckedChange={() => handleToggle(task.id, task.status)}
-                disabled={isPending}
+                disabled={isPending || (!canManageTasks && task.assigneeId !== currentUserId)}
                 className="mt-1 border-primary/30 data-[state=checked]:bg-primary data-[state=checked]:border-primary" 
               />
               <div className="flex-1 space-y-2">
@@ -121,9 +224,30 @@ export function TasksContent({ tasks }: TasksContentProps) {
                   <h3 className={`font-semibold text-foreground ${task.status === "COMPLETED" ? "line-through opacity-60" : ""}`}>
                     {task.title}
                   </h3>
-                  <span className={`text-[10px] px-2 py-0.5 rounded border font-mono uppercase ${getPriorityStyle(task.priority)}`}>
-                    {task.priority}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-[10px] px-2 py-0.5 rounded border font-mono uppercase ${getPriorityStyle(task.priority)}`}>
+                      {task.priority}
+                    </span>
+                    {canManageTasks && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-8 w-8">
+                            <MoreHorizontal className="w-4 h-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="glass-card border-primary/20">
+                          <DropdownMenuItem onClick={() => setEditingTask(task)}>
+                            <Pencil className="w-4 h-4 text-primary" />
+                            Edit task
+                          </DropdownMenuItem>
+                          <DropdownMenuItem variant="destructive" onClick={() => setDeletingTask(task)}>
+                            <Trash2 className="w-4 h-4" />
+                            Delete task
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
+                  </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
                   {task.project && (
@@ -142,6 +266,166 @@ export function TasksContent({ tasks }: TasksContentProps) {
           </div>
         ))}
       </div>
+
+      <Dialog open={Boolean(editingTask)} onOpenChange={(open) => !open && setEditingTask(null)}>
+        <DialogContent className="glass-card border-primary/20 sm:max-w-[560px]">
+          <DialogHeader>
+            <DialogTitle>Edit Task</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-task-title">Task Title</Label>
+              <Input
+                id="edit-task-title"
+                value={formData.title}
+                onChange={(event) => setFormData((current) => ({ ...current, title: event.target.value }))}
+                className="glass border-border/50 focus:border-primary/50 h-11"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="edit-task-description">Description</Label>
+              <Textarea
+                id="edit-task-description"
+                value={formData.description}
+                onChange={(event) => setFormData((current) => ({ ...current, description: event.target.value }))}
+                className="glass border-border/50 focus:border-primary/50 min-h-[96px] resize-none"
+              />
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Project</Label>
+                <Select value={formData.projectId} onValueChange={(value) => setFormData((current) => ({ ...current, projectId: value }))}>
+                  <SelectTrigger className="glass border-border/50 focus:border-primary/50 h-11">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="glass-card border-primary/20">
+                    {projects.map((project) => (
+                      <SelectItem key={project.id} value={project.id}>
+                        {project.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Assignee</Label>
+                <Select value={formData.assigneeId} onValueChange={(value) => setFormData((current) => ({ ...current, assigneeId: value }))}>
+                  <SelectTrigger className="glass border-border/50 focus:border-primary/50 h-11">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="glass-card border-primary/20">
+                    <SelectItem value="unassigned">Unassigned</SelectItem>
+                    {users.map((user) => (
+                      <SelectItem key={user.id} value={user.id}>
+                        {user.name ?? user.email}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-4">
+              <div className="space-y-2">
+                <Label>Priority</Label>
+                <Select value={formData.priority} onValueChange={(value) => setFormData((current) => ({ ...current, priority: value }))}>
+                  <SelectTrigger className="glass border-border/50 focus:border-primary/50 h-11">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="glass-card border-primary/20">
+                    <SelectItem value="high">High</SelectItem>
+                    <SelectItem value="medium">Medium</SelectItem>
+                    <SelectItem value="low">Low</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Status</Label>
+                <Select value={formData.status} onValueChange={(value) => setFormData((current) => ({ ...current, status: value }))}>
+                  <SelectTrigger className="glass border-border/50 focus:border-primary/50 h-11">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="glass-card border-primary/20">
+                    <SelectItem value="BACKLOG">Backlog</SelectItem>
+                    <SelectItem value="TODO">Todo</SelectItem>
+                    <SelectItem value="IN_PROGRESS">In Progress</SelectItem>
+                    <SelectItem value="IN_REVIEW">In Review</SelectItem>
+                    <SelectItem value="COMPLETED">Completed</SelectItem>
+                    <SelectItem value="ARCHIVED">Archived</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="edit-task-due-date">Due Date</Label>
+                <Input
+                  id="edit-task-due-date"
+                  type="date"
+                  value={formData.dueDate}
+                  onChange={(event) => setFormData((current) => ({ ...current, dueDate: event.target.value }))}
+                  className="glass border-border/50 focus:border-primary/50 h-11"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="edit-task-tags">Tags</Label>
+                <Input
+                  id="edit-task-tags"
+                  value={formData.tags}
+                  onChange={(event) => setFormData((current) => ({ ...current, tags: event.target.value }))}
+                  className="glass border-border/50 focus:border-primary/50 h-11"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="flex-1 glass border-border/50 hover:border-primary/30 hover:bg-primary/5"
+                onClick={() => setEditingTask(null)}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                disabled={isPending || !formData.title.trim() || !formData.projectId}
+                className="flex-1 bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70"
+                onClick={handleSaveTask}
+              >
+                Save Changes
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={Boolean(deletingTask)} onOpenChange={(open) => !open && setDeletingTask(null)}>
+        <AlertDialogContent className="glass-card border-primary/20">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Task</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deletingTask ? `Delete "${deletingTask.title}"? This action cannot be undone.` : ""}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="glass border-border/50 hover:border-primary/30 hover:bg-primary/5">
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={handleDeleteTask}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

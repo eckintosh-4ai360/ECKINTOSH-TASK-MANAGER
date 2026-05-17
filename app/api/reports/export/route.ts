@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server"
 import prisma from "@/lib/prisma"
 import { getSession } from "@/lib/auth"
+import { hasPermission } from "@/lib/rbac"
 
 type ExportFormat = "pdf" | "xlsx" | "json"
 type DateRange = "week" | "month" | "quarter" | "year" | "all"
@@ -551,6 +552,9 @@ function getHeaders(format: ExportFormat, filename: string) {
 export async function POST(request: NextRequest) {
   const session = await getSession()
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  if (!hasPermission(session.role, "export_reports")) {
+    return NextResponse.json({ error: "Only admins can export workspace reports." }, { status: 403 })
+  }
 
   let config: ExportConfig | null = null
 

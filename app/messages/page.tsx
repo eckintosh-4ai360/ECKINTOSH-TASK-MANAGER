@@ -1,10 +1,10 @@
-import { Sidebar } from "@/components/dashboard/sidebar"
+import { SidebarWithUser as Sidebar } from "@/components/dashboard/sidebar-with-user"
 import { HeaderWithUser as Header } from "@/components/dashboard/header-with-user"
 import { ChatInterface } from "@/components/messages/chat-interface"
-import { requireSession } from "@/lib/auth"
+import { requirePermission } from "@/lib/auth"
 
 export default async function MessagesPage() {
-  const session = await requireSession()
+  const session = await requirePermission("use_messages")
 
   return (
     <div className="flex min-h-screen bg-background">

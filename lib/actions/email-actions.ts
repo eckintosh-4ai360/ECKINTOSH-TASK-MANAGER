@@ -2,11 +2,15 @@
 
 import prisma from "@/lib/prisma"
 import { requireSession } from "@/lib/auth"
+import { getPermissionError, hasPermission } from "@/lib/rbac"
 import { revalidatePath } from "next/cache"
 
 // Send internal email
 export async function sendEmail(formData: FormData) {
   const session = await requireSession()
+  if (!hasPermission(session.role, "use_email")) {
+    return { error: getPermissionError("use_email") }
+  }
   const toId = formData.get("toId") as string
   const subject = formData.get("subject") as string
   const body = formData.get("body") as string
@@ -27,6 +31,7 @@ export async function sendEmail(formData: FormData) {
 // Get inbox (emails received by current user)
 export async function getInbox() {
   const session = await requireSession()
+  if (!hasPermission(session.role, "use_email")) return []
   return prisma.internalEmail.findMany({
     where: { toId: session.id },
     include: { from: { select: { name: true, email: true } } },
@@ -37,6 +42,7 @@ export async function getInbox() {
 // Get sent emails
 export async function getSentEmails() {
   const session = await requireSession()
+  if (!hasPermission(session.role, "use_email")) return []
   return prisma.internalEmail.findMany({
     where: { fromId: session.id },
     include: { to: { select: { name: true, email: true } } },
@@ -47,6 +53,7 @@ export async function getSentEmails() {
 // Mark email as read — NO revalidatePath: client state already reflects it
 export async function markEmailRead(emailId: string) {
   const session = await requireSession()
+  if (!hasPermission(session.role, "use_email")) return
   await prisma.internalEmail.updateMany({
     where: { id: emailId, toId: session.id },
     data: { read: true },
@@ -57,6 +64,7 @@ export async function markEmailRead(emailId: string) {
 // Delete email — updates local state, no full page revalidation needed
 export async function deleteEmail(emailId: string) {
   const session = await requireSession()
+  if (!hasPermission(session.role, "use_email")) return
   await prisma.internalEmail.deleteMany({
     where: { id: emailId, OR: [{ fromId: session.id }, { toId: session.id }] },
   })
@@ -66,6 +74,7 @@ export async function deleteEmail(emailId: string) {
 // Get all users to send email to
 export async function getEmailableUsers() {
   const session = await requireSession()
+  if (!hasPermission(session.role, "use_email")) return []
   return prisma.user.findMany({
     where: { id: { not: session.id } },
     select: { id: true, name: true, email: true },

@@ -2,6 +2,7 @@
 
 import prisma from "@/lib/prisma"
 import { requireSession } from "@/lib/auth"
+import { getPermissionError, hasPermission } from "@/lib/rbac"
 import { revalidatePath } from "next/cache"
 
 type NoteInput = {
@@ -39,6 +40,7 @@ export type JotNote = ReturnType<typeof serializeNote>
 
 export async function getNotes() {
   const session = await requireSession()
+  if (!hasPermission(session.role, "manage_own_notes")) return []
   const notes = await prisma.note.findMany({
     where: { ownerId: session.id, archived: false },
     orderBy: [{ pinned: "desc" }, { updatedAt: "desc" }],
@@ -49,6 +51,9 @@ export async function getNotes() {
 
 export async function createNote(input: NoteInput) {
   const session = await requireSession()
+  if (!hasPermission(session.role, "manage_own_notes")) {
+    return { success: false, error: getPermissionError("manage_own_notes") }
+  }
   const content = input.content?.trim() ?? ""
 
   const note = await prisma.note.create({
@@ -66,6 +71,9 @@ export async function createNote(input: NoteInput) {
 
 export async function updateNote(noteId: string, input: NoteInput) {
   const session = await requireSession()
+  if (!hasPermission(session.role, "manage_own_notes")) {
+    return { success: false, error: getPermissionError("manage_own_notes") }
+  }
   const content = input.content ?? ""
 
   const updated = await prisma.note.updateMany({
@@ -86,6 +94,9 @@ export async function updateNote(noteId: string, input: NoteInput) {
 
 export async function toggleNotePinned(noteId: string, pinned: boolean) {
   const session = await requireSession()
+  if (!hasPermission(session.role, "manage_own_notes")) {
+    return { success: false, error: getPermissionError("manage_own_notes") }
+  }
   await prisma.note.updateMany({
     where: { id: noteId, ownerId: session.id },
     data: { pinned },
@@ -97,6 +108,9 @@ export async function toggleNotePinned(noteId: string, pinned: boolean) {
 
 export async function deleteNote(noteId: string) {
   const session = await requireSession()
+  if (!hasPermission(session.role, "manage_own_notes")) {
+    return { success: false, error: getPermissionError("manage_own_notes") }
+  }
   await prisma.note.deleteMany({ where: { id: noteId, ownerId: session.id } })
 
   revalidatePath("/jot-it")

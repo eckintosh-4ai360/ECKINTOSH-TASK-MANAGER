@@ -6,11 +6,17 @@ import { WebSocketServer, WebSocket } from "ws"
 import { PrismaClient } from "@prisma/client"
 import { PrismaPg } from "@prisma/adapter-pg"
 import pg from "pg"
+import { jwtVerify } from "jose"
+import { hasPermission, type AppRole } from "@/lib/rbac"
 
 const { Pool } = pg
 const dev = process.env.NODE_ENV !== "production"
 const hostname = "localhost"
 const port = parseInt(process.env.PORT ?? "3000", 10)
+const COOKIE_NAME = "eckintosh_session"
+const JWT_SECRET = new TextEncoder().encode(
+  process.env.JWT_SECRET ?? "eckintosh-secret-key-2026-change-in-production"
+)
 
 // ─── Prisma (for persisting messages) ─────────────────────────────────────────
 const rawUrl = process.env.DATABASE_URL!
@@ -22,8 +28,40 @@ const pool = new Pool({ connectionString: cleanUrl, ssl: { rejectUnauthorized: f
 const adapter = new PrismaPg(pool)
 const prisma = new PrismaClient({ adapter })
 
+type SocketSessionUser = {
+  id: string
+  email: string
+  name: string
+  role: AppRole
+}
+
 // ─── Connected clients: userId → WebSocket ─────────────────────────────────────
 const clients = new Map<string, WebSocket>()
+
+function getCookieValue(cookieHeader: string | undefined, name: string) {
+  if (!cookieHeader) return null
+
+  for (const part of cookieHeader.split(";")) {
+    const [key, ...rest] = part.trim().split("=")
+    if (key === name) {
+      return decodeURIComponent(rest.join("="))
+    }
+  }
+
+  return null
+}
+
+async function getSocketSession(req: { headers: { cookie?: string } }) {
+  try {
+    const token = getCookieValue(req.headers.cookie, COOKIE_NAME)
+    if (!token) return null
+
+    const { payload } = await jwtVerify(token, JWT_SECRET)
+    return (payload as { user?: SocketSessionUser }).user ?? null
+  } catch {
+    return null
+  }
+}
 
 // ─── Next.js app ───────────────────────────────────────────────────────────────
 const app = next({ dev, hostname, port })
@@ -39,22 +77,24 @@ app.prepare().then(() => {
   const wss = new WebSocketServer({ server: httpServer, path: "/ws" })
 
   wss.on("connection", (ws, req) => {
-    const url = new URL(req.url!, `http://${hostname}`)
-    const userId = url.searchParams.get("userId")
+    void (async () => {
+      const url = new URL(req.url!, `http://${hostname}`)
+      const userId = url.searchParams.get("userId")
+      const session = await getSocketSession(req)
 
-    if (!userId) {
-      ws.close(4001, "userId required")
-      return
-    }
+      if (!userId || !session || session.id !== userId || !hasPermission(session.role, "use_messages")) {
+        ws.close(4001, "unauthorized")
+        return
+      }
 
-    // Register client
-    clients.set(userId, ws)
-    console.log(`[WS] Connected: ${userId} (${clients.size} online)`)
+      // Register client
+      clients.set(userId, ws)
+      console.log(`[WS] Connected: ${userId} (${clients.size} online)`)
 
-    // Broadcast online presence
-    broadcast({ type: "presence", userId, online: true }, userId)
+      // Broadcast online presence
+      broadcast({ type: "presence", userId, online: true }, userId)
 
-    ws.on("message", async (raw) => {
+      ws.on("message", async (raw) => {
       try {
         const data = JSON.parse(raw.toString())
 
@@ -170,15 +210,16 @@ app.prepare().then(() => {
       }
     })
 
-    ws.on("close", () => {
-      clients.delete(userId)
-      console.log(`[WS] Disconnected: ${userId} (${clients.size} online)`)
-      broadcast({ type: "presence", userId, online: false }, userId)
-    })
+      ws.on("close", () => {
+        clients.delete(userId)
+        console.log(`[WS] Disconnected: ${userId} (${clients.size} online)`)
+        broadcast({ type: "presence", userId, online: false }, userId)
+      })
 
-    ws.on("error", (err) => {
-      console.error(`[WS] Error for ${userId}:`, err.message)
-    })
+      ws.on("error", (err) => {
+        console.error(`[WS] Error for ${userId}:`, err.message)
+      })
+    })()
   })
 
   function broadcast(payload: object, excludeUserId?: string) {
