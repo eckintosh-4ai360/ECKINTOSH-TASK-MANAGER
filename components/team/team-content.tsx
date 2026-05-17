@@ -1,5 +1,6 @@
 "use client"
 
+import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Mail, MessageCircle, MoreHorizontal, CheckCircle2, Clock } from "lucide-react"
@@ -102,13 +103,17 @@ export function TeamContent() {
               </div>
 
               <div className="flex gap-2 pt-2">
-                <Button variant="outline" size="sm" className="flex-1 glass border-primary/20 hover:border-primary/40 hover:bg-primary/5 text-xs">
-                  <Mail className="w-3.5 h-3.5 mr-1" />
-                  Email
+                <Button variant="outline" size="sm" className="flex-1 glass border-primary/20 hover:border-primary/40 hover:bg-primary/5 text-xs" asChild>
+                  <Link href="/emails">
+                    <Mail className="w-3.5 h-3.5 mr-1" />
+                    Email
+                  </Link>
                 </Button>
-                <Button variant="outline" size="sm" className="flex-1 glass border-primary/20 hover:border-primary/40 hover:bg-primary/5 text-xs">
-                  <MessageCircle className="w-3.5 h-3.5 mr-1" />
-                  Chat
+                <Button variant="outline" size="sm" className="flex-1 glass border-primary/20 hover:border-primary/40 hover:bg-primary/5 text-xs" asChild>
+                  <Link href="/messages">
+                    <MessageCircle className="w-3.5 h-3.5 mr-1" />
+                    Chat
+                  </Link>
                 </Button>
               </div>
             </div>
