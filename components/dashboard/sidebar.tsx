@@ -13,6 +13,7 @@ import {
   Layers,
   MessageSquare,
   Mail,
+  NotebookPen,
   Zap,
   GitBranch,
   Rocket,
@@ -30,6 +31,7 @@ const workspaceItems = [
   { icon: Layers, label: "Projects", href: "/projects", badge: null },
   { icon: Zap, label: "Sprints", href: "/sprints", badge: "New" },
   { icon: CheckSquare, label: "Tasks", href: "/tasks", badge: null },
+  { icon: NotebookPen, label: "Jot it", href: "/jot-it", badge: "New" },
   { icon: BarChart3, label: "Analytics", href: "/analytics", badge: null },
 ]
 

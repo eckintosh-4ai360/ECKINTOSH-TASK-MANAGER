@@ -33,6 +33,7 @@ export async function createProject(formData: {
         description: formData.description || "",
         priority: (formData.priority || "medium").toLowerCase(),
         endDate: formData.dueDate ? new Date(formData.dueDate) : null,
+        tech: [],
         ownerId: user.id,
       },
     })
@@ -80,17 +81,23 @@ export async function getProjects() {
 
 export async function createTask(formData: {
   title: string
+  description?: string
   projectId: string
   priority?: string
   dueDate?: string
+  tags?: string
 }) {
   try {
     const task = await prisma.task.create({
       data: {
         title: formData.title,
+        description: formData.description || "",
         projectId: formData.projectId,
         priority: (formData.priority || "medium").toLowerCase(),
         dueDate: formData.dueDate ? new Date(formData.dueDate) : null,
+        tags: formData.tags
+          ? formData.tags.split(",").map((tag) => tag.trim()).filter(Boolean)
+          : [],
       },
     })
 
@@ -161,22 +168,19 @@ export async function toggleTaskStatus(taskId: string, isCompleted: boolean) {
 
 export async function getDashboardStats() {
   try {
-    const [totalProjects, completedProjects, activeProjects, pendingTasks, teamMembers] =
+    const weekAgo = new Date()
+    weekAgo.setDate(weekAgo.getDate() - 7)
+
+    const [totalProjects, completedProjects, activeProjects, pendingTasks, teamMembers, activeSprints, deployments] =
       await Promise.all([
         prisma.project.count(),
         prisma.project.count({ where: { status: "completed" } }),
         prisma.project.count({ where: { status: "active" } }),
         prisma.task.count({ where: { status: { in: ["TODO", "BACKLOG"] } } }),
         prisma.user.count(),
+        prisma.sprint.count({ where: { status: "ACTIVE" } }),
+        prisma.deployment.count({ where: { deployedAt: { gte: weekAgo } } }),
       ])
-
-    // Sprint count
-    let activeSprints = 0
-    try {
-      activeSprints = await prisma.sprint.count({ where: { status: "ACTIVE" } })
-    } catch {
-      // fallback if schema not synced
-    }
 
     return {
       totalProjects,
@@ -185,6 +189,7 @@ export async function getDashboardStats() {
       pendingTasks,
       activeSprints,
       teamMembers,
+      deployments,
     }
   } catch (error) {
     console.error("Failed to fetch dashboard stats:", error)
@@ -195,6 +200,7 @@ export async function getDashboardStats() {
       pendingTasks: 0,
       activeSprints: 0,
       teamMembers: 0,
+      deployments: 0,
     }
   }
 }

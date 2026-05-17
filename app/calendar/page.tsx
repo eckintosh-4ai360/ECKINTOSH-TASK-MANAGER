@@ -3,8 +3,11 @@ import { HeaderWithUser as Header } from "@/components/dashboard/header-with-use
 import { CalendarContent } from "@/components/calendar/calendar-content"
 import { Button } from "@/components/ui/button"
 import { AddEventModal } from "@/components/modals/add-event-modal"
+import { getCalendarEvents } from "@/lib/actions/calendar-actions"
 
-export default function CalendarPage() {
+export default async function CalendarPage() {
+  const events = await getCalendarEvents()
+
   return (
     <div className="flex min-h-screen bg-background">
       <div className="hidden lg:block">
@@ -25,7 +28,7 @@ export default function CalendarPage() {
         />
 
         <div className="mt-6">
-          <CalendarContent />
+          <CalendarContent events={events} />
         </div>
       </main>
     </div>

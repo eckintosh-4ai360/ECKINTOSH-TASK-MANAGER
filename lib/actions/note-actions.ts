@@ -1,0 +1,104 @@
+"use server"
+
+import prisma from "@/lib/prisma"
+import { requireSession } from "@/lib/auth"
+import { revalidatePath } from "next/cache"
+
+type NoteInput = {
+  title?: string
+  content?: string
+  color?: string
+}
+
+function serializeNote(note: {
+  id: string
+  title: string
+  content: string
+  color: string
+  pinned: boolean
+  archived: boolean
+  createdAt: Date
+  updatedAt: Date
+}) {
+  return {
+    ...note,
+    createdAt: note.createdAt.toISOString(),
+    updatedAt: note.updatedAt.toISOString(),
+  }
+}
+
+function normalizeTitle(title?: string, content?: string) {
+  const cleanTitle = title?.trim()
+  if (cleanTitle) return cleanTitle
+
+  const firstLine = content?.split("\n").find((line) => line.trim())?.trim()
+  return firstLine?.slice(0, 80) || "Untitled note"
+}
+
+export type JotNote = ReturnType<typeof serializeNote>
+
+export async function getNotes() {
+  const session = await requireSession()
+  const notes = await prisma.note.findMany({
+    where: { ownerId: session.id, archived: false },
+    orderBy: [{ pinned: "desc" }, { updatedAt: "desc" }],
+  })
+
+  return notes.map(serializeNote)
+}
+
+export async function createNote(input: NoteInput) {
+  const session = await requireSession()
+  const content = input.content?.trim() ?? ""
+
+  const note = await prisma.note.create({
+    data: {
+      title: normalizeTitle(input.title, content),
+      content,
+      color: input.color || "#00d4ff",
+      ownerId: session.id,
+    },
+  })
+
+  revalidatePath("/jot-it")
+  return { success: true, note: serializeNote(note) }
+}
+
+export async function updateNote(noteId: string, input: NoteInput) {
+  const session = await requireSession()
+  const content = input.content ?? ""
+
+  const updated = await prisma.note.updateMany({
+    where: { id: noteId, ownerId: session.id },
+    data: {
+      title: normalizeTitle(input.title, content),
+      content,
+      color: input.color || "#00d4ff",
+    },
+  })
+
+  if (updated.count === 0) return { success: false, error: "Note not found" }
+
+  const note = await prisma.note.findUniqueOrThrow({ where: { id: noteId } })
+  revalidatePath("/jot-it")
+  return { success: true, note: serializeNote(note) }
+}
+
+export async function toggleNotePinned(noteId: string, pinned: boolean) {
+  const session = await requireSession()
+  await prisma.note.updateMany({
+    where: { id: noteId, ownerId: session.id },
+    data: { pinned },
+  })
+
+  revalidatePath("/jot-it")
+  return { success: true }
+}
+
+export async function deleteNote(noteId: string) {
+  const session = await requireSession()
+  await prisma.note.deleteMany({ where: { id: noteId, ownerId: session.id } })
+
+  revalidatePath("/jot-it")
+  return { success: true }
+}

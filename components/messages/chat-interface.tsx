@@ -319,12 +319,12 @@ export function ChatInterface({ currentUserId, currentUserName }: ChatInterfaceP
     })
 
   return (
-    <div className="flex h-[calc(100vh-120px)] overflow-hidden rounded-2xl border border-white/10 shadow-2xl" style={{ background: "hsl(var(--background))" }}>
+    <div className="flex h-[calc(100vh-120px)] overflow-hidden rounded-2xl border border-border/60 bg-card shadow-xl shadow-black/5 dark:shadow-black/30">
 
       {/* ── LEFT PANEL: contacts ───────────────────────────────────────────── */}
-      <div className="w-80 flex-shrink-0 flex flex-col border-r border-white/5" style={{ background: "hsl(222 20% 8%)" }}>
+      <div className="w-80 flex-shrink-0 flex flex-col border-r border-border/60 bg-card/85">
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-4 border-b border-white/5">
+        <div className="flex items-center justify-between px-4 py-4 border-b border-border/60">
           <div className="flex items-center gap-2">
             <div className="w-9 h-9 rounded-full bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center text-xs font-bold text-primary-foreground uppercase">
               {currentUserName[0]}
@@ -338,7 +338,7 @@ export function ChatInterface({ currentUserId, currentUserName }: ChatInterfaceP
         <div className="px-3 py-2">
           <div className="relative">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search or start a chat" className="pl-9 h-9 text-sm border-none bg-white/5 focus-visible:ring-0 rounded-full" />
+            <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search or start a chat" className="pl-9 h-9 text-sm border border-border/40 bg-background/70 focus-visible:ring-0 rounded-full" />
           </div>
         </div>
 
@@ -351,8 +351,8 @@ export function ChatInterface({ currentUserId, currentUserName }: ChatInterfaceP
 
             return (
               <button key={user.id} onClick={() => selectUser(user)}
-                className={cn("w-full flex items-center gap-3 px-4 py-3.5 text-left transition-colors border-b border-white/5 hover:bg-white/5",
-                  isSelected && "bg-primary/15"
+                className={cn("w-full flex items-center gap-3 px-4 py-3.5 text-left transition-colors border-b border-border/50 hover:bg-muted/60",
+                  isSelected && "bg-primary/10"
                 )}>
                 {/* Avatar with online dot */}
                 <div className="relative flex-shrink-0">
@@ -395,7 +395,7 @@ export function ChatInterface({ currentUserId, currentUserName }: ChatInterfaceP
       {selectedUser ? (
         <div className="flex-1 flex flex-col min-w-0">
           {/* Chat header */}
-          <div className="flex items-center gap-3 px-4 py-3 border-b border-white/5 flex-shrink-0" style={{ background: "hsl(222 20% 9%)" }}>
+          <div className="flex items-center gap-3 px-4 py-3 border-b border-border/60 bg-card/90 flex-shrink-0">
             <div className="relative">
               <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary/40 to-primary/10 flex items-center justify-center text-sm font-bold text-primary uppercase">
                 {(selectedUser.name ?? selectedUser.email)[0]}
@@ -414,18 +414,12 @@ export function ChatInterface({ currentUserId, currentUserName }: ChatInterfaceP
           </div>
 
           {/* Messages area */}
-          <div
-            className="flex-1 overflow-y-auto py-4 px-4 space-y-1"
-            style={{
-              background: "hsl(222 18% 7%)",
-              backgroundImage: "radial-gradient(circle at 25% 25%, hsl(var(--primary) / 0.03) 0%, transparent 50%), radial-gradient(circle at 75% 75%, hsl(var(--primary) / 0.03) 0%, transparent 50%)",
-            }}
-          >
+          <div className="flex-1 overflow-y-auto py-4 px-4 space-y-1 bg-background">
             {grouped.map(({ date, msgs }) => (
               <div key={date}>
                 {/* Date separator */}
                 <div className="flex items-center justify-center my-4">
-                  <span className="bg-white/10 text-muted-foreground text-[11px] px-3 py-1 rounded-full font-medium">
+                  <span className="bg-muted text-muted-foreground text-[11px] px-3 py-1 rounded-full font-medium">
                     {date}
                   </span>
                 </div>
@@ -459,12 +453,12 @@ export function ChatInterface({ currentUserId, currentUserName }: ChatInterfaceP
                         <div className="flex-shrink-0 flex items-center gap-1">
                           {!msg.mediaUrl && (
                             <button onClick={() => startEdit(msg)}
-                              className="w-7 h-7 rounded-full flex items-center justify-center bg-white/10 hover:bg-blue-500/20 text-muted-foreground hover:text-blue-400 transition-colors">
+                              className="w-7 h-7 rounded-full flex items-center justify-center bg-muted hover:bg-blue-500/20 text-muted-foreground hover:text-blue-500 transition-colors">
                               <Pencil className="w-3.5 h-3.5" />
                             </button>
                           )}
                           <button onClick={() => sendDelete(msg.id)}
-                            className="w-7 h-7 rounded-full flex items-center justify-center bg-white/10 hover:bg-red-500/20 text-muted-foreground hover:text-red-400 transition-colors">
+                            className="w-7 h-7 rounded-full flex items-center justify-center bg-muted hover:bg-red-500/20 text-muted-foreground hover:text-red-500 transition-colors">
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </div>
@@ -474,7 +468,7 @@ export function ChatInterface({ currentUserId, currentUserName }: ChatInterfaceP
                       {hoveredMsg === msg.id && !isMine && (
                         <button
                           onClick={() => { setReplyingTo(msg); inputRef.current?.focus() }}
-                          className="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center bg-white/10 hover:bg-white/20 text-muted-foreground hover:text-foreground transition-colors"
+                          className="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground transition-colors"
                         >
                           <Reply className="w-3.5 h-3.5" />
                         </button>
@@ -488,7 +482,7 @@ export function ChatInterface({ currentUserId, currentUserName }: ChatInterfaceP
                             onClick={() => scrollToMessage(msg.replyTo!.id)}
                             className={cn(
                               "w-full mb-1 text-left rounded-lg overflow-hidden border-l-4 px-3 py-1.5 cursor-pointer hover:brightness-110 transition-all",
-                              isMine ? "bg-white/10 border-primary/60" : "bg-white/5 border-emerald-400/60"
+                              isMine ? "bg-primary/10 border-primary/60" : "bg-muted border-emerald-500/60"
                             )}
                           >
                             <p className="text-[11px] font-semibold text-primary truncate">{msg.replyTo.senderName}</p>
@@ -502,10 +496,8 @@ export function ChatInterface({ currentUserId, currentUserName }: ChatInterfaceP
                           msg.mediaUrl ? "p-1" : "px-3 py-2",
                           isMine
                             ? "bg-gradient-to-br from-primary to-primary/80 text-primary-foreground rounded-tr-sm shadow-lg shadow-primary/20"
-                            : "text-foreground rounded-tl-sm shadow-sm",
-                          !isMine && "bg-white/8"
+                            : "bg-card text-card-foreground border border-border/60 rounded-tl-sm shadow-sm"
                         )}
-                          style={!isMine ? { background: "hsl(222 18% 14%)" } : undefined}
                         >
                           {msg.mediaUrl && msg.mediaType && (
                             <MediaBubble
@@ -560,7 +552,7 @@ export function ChatInterface({ currentUserId, currentUserName }: ChatInterfaceP
 
             {messages.length === 0 && (
               <div className="flex flex-col items-center justify-center h-full gap-3 text-muted-foreground">
-                <div className="w-16 h-16 rounded-2xl border border-white/10 flex items-center justify-center" style={{ background: "hsl(222 18% 12%)" }}>
+                <div className="w-16 h-16 rounded-2xl border border-border/60 bg-card flex items-center justify-center">
                   <MessageSquare className="w-8 h-8 text-primary/40" />
                 </div>
                 <p className="text-sm">Say hi to <span className="text-foreground font-medium">{selectedUser.name ?? selectedUser.email}</span> 👋</p>
@@ -571,7 +563,7 @@ export function ChatInterface({ currentUserId, currentUserName }: ChatInterfaceP
 
           {/* Reply preview bar */}
           {replyingTo && (
-            <div className="flex items-center gap-3 px-4 py-2 border-t border-white/5 flex-shrink-0" style={{ background: "hsl(222 18% 10%)" }}>
+            <div className="flex items-center gap-3 px-4 py-2 border-t border-border/60 bg-card flex-shrink-0">
               <div className="flex-1 border-l-4 border-primary pl-3">
                 <p className="text-xs font-semibold text-primary">{replyingTo.from === currentUserId ? "You" : replyingTo.senderName}</p>
                 <p className="text-xs text-muted-foreground truncate">
@@ -585,7 +577,7 @@ export function ChatInterface({ currentUserId, currentUserName }: ChatInterfaceP
           )}
 
           {/* Input bar */}
-          <div className="flex items-center gap-2 px-4 py-3 border-t border-white/5 flex-shrink-0" style={{ background: "hsl(222 18% 9%)" }}>
+          <div className="flex items-center gap-2 px-4 py-3 border-t border-border/60 bg-card flex-shrink-0">
             {wsStatus !== "connected" && (
               <div className="absolute left-1/2 -translate-x-1/2 bottom-20 z-10">
                 <span className={cn(
@@ -606,8 +598,7 @@ export function ChatInterface({ currentUserId, currentUserName }: ChatInterfaceP
               onChange={(e) => handleInputChange(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage() } }}
               placeholder={wsStatus === "connected" ? "Type a message…" : "Waiting for connection…"}
-              className="flex-1 border-none bg-white/8 rounded-full h-10 px-4 focus-visible:ring-0 text-sm"
-              style={{ background: "hsl(222 18% 14%)" }}
+              className="flex-1 border border-border/50 bg-background/80 rounded-full h-10 px-4 focus-visible:ring-0 text-sm"
             />
             <Button
               onClick={sendMessage}
@@ -621,8 +612,8 @@ export function ChatInterface({ currentUserId, currentUserName }: ChatInterfaceP
         </div>
       ) : (
         /* No chat selected */
-        <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground gap-4" style={{ background: "hsl(222 18% 7%)" }}>
-          <div className="w-24 h-24 rounded-3xl border border-white/10 flex items-center justify-center" style={{ background: "hsl(222 18% 11%)" }}>
+        <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground gap-4 bg-background">
+          <div className="w-24 h-24 rounded-3xl border border-border/60 bg-card flex items-center justify-center">
             <MessageSquare className="w-12 h-12 text-primary/30" />
           </div>
           <div className="text-center">
@@ -633,10 +624,9 @@ export function ChatInterface({ currentUserId, currentUserName }: ChatInterfaceP
       )}
 
       <style jsx>{`
-        .bg-white\/8 { background: hsl(222 18% 14%) }
         @keyframes flash {
           0%, 100% { background: transparent }
-          50% { background: hsl(var(--primary) / 0.2) }
+          50% { background: color-mix(in oklab, var(--primary) 18%, transparent) }
         }
         .highlight-flash { animation: flash 0.6s ease 2 }
       `}</style>

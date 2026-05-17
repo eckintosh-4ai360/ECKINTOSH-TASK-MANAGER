@@ -2,12 +2,16 @@
 
 import { Cpu, CheckCircle2, Zap, Rocket, GitBranch, Users } from "lucide-react"
 import { useState } from "react"
+import Link from "next/link"
 
 interface DashboardStats {
   totalProjects: number
   completedProjects: number
   activeProjects: number
   pendingTasks: number
+  activeSprints: number
+  teamMembers: number
+  deployments: number
 }
 
 interface StatsCardsProps {
@@ -30,10 +34,11 @@ export function StatsCards({ stats }: StatsCardsProps) {
       borderDefault: "border-primary/20",
       borderHover: "border-primary/50 shadow-primary/20",
       delay: "0ms",
+      href: "/projects",
     },
     {
       title: "Active Sprints",
-      value: stats.activeProjects.toString(),
+      value: stats.activeSprints.toString(),
       badge: "LIVE",
       subtitle: "In progress now",
       icon: Zap,
@@ -43,10 +48,11 @@ export function StatsCards({ stats }: StatsCardsProps) {
       borderDefault: "border-chart-2/20",
       borderHover: "border-chart-2/50 shadow-chart-2/20",
       delay: "80ms",
+      href: "/sprints",
     },
     {
       title: "Deployments",
-      value: "14",
+      value: stats.deployments.toString(),
       badge: "THIS WEEK",
       subtitle: "Staging & Production",
       icon: Rocket,
@@ -56,6 +62,7 @@ export function StatsCards({ stats }: StatsCardsProps) {
       borderDefault: "border-chart-3/20",
       borderHover: "border-chart-3/50 shadow-chart-3/20",
       delay: "160ms",
+      href: "/analytics",
     },
     {
       title: "Open Tasks",
@@ -69,10 +76,11 @@ export function StatsCards({ stats }: StatsCardsProps) {
       borderDefault: "border-chart-4/20",
       borderHover: "border-chart-4/50 shadow-chart-4/20",
       delay: "240ms",
+      href: "/tasks",
     },
     {
       title: "Team Members",
-      value: "6",
+      value: stats.teamMembers.toString(),
       badge: "ONLINE 4",
       subtitle: "Active contributors",
       icon: Users,
@@ -82,6 +90,7 @@ export function StatsCards({ stats }: StatsCardsProps) {
       borderDefault: "border-chart-5/20",
       borderHover: "border-chart-5/50 shadow-chart-5/20",
       delay: "320ms",
+      href: "/team",
     },
     {
       title: "Commits Today",
@@ -95,14 +104,16 @@ export function StatsCards({ stats }: StatsCardsProps) {
       borderDefault: "border-primary/20",
       borderHover: "border-primary/50 shadow-primary/20",
       delay: "400ms",
+      href: "/commits",
     },
   ]
 
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
       {cards.map((stat, index) => (
-        <div
+        <Link
           key={stat.title}
+          href={stat.href}
           onMouseEnter={() => setHoveredCard(index)}
           onMouseLeave={() => setHoveredCard(null)}
           style={{ animationDelay: stat.delay }}
@@ -130,7 +141,7 @@ export function StatsCards({ stats }: StatsCardsProps) {
             <p className="text-[11px] font-semibold text-foreground mb-0.5">{stat.title}</p>
             <p className="text-[10px] text-muted-foreground">{stat.subtitle}</p>
           </div>
-        </div>
+        </Link>
       ))}
     </div>
   )

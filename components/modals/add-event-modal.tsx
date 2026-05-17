@@ -1,39 +1,54 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useTransition } from "react"
+import { useRouter } from "next/navigation"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Plus, CalendarPlus, Clock, Video, MapPin } from "lucide-react"
+import { Plus, CalendarPlus, Clock, Video, MapPin, Loader2 } from "lucide-react"
+import { createCalendarEvent } from "@/lib/actions/calendar-actions"
 
 interface AddEventModalProps {
   children: React.ReactNode
 }
 
 export function AddEventModal({ children }: AddEventModalProps) {
+  const router = useRouter()
   const [open, setOpen] = useState(false)
+  const [isPending, startTransition] = useTransition()
+  const [message, setMessage] = useState<string | null>(null)
   const [formData, setFormData] = useState({
     title: "",
     description: "",
     date: "",
     startTime: "",
     endTime: "",
-    type: "",
+    type: "meeting",
     location: "",
   })
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    console.log("Event created:", formData)
-    setOpen(false)
-    setFormData({ title: "", description: "", date: "", startTime: "", endTime: "", type: "", location: "" })
+    setMessage(null)
+
+    startTransition(async () => {
+      const result = await createCalendarEvent(formData)
+      if (!result.success) {
+        setMessage(result.error ?? "Could not schedule event.")
+        return
+      }
+
+      setOpen(false)
+      setFormData({ title: "", description: "", date: "", startTime: "", endTime: "", type: "meeting", location: "" })
+      router.refresh()
+    })
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={(value) => { setOpen(value); if (!value) setMessage(null) }}>
       <DialogTrigger asChild>{children}</DialogTrigger>
       <DialogContent className="glass-card border-primary/20 sm:max-w-[500px]">
         <DialogHeader>
@@ -152,6 +167,12 @@ export function AddEventModal({ children }: AddEventModalProps) {
             </div>
           </div>
 
+          {message && (
+            <p className="rounded-xl border border-destructive/25 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              {message}
+            </p>
+          )}
+
           <div className="flex gap-3 pt-4">
             <Button
               type="button"
@@ -163,9 +184,10 @@ export function AddEventModal({ children }: AddEventModalProps) {
             </Button>
             <Button
               type="submit"
+              disabled={isPending}
               className="flex-1 bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 shadow-lg shadow-primary/20"
             >
-              <Plus className="w-4 h-4 mr-2" />
+              {isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Plus className="w-4 h-4 mr-2" />}
               Schedule Event
             </Button>
           </div>

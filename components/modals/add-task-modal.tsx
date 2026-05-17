@@ -46,9 +46,11 @@ export function AddTaskModal({ children, projects }: AddTaskModalProps) {
     startTransition(async () => {
       const result = await createTask({
         title: formData.title,
+        description: formData.description,
         projectId: formData.projectId,
         priority: formData.priority,
         dueDate: formData.dueDate,
+        tags: formData.tags,
       })
 
       if (result.success) {

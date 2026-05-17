@@ -53,12 +53,12 @@ export function MediaBubble({ mediaUrl, mediaType, mediaName, mediaSize, isMine 
 
   if (mediaType === "audio") {
     return (
-      <div className={`flex items-center gap-3 rounded-2xl px-4 py-3 min-w-[220px] ${isMine ? "bg-primary/20" : "bg-white/5"}`}>
+      <div className={`flex items-center gap-3 rounded-2xl px-4 py-3 min-w-[220px] ${isMine ? "bg-primary/20" : "bg-muted"}`}>
         <div className="w-9 h-9 rounded-full bg-primary/30 flex items-center justify-center flex-shrink-0">
           <Music className="w-4 h-4 text-primary" />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-xs font-medium truncate text-foreground">{mediaName ?? "Audio"}</p>
+          <p className={`text-xs font-medium truncate ${isMine ? "text-primary-foreground" : "text-foreground"}`}>{mediaName ?? "Audio"}</p>
           {mediaSize && <p className="text-[10px] text-muted-foreground">{formatBytes(mediaSize)}</p>}
           <audio src={mediaUrl} controls className="w-full mt-1 h-7" />
         </div>
@@ -82,14 +82,14 @@ export function MediaBubble({ mediaUrl, mediaType, mediaName, mediaSize, isMine 
       href={mediaUrl}
       download={mediaName ?? true}
       className={`flex items-center gap-3 rounded-xl px-4 py-3 min-w-[200px] max-w-[260px] transition-colors group ${
-        isMine ? "bg-primary/20 hover:bg-primary/30" : "bg-white/5 hover:bg-white/10"
+        isMine ? "bg-primary/20 hover:bg-primary/30" : "bg-muted hover:bg-muted/80"
       }`}
     >
       <div className="w-10 h-10 rounded-lg bg-primary/20 flex items-center justify-center flex-shrink-0">
         <Icon className="w-5 h-5 text-primary" />
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium truncate text-foreground">{mediaName ?? "File"}</p>
+        <p className={`text-sm font-medium truncate ${isMine ? "text-primary-foreground" : "text-foreground"}`}>{mediaName ?? "File"}</p>
         {mediaSize && <p className="text-[10px] text-muted-foreground">{formatBytes(mediaSize)}</p>}
       </div>
       <Download className="w-4 h-4 text-muted-foreground group-hover:text-primary flex-shrink-0 transition-colors" />
