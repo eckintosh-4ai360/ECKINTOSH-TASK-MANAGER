@@ -11,7 +11,7 @@ const COOKIE_NAME = "eckintosh_session"
 // /api/auth is NextAuth's endpoint (callback, signin, etc.).
 const PUBLIC_ROUTES = ["/login", "/auth/complete", "/api/auth"]
 
-export async function proxy(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
   // Allow public routes through
