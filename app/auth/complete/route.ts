@@ -1,15 +1,11 @@
 import { auth } from "@/auth"
-import { createSession } from "@/lib/auth"
+import { SESSION_COOKIE_NAME, createSessionToken, getSessionCookieOptions } from "@/lib/session"
 import prisma from "@/lib/prisma"
 import type { Session } from "next-auth"
 import { NextResponse } from "next/server"
 
-function getBaseUrl(request: Request) {
-  return (
-    process.env.AUTH_URL
-    ?? process.env.NEXTAUTH_URL
-    ?? new URL(request.url).origin
-  )
+function redirectTo(request: Request, path: string) {
+  return NextResponse.redirect(new URL(path, request.url))
 }
 
 /**
@@ -27,7 +23,6 @@ export async function GET(request: Request) {
   console.log("[auth/complete] Bridge route hit — reading NextAuth session…")
 
   let session: Session | null = null
-  const baseUrl = getBaseUrl(request)
 
   try {
     session = await auth()
@@ -37,7 +32,7 @@ export async function GET(request: Request) {
     )
   } catch (err) {
     console.error("[auth/complete] auth() threw:", err)
-    return NextResponse.redirect(new URL("/login?error=session_error", baseUrl))
+    return redirectTo(request, "/login?error=session_error")
   }
 
   if (!session?.user?.email) {
@@ -45,7 +40,7 @@ export async function GET(request: Request) {
       "[auth/complete] No session or email. session:",
       JSON.stringify(session)
     )
-    return NextResponse.redirect(new URL("/login?error=no_session", baseUrl))
+    return redirectTo(request, "/login?error=no_session")
   }
 
   const email = session.user.email
@@ -62,26 +57,28 @@ export async function GET(request: Request) {
     )
   } catch (err) {
     console.error("[auth/complete] DB lookup failed:", err)
-    return NextResponse.redirect(new URL("/login?error=db_error", baseUrl))
+    return redirectTo(request, "/login?error=db_error")
   }
 
   if (!dbUser) {
     console.error("[auth/complete] DB user not found for email:", email)
-    return NextResponse.redirect(new URL("/login?error=user_not_found", baseUrl))
+    return redirectTo(request, "/login?error=user_not_found")
   }
 
-  // Create the custom JWT session cookie
-  await createSession({
+  // Set the custom JWT cookie on the same redirect response/host.
+  const token = await createSessionToken({
     id: dbUser.id,
     email: dbUser.email,
     name: dbUser.name ?? "Developer",
     role: dbUser.role as "ADMIN" | "USER" | "GUEST",
   })
+  const response = redirectTo(request, "/")
+  response.cookies.set(SESSION_COOKIE_NAME, token, getSessionCookieOptions())
 
   console.log(
     "[auth/complete] ✅ Session cookie created for:",
     email,
     "→ redirecting to /"
   )
-  return NextResponse.redirect(new URL("/", baseUrl))
+  return response
 }

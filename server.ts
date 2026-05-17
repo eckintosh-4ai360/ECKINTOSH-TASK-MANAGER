@@ -6,17 +6,13 @@ import { WebSocketServer, WebSocket } from "ws"
 import { PrismaClient } from "@prisma/client"
 import { PrismaPg } from "@prisma/adapter-pg"
 import pg from "pg"
-import { jwtVerify } from "jose"
-import { hasPermission, type AppRole } from "@/lib/rbac"
+import { hasPermission } from "@/lib/rbac"
+import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/session"
 
 const { Pool } = pg
 const dev = process.env.NODE_ENV !== "production"
 const hostname = "localhost"
 const port = parseInt(process.env.PORT ?? "3000", 10)
-const COOKIE_NAME = "eckintosh_session"
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET ?? "eckintosh-secret-key-2026-change-in-production"
-)
 
 // ─── Prisma (for persisting messages) ─────────────────────────────────────────
 const rawUrl = process.env.DATABASE_URL!
@@ -27,13 +23,6 @@ const cleanUrl = rawUrl
 const pool = new Pool({ connectionString: cleanUrl, ssl: { rejectUnauthorized: false } })
 const adapter = new PrismaPg(pool)
 const prisma = new PrismaClient({ adapter })
-
-type SocketSessionUser = {
-  id: string
-  email: string
-  name: string
-  role: AppRole
-}
 
 // ─── Connected clients: userId → WebSocket ─────────────────────────────────────
 const clients = new Map<string, WebSocket>()
@@ -52,15 +41,10 @@ function getCookieValue(cookieHeader: string | undefined, name: string) {
 }
 
 async function getSocketSession(req: { headers: { cookie?: string } }) {
-  try {
-    const token = getCookieValue(req.headers.cookie, COOKIE_NAME)
-    if (!token) return null
+  const token = getCookieValue(req.headers.cookie, SESSION_COOKIE_NAME)
+  if (!token) return null
 
-    const { payload } = await jwtVerify(token, JWT_SECRET)
-    return (payload as { user?: SocketSessionUser }).user ?? null
-  } catch {
-    return null
-  }
+  return verifySessionToken(token)
 }
 
 // ─── Next.js app ───────────────────────────────────────────────────────────────

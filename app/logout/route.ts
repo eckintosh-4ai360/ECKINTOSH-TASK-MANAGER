@@ -1,13 +1,11 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { signOut } from "@/auth"
-
-const COOKIE_NAME = "eckintosh_session"
+import { SESSION_COOKIE_NAME } from "@/lib/session"
 
 // GET /logout — clears both the custom session cookie AND the Auth.js OAuth session
 export async function GET(_req: NextRequest) {
   // Clear custom JWT cookie
   const response = NextResponse.redirect(new URL("/login", _req.url))
-  response.cookies.delete(COOKIE_NAME)
+  response.cookies.delete(SESSION_COOKIE_NAME)
 
   // Also clear Auth.js session cookies (set by GitHub OAuth)
   response.cookies.delete("authjs.session-token")

@@ -1,38 +1,23 @@
-import { SignJWT, jwtVerify } from "jose"
 import { cookies } from "next/headers"
 import { redirect } from "next/navigation"
-import { type AppRole, type Permission, hasPermission } from "@/lib/rbac"
+import { type Permission, hasPermission } from "@/lib/rbac"
+import {
+  SESSION_COOKIE_NAME,
+  createSessionToken,
+  getSessionCookieOptions,
+  verifySessionToken,
+  type SessionUser,
+} from "@/lib/session"
 
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET ?? "eckintosh-secret-key-2026-change-in-production"
-)
-
-const COOKIE_NAME = "eckintosh_session"
-
-export interface SessionUser {
-  id: string
-  email: string
-  name: string
-  role: AppRole
-}
+export type { SessionUser } from "@/lib/session"
 
 // ─── Create + store session ───────────────────────────────────────────────────
 // Called by: email/password loginAction AND /auth/complete (OAuth bridge)
 export async function createSession(user: SessionUser) {
-  const token = await new SignJWT({ user })
-    .setProtectedHeader({ alg: "HS256" })
-    .setIssuedAt()
-    .setExpirationTime("7d")
-    .sign(JWT_SECRET)
+  const token = await createSessionToken(user)
 
   const cookieStore = await cookies()
-  cookieStore.set(COOKIE_NAME, token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    maxAge: 60 * 60 * 24 * 7, // 7 days
-    path: "/",
-  })
+  cookieStore.set(SESSION_COOKIE_NAME, token, getSessionCookieOptions())
 }
 
 // ─── Read session ─────────────────────────────────────────────────────────────
@@ -41,11 +26,10 @@ export async function createSession(user: SessionUser) {
 export async function getSession(): Promise<SessionUser | null> {
   try {
     const cookieStore = await cookies()
-    const token = cookieStore.get(COOKIE_NAME)?.value
+    const token = cookieStore.get(SESSION_COOKIE_NAME)?.value
     if (!token) return null
 
-    const { payload } = await jwtVerify(token, JWT_SECRET)
-    return (payload as any).user as SessionUser
+    return verifySessionToken(token)
   } catch {
     return null
   }
@@ -74,5 +58,5 @@ export async function requirePermission(permission: Permission, redirectTo = "/"
 // ─── Destroy session ──────────────────────────────────────────────────────────
 export async function destroySession() {
   const cookieStore = await cookies()
-  cookieStore.delete(COOKIE_NAME)
+  cookieStore.delete(SESSION_COOKIE_NAME)
 }

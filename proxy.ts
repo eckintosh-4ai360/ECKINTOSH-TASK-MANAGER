@@ -1,10 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { jwtVerify } from "jose"
-
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET ?? "eckintosh-secret-key-2026-change-in-production"
-)
-const COOKIE_NAME = "eckintosh_session"
+import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/session"
 
 // Routes that do NOT require the custom eckintosh_session cookie.
 // /auth/complete is the OAuth bridge that creates the cookie after GitHub login.
@@ -19,21 +14,21 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next()
   }
 
-  const token = request.cookies.get(COOKIE_NAME)?.value
+  const token = request.cookies.get(SESSION_COOKIE_NAME)?.value
 
   if (!token) {
     return NextResponse.redirect(new URL("/login", request.url))
   }
 
-  try {
-    await jwtVerify(token, JWT_SECRET)
+  const session = await verifySessionToken(token)
+  if (session) {
     return NextResponse.next()
-  } catch {
-    // Token invalid or expired
-    const response = NextResponse.redirect(new URL("/login", request.url))
-    response.cookies.delete(COOKIE_NAME)
-    return response
   }
+
+  // Token invalid or expired
+  const response = NextResponse.redirect(new URL("/login", request.url))
+  response.cookies.delete(SESSION_COOKIE_NAME)
+  return response
 }
 
 export const config = {
@@ -48,4 +43,3 @@ export const config = {
     "/((?!api|_next/static|_next/image|favicon.ico|.*\\.(?:png|jpg|jpeg|svg|gif|webp|ico)).*)",
   ],
 }
-
