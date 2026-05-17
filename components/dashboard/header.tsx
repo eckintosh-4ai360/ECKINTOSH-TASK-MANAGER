@@ -80,7 +80,7 @@ export function Header({ title, description, actions, user }: HeaderProps) {
   const roleStyle = ROLE_COLORS[role] ?? ROLE_COLORS.USER
 
   return (
-    <header className="space-y-4 md:space-y-5 animate-slide-in-up">
+    <header className="relative z-[100] space-y-4 md:space-y-5 animate-slide-in-up">
       <div className="flex items-center justify-between gap-4">
         {/* Left: Mobile nav + Search */}
         <div className="flex items-center gap-3 flex-1">
@@ -141,7 +141,7 @@ export function Header({ title, description, actions, user }: HeaderProps) {
           </Button>
 
           {/* ── Profile dropdown ─────────────────────────────────────── */}
-          <div className="pl-3 md:pl-4 border-l border-primary/20" ref={dropdownRef}>
+          <div className="relative z-[110] pl-3 md:pl-4 border-l border-primary/20" ref={dropdownRef}>
             <button
               onClick={() => setDropdownOpen((v) => !v)}
               className={cn(
@@ -169,7 +169,7 @@ export function Header({ title, description, actions, user }: HeaderProps) {
 
             {/* Dropdown panel */}
             {dropdownOpen && (
-              <div className="absolute right-4 mt-2 w-64 z-50 rounded-2xl border border-primary/20 shadow-2xl shadow-black/40 overflow-hidden"
+              <div className="absolute right-0 mt-2 w-64 z-[120] rounded-2xl border border-primary/20 shadow-2xl shadow-black/40 overflow-hidden"
                 style={{ background: "color-mix(in oklab, var(--card) 96%, transparent)" }}
               >
                 {/* User info block */}
