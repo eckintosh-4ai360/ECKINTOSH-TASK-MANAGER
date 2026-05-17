@@ -1,7 +1,7 @@
 "use client"
 
 import { signIn } from "next-auth/react"
-import { useState } from "react"
+import { useState, Suspense } from "react"
 import { useSearchParams } from "next/navigation"
 import { GitBranch, Github, Loader2, AlertCircle, Code2, Zap, Users, Rocket } from "lucide-react"
 
@@ -16,7 +16,8 @@ const AUTH_ERROR_MESSAGES: Record<string, string> = {
   user_not_found: "Sign-in succeeded, but the user record could not be found.",
 }
 
-export default function LoginPage() {
+// Isolated component that uses useSearchParams — must be inside <Suspense>
+function LoginForm() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const searchParams = useSearchParams()
@@ -34,6 +35,79 @@ export default function LoginPage() {
     }
   }
 
+  return (
+    <div className="glass-card rounded-2xl p-8 border border-primary/20 shadow-2xl shadow-primary/10 w-full max-w-md mx-auto">
+      {/* Mobile logo */}
+      <div className="flex items-center gap-3 mb-8 lg:hidden">
+        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-primary/50 flex items-center justify-center shadow-lg shadow-primary/30">
+          <GitBranch className="w-5 h-5 text-primary-foreground" />
+        </div>
+        <div>
+          <p className="text-lg font-extrabold neon-text tracking-wider">Eckintosh</p>
+          <p className="text-[10px] text-muted-foreground">Engineering Digital Solutions</p>
+        </div>
+      </div>
+
+      <div className="mb-8">
+        <h2 className="text-xl font-bold text-foreground mb-1">Welcome back</h2>
+        <p className="text-sm text-muted-foreground">Sign in with your GitHub account to access your workspace.</p>
+      </div>
+
+      {/* GitHub OAuth button */}
+      <button
+        id="github-signin-btn"
+        onClick={handleGitHubSignIn}
+        disabled={loading}
+        className="w-full h-12 flex items-center justify-center gap-3 rounded-xl bg-[#24292e] hover:bg-[#2f363d] border border-white/10 text-white font-semibold text-sm transition-all duration-200 hover:scale-[1.02] hover:shadow-xl hover:shadow-black/30 disabled:opacity-60 disabled:cursor-not-allowed disabled:scale-100 group"
+      >
+        {loading ? (
+          <>
+            <Loader2 className="w-5 h-5 animate-spin" />
+            Connecting to GitHub...
+          </>
+        ) : (
+          <>
+            <Github className="w-5 h-5 group-hover:scale-110 transition-transform" />
+            Continue with GitHub
+          </>
+        )}
+      </button>
+
+      {/* Divider */}
+      <div className="flex items-center gap-3 my-6">
+        <div className="flex-1 h-px bg-white/5" />
+        <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">or</span>
+        <div className="flex-1 h-px bg-white/5" />
+      </div>
+
+      {/* Email fallback link */}
+      <a
+        href="/login/email"
+        className="w-full h-11 flex items-center justify-center gap-2 rounded-xl border border-primary/20 text-sm text-muted-foreground hover:text-primary hover:border-primary/40 hover:bg-primary/5 transition-all duration-200 font-medium"
+      >
+        Sign in with Email &amp; Password
+      </a>
+
+      {/* Error */}
+      {displayError && (
+        <div className="mt-4 flex items-center gap-2 text-sm text-destructive bg-destructive/10 border border-destructive/30 rounded-lg px-3 py-2.5">
+          <AlertCircle className="w-4 h-4 flex-shrink-0" />
+          <span>{displayError}</span>
+        </div>
+      )}
+
+      {/* Info */}
+      <div className="mt-6 p-3 rounded-xl bg-primary/5 border border-primary/10">
+        <p className="text-[11px] text-muted-foreground leading-relaxed">
+          <span className="text-primary font-semibold">First time?</span> Your account will be created automatically using your GitHub profile. Contact{" "}
+          <span className="text-primary">admin@eckintosh.dev</span> to be granted admin access.
+        </p>
+      </div>
+    </div>
+  )
+}
+
+export default function LoginPage() {
   return (
     <div className="min-h-screen bg-background futuristic-grid flex items-center justify-center p-4 relative overflow-hidden">
       {/* Background ambient glows */}
@@ -60,7 +134,7 @@ export default function LoginPage() {
           {/* Description */}
           <div>
             <h2 className="text-xl font-bold text-foreground mb-2 leading-snug">
-              Your dev team's<br />
+              Your dev team&apos;s<br />
               <span className="neon-text">command center.</span>
             </h2>
             <p className="text-sm text-muted-foreground leading-relaxed max-w-xs">
@@ -89,75 +163,14 @@ export default function LoginPage() {
           </div>
         </div>
 
-        {/* ── Right: Sign-in card ──────────────────────────── */}
-        <div className="glass-card rounded-2xl p-8 border border-primary/20 shadow-2xl shadow-primary/10 w-full max-w-md mx-auto">
-          {/* Mobile logo */}
-          <div className="flex items-center gap-3 mb-8 lg:hidden">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-primary/50 flex items-center justify-center shadow-lg shadow-primary/30">
-              <GitBranch className="w-5 h-5 text-primary-foreground" />
-            </div>
-            <div>
-              <p className="text-lg font-extrabold neon-text tracking-wider">Eckintosh</p>
-              <p className="text-[10px] text-muted-foreground">Engineering Digital Solutions</p>
-            </div>
+        {/* ── Right: Sign-in card (Suspense wraps useSearchParams) ── */}
+        <Suspense fallback={
+          <div className="glass-card rounded-2xl p-8 border border-primary/20 w-full max-w-md mx-auto flex items-center justify-center min-h-[300px]">
+            <Loader2 className="w-6 h-6 animate-spin text-primary" />
           </div>
-
-          <div className="mb-8">
-            <h2 className="text-xl font-bold text-foreground mb-1">Welcome back</h2>
-            <p className="text-sm text-muted-foreground">Sign in with your GitHub account to access your workspace.</p>
-          </div>
-
-          {/* GitHub OAuth button */}
-          <button
-            id="github-signin-btn"
-            onClick={handleGitHubSignIn}
-            disabled={loading}
-            className="w-full h-12 flex items-center justify-center gap-3 rounded-xl bg-[#24292e] hover:bg-[#2f363d] border border-white/10 text-white font-semibold text-sm transition-all duration-200 hover:scale-[1.02] hover:shadow-xl hover:shadow-black/30 disabled:opacity-60 disabled:cursor-not-allowed disabled:scale-100 group"
-          >
-            {loading ? (
-              <>
-                <Loader2 className="w-5 h-5 animate-spin" />
-                Connecting to GitHub...
-              </>
-            ) : (
-              <>
-                <Github className="w-5 h-5 group-hover:scale-110 transition-transform" />
-                Continue with GitHub
-              </>
-            )}
-          </button>
-
-          {/* Divider */}
-          <div className="flex items-center gap-3 my-6">
-            <div className="flex-1 h-px bg-white/5" />
-            <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">or</span>
-            <div className="flex-1 h-px bg-white/5" />
-          </div>
-
-          {/* Email fallback link */}
-          <a
-            href="/login/email"
-            className="w-full h-11 flex items-center justify-center gap-2 rounded-xl border border-primary/20 text-sm text-muted-foreground hover:text-primary hover:border-primary/40 hover:bg-primary/5 transition-all duration-200 font-medium"
-          >
-            Sign in with Email & Password
-          </a>
-
-          {/* Error */}
-          {displayError && (
-            <div className="mt-4 flex items-center gap-2 text-sm text-destructive bg-destructive/10 border border-destructive/30 rounded-lg px-3 py-2.5">
-              <AlertCircle className="w-4 h-4 flex-shrink-0" />
-              <span>{displayError}</span>
-            </div>
-          )}
-
-          {/* Info */}
-          <div className="mt-6 p-3 rounded-xl bg-primary/5 border border-primary/10">
-            <p className="text-[11px] text-muted-foreground leading-relaxed">
-              <span className="text-primary font-semibold">First time?</span> Your account will be created automatically using your GitHub profile. Contact{" "}
-              <span className="text-primary">admin@eckintosh.dev</span> to be granted admin access.
-            </p>
-          </div>
-        </div>
+        }>
+          <LoginForm />
+        </Suspense>
       </div>
 
       {/* Footer */}
