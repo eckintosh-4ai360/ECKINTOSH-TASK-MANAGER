@@ -2,14 +2,30 @@ import NextAuth from "next-auth"
 import GitHub from "next-auth/providers/github"
 import prisma from "@/lib/prisma"
 
+const githubClientId = process.env.AUTH_GITHUB_ID ?? process.env.GITHUB_ID
+const githubClientSecret = process.env.AUTH_GITHUB_SECRET ?? process.env.GITHUB_SECRET
+const authSecret =
+  process.env.AUTH_SECRET
+  ?? process.env.NEXTAUTH_SECRET
+  ?? process.env.JWT_SECRET
+
+if (!authSecret) {
+  console.warn("[auth] Missing AUTH_SECRET/NEXTAUTH_SECRET/JWT_SECRET. OAuth sessions may fail in production.")
+}
+
+if (!githubClientId || !githubClientSecret) {
+  console.warn("[auth] Missing GITHUB_ID/GITHUB_SECRET (or AUTH_GITHUB_ID/AUTH_GITHUB_SECRET). GitHub sign-in is disabled.")
+}
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  providers: [
+  secret: authSecret,
+  providers: githubClientId && githubClientSecret ? [
     GitHub({
-      clientId: process.env.GITHUB_ID!,
-      clientSecret: process.env.GITHUB_SECRET!,
+      clientId: githubClientId,
+      clientSecret: githubClientSecret,
       authorization: { params: { scope: "read:user user:email" } },
     }),
-  ],
+  ] : [],
   session: {
     strategy: "jwt",
   },

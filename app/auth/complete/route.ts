@@ -4,6 +4,14 @@ import prisma from "@/lib/prisma"
 import type { Session } from "next-auth"
 import { NextResponse } from "next/server"
 
+function getBaseUrl(request: Request) {
+  return (
+    process.env.AUTH_URL
+    ?? process.env.NEXTAUTH_URL
+    ?? new URL(request.url).origin
+  )
+}
+
 /**
  * GET /auth/complete
  *
@@ -15,10 +23,11 @@ import { NextResponse } from "next/server"
  * Next.js App Router forbids setting cookies from Server Components.
  * Route Handlers (GET/POST) are explicitly allowed to modify cookies.
  */
-export async function GET() {
+export async function GET(request: Request) {
   console.log("[auth/complete] Bridge route hit — reading NextAuth session…")
 
   let session: Session | null = null
+  const baseUrl = getBaseUrl(request)
 
   try {
     session = await auth()
@@ -28,7 +37,7 @@ export async function GET() {
     )
   } catch (err) {
     console.error("[auth/complete] auth() threw:", err)
-    return NextResponse.redirect(new URL("/login?error=session_error", process.env.NEXTAUTH_URL ?? "http://localhost:3000"))
+    return NextResponse.redirect(new URL("/login?error=session_error", baseUrl))
   }
 
   if (!session?.user?.email) {
@@ -36,12 +45,10 @@ export async function GET() {
       "[auth/complete] No session or email. session:",
       JSON.stringify(session)
     )
-    return NextResponse.redirect(new URL("/login?error=no_session", process.env.NEXTAUTH_URL ?? "http://localhost:3000"))
+    return NextResponse.redirect(new URL("/login?error=no_session", baseUrl))
   }
 
   const email = session.user.email
-  const baseUrl = process.env.NEXTAUTH_URL ?? "http://localhost:3000"
-
   // Look up user in DB
   let dbUser
   try {

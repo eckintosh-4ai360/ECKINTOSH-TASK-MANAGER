@@ -2,11 +2,26 @@
 
 import { signIn } from "next-auth/react"
 import { useState } from "react"
+import { useSearchParams } from "next/navigation"
 import { GitBranch, Github, Loader2, AlertCircle, Code2, Zap, Users, Rocket } from "lucide-react"
+
+const AUTH_ERROR_MESSAGES: Record<string, string> = {
+  Configuration: "GitHub sign-in is not configured for this deployment yet.",
+  AccessDenied: "Access was denied during sign-in.",
+  OAuthSignin: "GitHub sign-in could not be started.",
+  OAuthCallback: "GitHub sign-in could not be completed.",
+  session_error: "The sign-in session could not be read after GitHub login.",
+  no_session: "GitHub login finished, but no authenticated session was available.",
+  db_error: "Sign-in succeeded, but the app could not reach the database.",
+  user_not_found: "Sign-in succeeded, but the user record could not be found.",
+}
 
 export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const searchParams = useSearchParams()
+  const authError = searchParams.get("error")
+  const displayError = error ?? (authError ? AUTH_ERROR_MESSAGES[authError] ?? "Sign-in failed. Please try again." : null)
 
   async function handleGitHubSignIn() {
     setLoading(true)
@@ -128,10 +143,10 @@ export default function LoginPage() {
           </a>
 
           {/* Error */}
-          {error && (
+          {displayError && (
             <div className="mt-4 flex items-center gap-2 text-sm text-destructive bg-destructive/10 border border-destructive/30 rounded-lg px-3 py-2.5">
               <AlertCircle className="w-4 h-4 flex-shrink-0" />
-              <span>{error}</span>
+              <span>{displayError}</span>
             </div>
           )}
 
