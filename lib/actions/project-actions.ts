@@ -2,6 +2,7 @@
 
 import prisma from "@/lib/prisma"
 import { requireSession } from "@/lib/auth"
+import { createNotificationsForUsers, getWorkspaceRecipientIds } from "@/lib/notifications"
 import { canUpdateTaskStatus, getPermissionError, hasPermission } from "@/lib/rbac"
 import { revalidatePath } from "next/cache"
 
@@ -25,6 +26,20 @@ export async function createProject(formData: {
         endDate: formData.dueDate ? new Date(formData.dueDate) : null,
         tech: [],
         ownerId: session.id,
+      },
+    })
+
+    const recipients = await getWorkspaceRecipientIds(session.id)
+    await createNotificationsForUsers({
+      userIds: recipients,
+      channel: "teamUpdates",
+      title: "New project created",
+      message: `${session.name} created ${project.name}.`,
+      type: "info",
+      link: "/projects",
+      email: {
+        senderId: session.id,
+        subject: `Project created: ${project.name}`,
       },
     })
 
@@ -63,6 +78,20 @@ export async function updateProject(input: {
       },
     })
 
+    const recipients = await getWorkspaceRecipientIds(session.id)
+    await createNotificationsForUsers({
+      userIds: recipients,
+      channel: "teamUpdates",
+      title: "Project updated",
+      message: `${session.name} updated ${project.name}.`,
+      type: "info",
+      link: "/projects",
+      email: {
+        senderId: session.id,
+        subject: `Project updated: ${project.name}`,
+      },
+    })
+
     revalidatePath("/")
     revalidatePath("/projects")
     revalidatePath("/tasks")
@@ -82,8 +111,27 @@ export async function deleteProject(projectId: string) {
       return { success: false, error: getPermissionError("manage_projects") }
     }
 
+    const project = await prisma.project.findUnique({
+      where: { id: projectId },
+      select: { name: true },
+    })
+
     await prisma.project.delete({
       where: { id: projectId },
+    })
+
+    const recipients = await getWorkspaceRecipientIds(session.id)
+    await createNotificationsForUsers({
+      userIds: recipients,
+      channel: "teamUpdates",
+      title: "Project removed",
+      message: `${session.name} deleted ${project?.name ?? "a project"}.`,
+      type: "warning",
+      link: "/projects",
+      email: {
+        senderId: session.id,
+        subject: `Project removed: ${project?.name ?? "Project"}`,
+      },
     })
 
     revalidatePath("/")
@@ -177,6 +225,20 @@ export async function createTask(formData: {
       },
     })
 
+    const recipients = await getWorkspaceRecipientIds(session.id)
+    await createNotificationsForUsers({
+      userIds: recipients,
+      channel: "teamUpdates",
+      title: "New task created",
+      message: `${session.name} created ${task.title}.`,
+      type: "info",
+      link: "/tasks",
+      email: {
+        senderId: session.id,
+        subject: `Task created: ${task.title}`,
+      },
+    })
+
     revalidatePath("/")
     revalidatePath("/tasks")
     revalidatePath(`/projects/${formData.projectId}`)
@@ -219,7 +281,41 @@ export async function updateTask(input: {
           ? input.tags.split(",").map((tag) => tag.trim()).filter(Boolean)
           : [],
       },
+      select: {
+        id: true,
+        title: true,
+        assigneeId: true,
+      },
     })
+
+    const workspaceRecipients = await getWorkspaceRecipientIds(session.id)
+    await createNotificationsForUsers({
+      userIds: workspaceRecipients,
+      channel: "teamUpdates",
+      title: "Task updated",
+      message: `${session.name} updated ${task.title}.`,
+      type: "info",
+      link: "/tasks",
+      email: {
+        senderId: session.id,
+        subject: `Task updated: ${task.title}`,
+      },
+    })
+
+    if (task.assigneeId && task.assigneeId !== session.id) {
+      await createNotificationsForUsers({
+        userIds: [task.assigneeId],
+        channel: "taskReminders",
+        title: "Task assigned or updated",
+        message: `${session.name} updated ${task.title} and it is assigned to you.`,
+        type: "info",
+        link: "/tasks",
+        email: {
+          senderId: session.id,
+          subject: `Task assigned: ${task.title}`,
+        },
+      })
+    }
 
     revalidatePath("/")
     revalidatePath("/tasks")
@@ -240,8 +336,27 @@ export async function deleteTask(taskId: string) {
       return { success: false, error: getPermissionError("manage_tasks") }
     }
 
+    const task = await prisma.task.findUnique({
+      where: { id: taskId },
+      select: { title: true },
+    })
+
     await prisma.task.delete({
       where: { id: taskId },
+    })
+
+    const recipients = await getWorkspaceRecipientIds(session.id)
+    await createNotificationsForUsers({
+      userIds: recipients,
+      channel: "teamUpdates",
+      title: "Task deleted",
+      message: `${session.name} deleted ${task?.title ?? "a task"}.`,
+      type: "warning",
+      link: "/tasks",
+      email: {
+        senderId: session.id,
+        subject: `Task removed: ${task?.title ?? "Task"}`,
+      },
     })
 
     revalidatePath("/")
@@ -314,7 +429,26 @@ export async function updateTaskStatus(taskId: string, status: string) {
     const task = await prisma.task.update({
       where: { id: taskId },
       data: { status: status as any },
+      select: {
+        title: true,
+        assigneeId: true,
+      },
     })
+
+    if (task.assigneeId && task.assigneeId !== session.id) {
+      await createNotificationsForUsers({
+        userIds: [task.assigneeId],
+        channel: "taskReminders",
+        title: "Task status changed",
+        message: `${session.name} changed ${task.title} to ${status.replace(/_/g, " ").toLowerCase()}.`,
+        type: "info",
+        link: "/tasks",
+        email: {
+          senderId: session.id,
+          subject: `Task status changed: ${task.title}`,
+        },
+      })
+    }
 
     revalidatePath("/")
     revalidatePath("/tasks")
@@ -345,7 +479,26 @@ export async function toggleTaskStatus(taskId: string, isCompleted: boolean) {
     const task = await prisma.task.update({
       where: { id: taskId },
       data: { status: isCompleted ? "COMPLETED" : "TODO" },
+      select: {
+        title: true,
+        assigneeId: true,
+      },
     })
+
+    if (task.assigneeId && task.assigneeId !== session.id) {
+      await createNotificationsForUsers({
+        userIds: [task.assigneeId],
+        channel: "taskReminders",
+        title: isCompleted ? "Task completed" : "Task reopened",
+        message: `${session.name} ${isCompleted ? "completed" : "reopened"} ${task.title}.`,
+        type: isCompleted ? "success" : "info",
+        link: "/tasks",
+        email: {
+          senderId: session.id,
+          subject: `${isCompleted ? "Task completed" : "Task reopened"}: ${task.title}`,
+        },
+      })
+    }
 
     revalidatePath("/")
     revalidatePath("/tasks")

@@ -1,10 +1,61 @@
 "use server"
 
+import { cookies } from "next/headers"
 import { revalidatePath } from "next/cache"
 import prisma from "@/lib/prisma"
+import { createNotificationForUser } from "@/lib/notifications"
+import {
+  deletePushSubscription,
+  getPublicVapidKey,
+  hasWebPushConfig,
+  sendPushNotificationToUserSubscriptions,
+  type PushSubscriptionInput,
+  upsertPushSubscription,
+} from "@/lib/push"
 import { createSession, requireSession } from "@/lib/auth"
+import { SESSION_COOKIE_NAME } from "@/lib/session"
 
 const ACTIVE_TASK_STATUSES = ["BACKLOG", "TODO", "IN_PROGRESS", "IN_REVIEW"] as const
+const REMINDER_LEAD_TIME_VALUES = ["15m", "1h", "1d", "3d"] as const
+const MANAGED_AUTH_COOKIE_NAMES = [
+  SESSION_COOKIE_NAME,
+  "authjs.session-token",
+  "__Secure-authjs.session-token",
+  "authjs.callback-url",
+  "__Secure-authjs.callback-url",
+  "authjs.csrf-token",
+  "__Host-authjs.csrf-token",
+  "authjs.pkce.code_verifier",
+  "__Secure-authjs.pkce.code_verifier",
+  "authjs.state",
+  "__Secure-authjs.state",
+  "authjs.nonce",
+  "__Secure-authjs.nonce",
+] as const
+
+export type SettingsReminderLeadTime = (typeof REMINDER_LEAD_TIME_VALUES)[number]
+
+export type SettingsNotificationPreferences = {
+  email: boolean
+  push: boolean
+  taskReminders: boolean
+  teamUpdates: boolean
+  dailyDigest: boolean
+  overdueEscalation: boolean
+  quietHours: boolean
+  reminderLeadTime: SettingsReminderLeadTime
+}
+
+export const DEFAULT_NOTIFICATION_PREFERENCES: SettingsNotificationPreferences = {
+  email: true,
+  push: false,
+  taskReminders: true,
+  teamUpdates: true,
+  dailyDigest: true,
+  overdueEscalation: true,
+  quietHours: false,
+  reminderLeadTime: "1d",
+}
 
 export type SettingsProfile = {
   id: string
@@ -47,10 +98,13 @@ export type SettingsReminderSummary = {
 
 export type SettingsPageData = {
   profile: SettingsProfile
+  preferences: SettingsNotificationPreferences
   notifications: SettingsNotification[]
   unreadNotifications: number
   reminderTasks: SettingsReminderTask[]
   reminderSummary: SettingsReminderSummary
+  pushDeliveryConfigured: boolean
+  vapidPublicKey: string | null
 }
 
 function normalizeProfile(user: {
@@ -79,6 +133,83 @@ function cleanString(value: FormDataEntryValue | null) {
   return typeof value === "string" ? value.trim() : ""
 }
 
+function normalizeReminderLeadTime(value: string | null | undefined): SettingsReminderLeadTime {
+  return REMINDER_LEAD_TIME_VALUES.includes(value as SettingsReminderLeadTime)
+    ? (value as SettingsReminderLeadTime)
+    : DEFAULT_NOTIFICATION_PREFERENCES.reminderLeadTime
+}
+
+function normalizeNotificationPreferences(input: Partial<SettingsNotificationPreferences>): SettingsNotificationPreferences {
+  return {
+    email: input.email ?? DEFAULT_NOTIFICATION_PREFERENCES.email,
+    push: input.push ?? DEFAULT_NOTIFICATION_PREFERENCES.push,
+    taskReminders: input.taskReminders ?? DEFAULT_NOTIFICATION_PREFERENCES.taskReminders,
+    teamUpdates: input.teamUpdates ?? DEFAULT_NOTIFICATION_PREFERENCES.teamUpdates,
+    dailyDigest: input.dailyDigest ?? DEFAULT_NOTIFICATION_PREFERENCES.dailyDigest,
+    overdueEscalation: input.overdueEscalation ?? DEFAULT_NOTIFICATION_PREFERENCES.overdueEscalation,
+    quietHours: input.quietHours ?? DEFAULT_NOTIFICATION_PREFERENCES.quietHours,
+    reminderLeadTime: normalizeReminderLeadTime(input.reminderLeadTime),
+  }
+}
+
+function preferencesFromRecord(record: {
+  emailEnabled: boolean
+  pushEnabled: boolean
+  taskRemindersEnabled: boolean
+  teamUpdatesEnabled: boolean
+  dailyDigestEnabled: boolean
+  overdueEscalationEnabled: boolean
+  quietHoursEnabled: boolean
+  reminderLeadTime: string
+}): SettingsNotificationPreferences {
+  return normalizeNotificationPreferences({
+    email: record.emailEnabled,
+    push: record.pushEnabled,
+    taskReminders: record.taskRemindersEnabled,
+    teamUpdates: record.teamUpdatesEnabled,
+    dailyDigest: record.dailyDigestEnabled,
+    overdueEscalation: record.overdueEscalationEnabled,
+    quietHours: record.quietHoursEnabled,
+    reminderLeadTime: record.reminderLeadTime,
+  })
+}
+
+function preferencesToRecord(preferences: SettingsNotificationPreferences) {
+  const normalized = normalizeNotificationPreferences(preferences)
+
+  return {
+    emailEnabled: normalized.email,
+    pushEnabled: normalized.push,
+    taskRemindersEnabled: normalized.taskReminders,
+    teamUpdatesEnabled: normalized.teamUpdates,
+    dailyDigestEnabled: normalized.dailyDigest,
+    overdueEscalationEnabled: normalized.overdueEscalation,
+    quietHoursEnabled: normalized.quietHours,
+    reminderLeadTime: normalized.reminderLeadTime,
+  }
+}
+
+async function getOrCreateNotificationPreference(userId: string) {
+  return prisma.notificationPreference.upsert({
+    where: { userId },
+    update: {},
+    create: {
+      userId,
+      ...preferencesToRecord(DEFAULT_NOTIFICATION_PREFERENCES),
+    },
+    select: {
+      emailEnabled: true,
+      pushEnabled: true,
+      taskRemindersEnabled: true,
+      teamUpdatesEnabled: true,
+      dailyDigestEnabled: true,
+      overdueEscalationEnabled: true,
+      quietHoursEnabled: true,
+      reminderLeadTime: true,
+    },
+  })
+}
+
 export async function getSettingsPageData(): Promise<SettingsPageData> {
   const session = await requireSession()
 
@@ -98,7 +229,7 @@ export async function getSettingsPageData(): Promise<SettingsPageData> {
   }
 
   try {
-    const [user, notifications, unreadNotifications, reminderTasks, activeAssigned, dueSoon, overdue] =
+    const [user, preferences, notifications, unreadNotifications, reminderTasks, activeAssigned, dueSoon, overdue] =
       await Promise.all([
         prisma.user.findUnique({
           where: { id: session.id },
@@ -113,10 +244,11 @@ export async function getSettingsPageData(): Promise<SettingsPageData> {
             createdAt: true,
           },
         }),
+        getOrCreateNotificationPreference(session.id),
         prisma.notification.findMany({
           where: { userId: session.id },
           orderBy: { createdAt: "desc" },
-          take: 4,
+          take: 6,
           select: {
             id: true,
             title: true,
@@ -178,6 +310,7 @@ export async function getSettingsPageData(): Promise<SettingsPageData> {
 
     return {
       profile: user ? normalizeProfile(user) : fallbackProfile,
+      preferences: preferencesFromRecord(preferences),
       notifications: notifications.map((notification) => ({
         ...notification,
         createdAt: notification.createdAt.toISOString(),
@@ -192,11 +325,14 @@ export async function getSettingsPageData(): Promise<SettingsPageData> {
         dueSoon,
         overdue,
       },
+      pushDeliveryConfigured: hasWebPushConfig(),
+      vapidPublicKey: getPublicVapidKey(),
     }
   } catch (error) {
     console.error("[settings] Failed to load settings page data:", error)
     return {
       profile: fallbackProfile,
+      preferences: DEFAULT_NOTIFICATION_PREFERENCES,
       notifications: [],
       unreadNotifications: 0,
       reminderTasks: [],
@@ -205,6 +341,8 @@ export async function getSettingsPageData(): Promise<SettingsPageData> {
         dueSoon: 0,
         overdue: 0,
       },
+      pushDeliveryConfigured: hasWebPushConfig(),
+      vapidPublicKey: getPublicVapidKey(),
     }
   }
 }
@@ -277,4 +415,203 @@ export async function updateProfileAction(formData: FormData) {
     success: true,
     profile: normalizeProfile(updatedUser),
   }
+}
+
+export async function saveNotificationPreferencesAction(preferences: SettingsNotificationPreferences) {
+  const session = await requireSession()
+  const nextPreferences = normalizeNotificationPreferences(preferences)
+
+  const record = await prisma.notificationPreference.upsert({
+    where: { userId: session.id },
+    update: preferencesToRecord(nextPreferences),
+    create: {
+      userId: session.id,
+      ...preferencesToRecord(nextPreferences),
+    },
+    select: {
+      emailEnabled: true,
+      pushEnabled: true,
+      taskRemindersEnabled: true,
+      teamUpdatesEnabled: true,
+      dailyDigestEnabled: true,
+      overdueEscalationEnabled: true,
+      quietHoursEnabled: true,
+      reminderLeadTime: true,
+    },
+  })
+
+  revalidatePath("/settings")
+
+  return {
+    success: true,
+    preferences: preferencesFromRecord(record),
+  }
+}
+
+export async function savePushSubscriptionAction(subscription: PushSubscriptionInput) {
+  const session = await requireSession()
+  const result = await upsertPushSubscription(session.id, subscription)
+  if (!result.success) return result
+
+  revalidatePath("/settings")
+  return { success: true }
+}
+
+export async function deletePushSubscriptionAction(endpoint: string) {
+  const session = await requireSession()
+  await deletePushSubscription(session.id, endpoint)
+  revalidatePath("/settings")
+  return { success: true }
+}
+
+export async function createTestReminderAction() {
+  const session = await requireSession()
+  const preferences = preferencesFromRecord(await getOrCreateNotificationPreference(session.id))
+
+  if (!preferences.taskReminders) {
+    return { success: false, error: "Task reminders are turned off for this account." }
+  }
+
+  const notification = await prisma.notification.create({
+    data: {
+      userId: session.id,
+      title: "Test reminder triggered",
+      message: `Reminder pipeline checked with ${preferences.reminderLeadTime} lead time.`,
+      type: "info",
+      link: "/settings",
+    },
+    select: {
+      id: true,
+      title: true,
+      message: true,
+      type: true,
+      read: true,
+      link: true,
+      createdAt: true,
+    },
+  })
+
+  if (preferences.email) {
+    await prisma.internalEmail.create({
+      data: {
+        fromId: session.id,
+        toId: session.id,
+        subject: "Task reminder test",
+        body: `Reminder pipeline checked with ${preferences.reminderLeadTime} lead time.`,
+      },
+    })
+  }
+
+  let pushResult = {
+    success: false,
+    sentCount: 0,
+    error: "Push delivery is disabled for this account.",
+  }
+
+  if (preferences.push) {
+    pushResult = await sendPushNotificationToUserSubscriptions(session.id, {
+      title: "Eckintosh task reminder",
+      body: "Reminder flow is live. Your deadlines will not sneak past the perimeter.",
+      url: "/settings",
+      tag: "settings-test-reminder",
+    })
+  }
+
+  const unreadNotifications = await prisma.notification.count({
+    where: { userId: session.id, read: false },
+  })
+
+  revalidatePath("/settings")
+
+  return {
+    success: true,
+    notification: {
+      ...notification,
+      createdAt: notification.createdAt.toISOString(),
+    },
+    unreadNotifications,
+    pushResult,
+  }
+}
+
+export async function markNotificationReadAction(notificationId: string, read: boolean) {
+  const session = await requireSession()
+
+  const notification = await prisma.notification.updateMany({
+    where: {
+      id: notificationId,
+      userId: session.id,
+    },
+    data: { read },
+  })
+
+  const unreadNotifications = await prisma.notification.count({
+    where: { userId: session.id, read: false },
+  })
+
+  revalidatePath("/settings")
+
+  return {
+    success: notification.count > 0,
+    unreadNotifications,
+  }
+}
+
+export async function markAllNotificationsReadAction() {
+  const session = await requireSession()
+
+  await prisma.notification.updateMany({
+    where: {
+      userId: session.id,
+      read: false,
+    },
+    data: { read: true },
+  })
+
+  revalidatePath("/settings")
+
+  return {
+    success: true,
+    unreadNotifications: 0,
+  }
+}
+
+export async function deleteOwnAccountAction() {
+  const session = await requireSession()
+
+  await prisma.user.delete({
+    where: { id: session.id },
+  })
+
+  const cookieStore = await cookies()
+  for (const name of MANAGED_AUTH_COOKIE_NAMES) {
+    cookieStore.delete(name)
+  }
+
+  revalidatePath("/")
+  revalidatePath("/login")
+
+  return {
+    success: true,
+    redirectTo: "/login?account=deleted",
+  }
+}
+
+export async function createSettingsTestNotificationAction() {
+  const session = await requireSession()
+
+  await createNotificationForUser(session.id, {
+    channel: "system",
+    title: "Notification center checked in",
+    message: "The settings page generated an in-app notification successfully.",
+    type: "success",
+    link: "/settings",
+    email: {
+      senderId: session.id,
+      subject: "Notification center check",
+    },
+  })
+
+  revalidatePath("/settings")
+  return { success: true }
 }

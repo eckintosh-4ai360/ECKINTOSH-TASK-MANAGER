@@ -2,6 +2,7 @@
 
 import prisma from "@/lib/prisma"
 import { requireSession } from "@/lib/auth"
+import { createNotificationsForUsers, getWorkspaceRecipientIds } from "@/lib/notifications"
 import { getPermissionError, hasPermission } from "@/lib/rbac"
 import { revalidatePath } from "next/cache"
 
@@ -108,10 +109,7 @@ export async function createCalendarEvent(input: CalendarEventInput) {
   }
 
   const eventType = input.type || "meeting"
-  const recipients = await prisma.user.findMany({
-    where: { id: { not: session.id } },
-    select: { id: true },
-  })
+  const recipientIds = await getWorkspaceRecipientIds(session.id)
 
   const body = formatEventBody(input, startTime, endTime, session.name)
   const subject = `Scheduled: ${input.title.trim()}`
@@ -128,26 +126,20 @@ export async function createCalendarEvent(input: CalendarEventInput) {
     },
   })
 
-  if (recipients.length > 0) {
-    await prisma.$transaction([
-      prisma.internalEmail.createMany({
-        data: recipients.map((recipient) => ({
-          fromId: session.id,
-          toId: recipient.id,
-          subject,
-          body,
-        })),
-      }),
-      prisma.notification.createMany({
-        data: recipients.map((recipient) => ({
-          userId: recipient.id,
-          title: "New scheduled event",
-          message: `${session.name} scheduled ${input.title.trim()}.`,
-          type: "info",
-          link: "/calendar",
-        })),
-      }),
-    ])
+  if (recipientIds.length > 0) {
+    await createNotificationsForUsers({
+      userIds: recipientIds,
+      channel: "teamUpdates",
+      title: "New scheduled event",
+      message: `${session.name} scheduled ${input.title.trim()}.`,
+      type: "info",
+      link: "/calendar",
+      email: {
+        senderId: session.id,
+        subject,
+        body,
+      },
+    })
   }
 
   revalidatePath("/")
@@ -187,6 +179,20 @@ export async function updateCalendarEvent(eventId: string, input: CalendarEventI
     },
   })
 
+  const recipients = await getWorkspaceRecipientIds(session.id)
+  await createNotificationsForUsers({
+    userIds: recipients,
+    channel: "teamUpdates",
+    title: "Calendar event updated",
+    message: `${session.name} updated ${event.title}.`,
+    type: "info",
+    link: "/calendar",
+    email: {
+      senderId: session.id,
+      subject: `Calendar event updated: ${event.title}`,
+    },
+  })
+
   revalidatePath("/calendar")
   return { success: true, event: serializeCalendarEvent(event) }
 }
@@ -197,8 +203,27 @@ export async function deleteCalendarEvent(eventId: string) {
     return { success: false, error: getPermissionError("manage_calendar") }
   }
 
+  const event = await prisma.calendarEvent.findUnique({
+    where: { id: eventId },
+    select: { title: true },
+  })
+
   await prisma.calendarEvent.delete({
     where: { id: eventId },
+  })
+
+  const recipients = await getWorkspaceRecipientIds(session.id)
+  await createNotificationsForUsers({
+    userIds: recipients,
+    channel: "teamUpdates",
+    title: "Calendar event removed",
+    message: `${session.name} deleted ${event?.title ?? "a scheduled event"}.`,
+    type: "warning",
+    link: "/calendar",
+    email: {
+      senderId: session.id,
+      subject: `Calendar event removed: ${event?.title ?? "Event"}`,
+    },
   })
 
   revalidatePath("/calendar")

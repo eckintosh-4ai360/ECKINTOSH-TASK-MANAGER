@@ -2,6 +2,7 @@
 
 import prisma from "@/lib/prisma"
 import { requireSession } from "@/lib/auth"
+import { createNotificationsForUsers, getWorkspaceRecipientIds } from "@/lib/notifications"
 import { canManageStandup, getPermissionError, hasPermission } from "@/lib/rbac"
 import { revalidatePath } from "next/cache"
 
@@ -84,7 +85,7 @@ export async function createStandup(input: StandupInput) {
 
   const mood = Math.max(1, Math.min(5, Number(input.mood) || 3))
 
-  await prisma.standup.create({
+  const standup = await prisma.standup.create({
     data: {
       userId: session.id,
       projectId: input.projectId || null,
@@ -92,6 +93,24 @@ export async function createStandup(input: StandupInput) {
       doingToday: input.doingToday.trim(),
       blockers: input.blockers?.trim() || null,
       mood,
+    },
+    select: {
+      id: true,
+      project: { select: { name: true } },
+    },
+  })
+
+  const recipients = await getWorkspaceRecipientIds(session.id)
+  await createNotificationsForUsers({
+    userIds: recipients,
+    channel: "teamUpdates",
+    title: "New standup posted",
+    message: `${session.name} posted a standup${standup.project?.name ? ` for ${standup.project.name}` : ""}.`,
+    type: "info",
+    link: "/standups",
+    email: {
+      senderId: session.id,
+      subject: `Standup posted${standup.project?.name ? `: ${standup.project.name}` : ""}`,
     },
   })
 
@@ -117,7 +136,7 @@ export async function updateStandup(standupId: string, input: StandupInput) {
 
   const mood = Math.max(1, Math.min(5, Number(input.mood) || 3))
 
-  await prisma.standup.update({
+  const updatedStandup = await prisma.standup.update({
     where: { id: standupId },
     data: {
       projectId: input.projectId || null,
@@ -125,6 +144,24 @@ export async function updateStandup(standupId: string, input: StandupInput) {
       doingToday: input.doingToday.trim(),
       blockers: input.blockers?.trim() || null,
       mood,
+    },
+    select: {
+      id: true,
+      project: { select: { name: true } },
+    },
+  })
+
+  const recipients = await getWorkspaceRecipientIds(session.id)
+  await createNotificationsForUsers({
+    userIds: recipients,
+    channel: "teamUpdates",
+    title: "Standup updated",
+    message: `${session.name} updated a standup${updatedStandup.project?.name ? ` for ${updatedStandup.project.name}` : ""}.`,
+    type: "info",
+    link: "/standups",
+    email: {
+      senderId: session.id,
+      subject: `Standup updated${updatedStandup.project?.name ? `: ${updatedStandup.project.name}` : ""}`,
     },
   })
 
@@ -150,6 +187,20 @@ export async function deleteStandup(standupId: string) {
 
   await prisma.standup.delete({
     where: { id: standupId },
+  })
+
+  const recipients = await getWorkspaceRecipientIds(session.id)
+  await createNotificationsForUsers({
+    userIds: recipients,
+    channel: "teamUpdates",
+    title: "Standup removed",
+    message: `${session.name} deleted a standup update.`,
+    type: "warning",
+    link: "/standups",
+    email: {
+      senderId: session.id,
+      subject: "Standup removed",
+    },
   })
 
   revalidatePath("/")

@@ -2,6 +2,7 @@
 
 import prisma from "@/lib/prisma"
 import { requireSession } from "@/lib/auth"
+import { createNotificationsForUsers, getWorkspaceRecipientIds } from "@/lib/notifications"
 import { getPermissionError, hasPermission } from "@/lib/rbac"
 import { revalidatePath } from "next/cache"
 
@@ -117,6 +118,24 @@ export async function createSprint(input: SprintInput) {
       startDate: input.startDate ? new Date(input.startDate) : null,
       endDate: input.endDate ? new Date(input.endDate) : null,
     },
+    select: {
+      id: true,
+      name: true,
+    },
+  })
+
+  const recipients = await getWorkspaceRecipientIds(session.id)
+  await createNotificationsForUsers({
+    userIds: recipients,
+    channel: "teamUpdates",
+    title: "Sprint created",
+    message: `${session.name} created ${sprint.name}.`,
+    type: "info",
+    link: "/sprints",
+    email: {
+      senderId: session.id,
+      subject: `Sprint created: ${sprint.name}`,
+    },
   })
 
   revalidatePath("/")
@@ -144,6 +163,24 @@ export async function updateSprint(input: SprintInput & { id: string }) {
       startDate: input.startDate ? new Date(input.startDate) : null,
       endDate: input.endDate ? new Date(input.endDate) : null,
     },
+    select: {
+      id: true,
+      name: true,
+    },
+  })
+
+  const recipients = await getWorkspaceRecipientIds(session.id)
+  await createNotificationsForUsers({
+    userIds: recipients,
+    channel: "teamUpdates",
+    title: "Sprint updated",
+    message: `${session.name} updated ${sprint.name}.`,
+    type: "info",
+    link: "/sprints",
+    email: {
+      senderId: session.id,
+      subject: `Sprint updated: ${sprint.name}`,
+    },
   })
 
   revalidatePath("/")
@@ -159,8 +196,27 @@ export async function deleteSprint(sprintId: string) {
     return { success: false, error: getPermissionError("manage_sprints") }
   }
 
+  const sprint = await prisma.sprint.findUnique({
+    where: { id: sprintId },
+    select: { name: true },
+  })
+
   await prisma.sprint.delete({
     where: { id: sprintId },
+  })
+
+  const recipients = await getWorkspaceRecipientIds(session.id)
+  await createNotificationsForUsers({
+    userIds: recipients,
+    channel: "teamUpdates",
+    title: "Sprint removed",
+    message: `${session.name} deleted ${sprint?.name ?? "a sprint"}.`,
+    type: "warning",
+    link: "/sprints",
+    email: {
+      senderId: session.id,
+      subject: `Sprint removed: ${sprint?.name ?? "Sprint"}`,
+    },
   })
 
   revalidatePath("/")

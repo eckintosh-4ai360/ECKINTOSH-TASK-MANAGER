@@ -7,6 +7,16 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { useTheme } from "@/components/theme-provider"
 import {
   AlertTriangle,
@@ -18,6 +28,7 @@ import {
   Camera,
   CheckCircle2,
   Clock3,
+  ExternalLink,
   Globe2,
   Image as ImageIcon,
   Inbox,
@@ -33,44 +44,35 @@ import {
   Smartphone,
   Sun,
   TimerReset,
+  Trash2,
   User,
   Users,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import {
+  createTestReminderAction,
+  deleteOwnAccountAction,
+  deletePushSubscriptionAction,
+  type SettingsNotification,
+  type SettingsNotificationPreferences,
   type SettingsPageData,
   type SettingsProfile,
+  type SettingsReminderLeadTime,
+  DEFAULT_NOTIFICATION_PREFERENCES,
+  markAllNotificationsReadAction,
+  markNotificationReadAction,
+  saveNotificationPreferencesAction,
+  savePushSubscriptionAction,
   updateProfileAction,
 } from "@/lib/actions/settings-actions"
 
-const PREFERENCES_STORAGE_KEY = "eckintosh-notification-preferences"
-
 type BrowserPermission = NotificationPermission | "unsupported"
-type ReminderLeadTime = "15m" | "1h" | "1d" | "3d"
 
-type NotificationPreferences = {
-  email: boolean
-  push: boolean
-  taskReminders: boolean
-  teamUpdates: boolean
-  dailyDigest: boolean
-  overdueEscalation: boolean
-  quietHours: boolean
-  reminderLeadTime: ReminderLeadTime
-}
-
-const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
-  email: true,
-  push: false,
-  taskReminders: true,
-  teamUpdates: true,
-  dailyDigest: true,
-  overdueEscalation: true,
-  quietHours: false,
-  reminderLeadTime: "1d",
-}
-
-const REMINDER_LEAD_TIMES: Array<{ value: ReminderLeadTime; label: string; description: string }> = [
+const REMINDER_LEAD_TIMES: Array<{
+  value: SettingsReminderLeadTime
+  label: string
+  description: string
+}> = [
   { value: "15m", label: "15 min", description: "Last-call ping" },
   { value: "1h", label: "1 hour", description: "Focus buffer" },
   { value: "1d", label: "1 day", description: "Default" },
@@ -128,25 +130,52 @@ function getDueState(value: string | null) {
   return { label: `Due in ${diffDays}d`, tone: "text-primary border-primary/30 bg-primary/10" }
 }
 
-function loadNotificationPreferences(): NotificationPreferences {
-  if (typeof window === "undefined") return DEFAULT_NOTIFICATION_PREFERENCES
-
-  try {
-    const stored = window.localStorage.getItem(PREFERENCES_STORAGE_KEY)
-    if (!stored) return DEFAULT_NOTIFICATION_PREFERENCES
-
-    return {
-      ...DEFAULT_NOTIFICATION_PREFERENCES,
-      ...JSON.parse(stored),
-    }
-  } catch {
-    return DEFAULT_NOTIFICATION_PREFERENCES
-  }
-}
-
 function getBrowserPermission(): BrowserPermission {
   if (typeof window === "undefined" || !("Notification" in window)) return "unsupported"
   return window.Notification.permission
+}
+
+function mergePreferences(input: Partial<SettingsNotificationPreferences>): SettingsNotificationPreferences {
+  return {
+    ...DEFAULT_NOTIFICATION_PREFERENCES,
+    ...input,
+  }
+}
+
+function urlBase64ToUint8Array(base64String: string) {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4)
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/")
+  const rawData = window.atob(base64)
+  const outputArray = new Uint8Array(rawData.length)
+
+  for (let index = 0; index < rawData.length; index += 1) {
+    outputArray[index] = rawData.charCodeAt(index)
+  }
+
+  return outputArray
+}
+
+function supportsPushMessaging() {
+  return typeof window !== "undefined"
+    && "serviceWorker" in navigator
+    && "PushManager" in window
+}
+
+async function getPushRegistration() {
+  if (!supportsPushMessaging()) return null
+
+  return navigator.serviceWorker.register("/notifications-sw.js")
+}
+
+function showLocalTestNotification() {
+  if (typeof window === "undefined" || !("Notification" in window) || window.Notification.permission !== "granted") {
+    return false
+  }
+
+  new window.Notification("Eckintosh task reminder", {
+    body: "Reminder flow is live. Your deadlines will not sneak past the perimeter.",
+  })
+  return true
 }
 
 function ProfileMeta({ profile }: { profile: SettingsProfile }) {
@@ -172,9 +201,12 @@ function ProfileMeta({ profile }: { profile: SettingsProfile }) {
 export function SettingsContent({ settings }: SettingsContentProps) {
   const router = useRouter()
   const avatarInputRef = useRef<HTMLInputElement>(null)
+  const preferencesRef = useRef(settings.preferences)
   const { theme, resolvedTheme, setTheme } = useTheme()
   const [mounted, setMounted] = useState(false)
   const [profile, setProfile] = useState(settings.profile)
+  const [notifications, setNotifications] = useState(settings.notifications)
+  const [unreadNotifications, setUnreadNotifications] = useState(settings.unreadNotifications)
   const [form, setForm] = useState({
     name: settings.profile.name,
     email: settings.profile.email,
@@ -183,11 +215,14 @@ export function SettingsContent({ settings }: SettingsContentProps) {
     avatar: settings.profile.avatar ?? "",
   })
   const [profileMessage, setProfileMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
-  const [isPending, startTransition] = useTransition()
-  const [preferences, setPreferences] = useState(DEFAULT_NOTIFICATION_PREFERENCES)
-  const [preferencesReady, setPreferencesReady] = useState(false)
+  const [preferences, setPreferences] = useState<SettingsNotificationPreferences>(mergePreferences(settings.preferences))
   const [permission, setPermission] = useState<BrowserPermission>("default")
-  const [notificationMessage, setNotificationMessage] = useState<string | null>(null)
+  const [notificationMessage, setNotificationMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [isProfilePending, startProfileTransition] = useTransition()
+  const [isPreferencesPending, startPreferencesTransition] = useTransition()
+  const [isNotificationPending, startNotificationTransition] = useTransition()
+  const [isDeletePending, startDeleteTransition] = useTransition()
 
   const activeTheme = mounted ? resolvedTheme ?? theme : "dark"
   const isDarkMode = activeTheme === "dark"
@@ -195,13 +230,16 @@ export function SettingsContent({ settings }: SettingsContentProps) {
 
   useEffect(() => {
     setMounted(true)
-    setPreferences(loadNotificationPreferences())
     setPermission(getBrowserPermission())
-    setPreferencesReady(true)
   }, [])
 
   useEffect(() => {
     setProfile(settings.profile)
+    setNotifications(settings.notifications)
+    setUnreadNotifications(settings.unreadNotifications)
+    const mergedPreferences = mergePreferences(settings.preferences)
+    setPreferences(mergedPreferences)
+    preferencesRef.current = mergedPreferences
     setForm({
       name: settings.profile.name,
       email: settings.profile.email,
@@ -209,30 +247,131 @@ export function SettingsContent({ settings }: SettingsContentProps) {
       timezone: settings.profile.timezone ?? "UTC",
       avatar: settings.profile.avatar ?? "",
     })
-  }, [settings.profile])
+  }, [settings])
 
   useEffect(() => {
-    if (!preferencesReady) return
-    window.localStorage.setItem(PREFERENCES_STORAGE_KEY, JSON.stringify(preferences))
-  }, [preferences, preferencesReady])
+    preferencesRef.current = preferences
+  }, [preferences])
 
-  function updatePreference<Key extends keyof NotificationPreferences>(
-    key: Key,
-    value: NotificationPreferences[Key],
+  function persistPreferences(
+    nextInput: SettingsNotificationPreferences | ((current: SettingsNotificationPreferences) => SettingsNotificationPreferences),
+    successText: string,
   ) {
-    setPreferences((current) => ({ ...current, [key]: value }))
-    setNotificationMessage("Notification preferences saved for this browser.")
+    const previousPreferences = preferencesRef.current
+    const nextPreferences = mergePreferences(
+      typeof nextInput === "function" ? nextInput(previousPreferences) : nextInput,
+    )
+
+    setPreferences(nextPreferences)
+    preferencesRef.current = nextPreferences
+
+    startPreferencesTransition(() => {
+      void saveNotificationPreferencesAction(nextPreferences)
+        .then((result) => {
+          if (!result.success || !result.preferences) {
+            setPreferences(previousPreferences)
+            preferencesRef.current = previousPreferences
+            setNotificationMessage({
+              type: "error",
+              text: "Could not save notification preferences.",
+            })
+            return
+          }
+
+          const normalized = mergePreferences(result.preferences)
+          setPreferences(normalized)
+          preferencesRef.current = normalized
+          setNotificationMessage({ type: "success", text: successText })
+        })
+        .catch(() => {
+          setPreferences(previousPreferences)
+          preferencesRef.current = previousPreferences
+          setNotificationMessage({
+            type: "error",
+            text: "Could not save notification preferences.",
+          })
+        })
+    })
+  }
+
+  function updatePreference<Key extends keyof SettingsNotificationPreferences>(
+    key: Key,
+    value: SettingsNotificationPreferences[Key],
+    successText = "Notification preferences saved to your account.",
+  ) {
+    persistPreferences((current) => ({ ...current, [key]: value }), successText)
+  }
+
+  async function syncPushSubscription() {
+    if (!supportsPushMessaging() || !settings.vapidPublicKey) {
+      return { subscribed: false }
+    }
+
+    const registration = await getPushRegistration()
+    if (!registration) {
+      return { subscribed: false }
+    }
+
+    let subscription = await registration.pushManager.getSubscription()
+    if (!subscription) {
+      subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(settings.vapidPublicKey),
+      })
+    }
+
+    const payload = subscription.toJSON()
+    if (!payload.endpoint || !payload.keys?.p256dh || !payload.keys?.auth) {
+      return { subscribed: false }
+    }
+
+    const result = await savePushSubscriptionAction({
+      endpoint: payload.endpoint,
+      expirationTime: payload.expirationTime ?? null,
+      keys: {
+        p256dh: payload.keys.p256dh,
+        auth: payload.keys.auth,
+      },
+    })
+
+    return {
+      subscribed: result.success,
+      endpoint: payload.endpoint,
+    }
+  }
+
+  async function removePushSubscriptionFromBrowser() {
+    if (!supportsPushMessaging()) return
+
+    const registration = await navigator.serviceWorker.getRegistration("/notifications-sw.js")
+    if (!registration) return
+
+    const subscription = await registration.pushManager.getSubscription()
+    const endpoint = subscription?.endpoint
+    await subscription?.unsubscribe()
+
+    if (endpoint) {
+      await deletePushSubscriptionAction(endpoint)
+    }
   }
 
   async function handlePushChange(enabled: boolean) {
     if (!enabled) {
-      updatePreference("push", false)
+      await removePushSubscriptionFromBrowser()
+      setPermission(getBrowserPermission())
+      persistPreferences(
+        (current) => ({ ...current, push: false }),
+        "Push notifications turned off for this account.",
+      )
       return
     }
 
     if (typeof window === "undefined" || !("Notification" in window)) {
       setPermission("unsupported")
-      setNotificationMessage("This browser does not support desktop push notifications.")
+      setNotificationMessage({
+        type: "error",
+        text: "This browser does not support desktop notifications.",
+      })
       return
     }
 
@@ -242,37 +381,82 @@ export function SettingsContent({ settings }: SettingsContentProps) {
     }
 
     setPermission(nextPermission)
-    updatePreference("push", nextPermission === "granted")
-    setNotificationMessage(
-      nextPermission === "granted"
-        ? "Push notifications are ready. The dashboard can now send browser reminders."
-        : "Browser push is blocked. Enable notifications in your browser settings to use push alerts.",
+
+    if (nextPermission !== "granted") {
+      persistPreferences(
+        (current) => ({ ...current, push: false }),
+        "Browser push is blocked. Enable notifications in your browser settings to use alerts.",
+      )
+      return
+    }
+
+    let pushStatusText = "Browser notifications are ready for this account."
+    try {
+      const pushResult = await syncPushSubscription()
+      if (pushResult.subscribed && settings.pushDeliveryConfigured) {
+        pushStatusText = "Push notifications are live. Test reminders can now reach this browser."
+      } else if (pushResult.subscribed) {
+        pushStatusText = "Permission is granted, but VAPID keys are still missing on the server for background push delivery."
+      } else if (!settings.vapidPublicKey) {
+        pushStatusText = "Permission is granted. Add VAPID keys to enable true background web push delivery."
+      } else {
+        pushStatusText = "Permission is granted, but this browser could not finish web push subscription."
+      }
+    } catch {
+      pushStatusText = "Permission is granted, but this browser could not finish web push subscription."
+    }
+
+    persistPreferences(
+      (current) => ({ ...current, push: true }),
+      pushStatusText,
     )
   }
 
   async function testReminder() {
-    if (!preferences.taskReminders) {
-      setNotificationMessage("Turn on task reminders first, then fire the test ping.")
+    if (!preferencesRef.current.taskReminders) {
+      setNotificationMessage({
+        type: "error",
+        text: "Turn on task reminders first, then fire the test ping.",
+      })
       return
     }
 
-    if (typeof window !== "undefined" && "Notification" in window) {
-      let nextPermission = window.Notification.permission
-      if (nextPermission === "default") {
-        nextPermission = await window.Notification.requestPermission()
-      }
+    startNotificationTransition(() => {
+      void createTestReminderAction()
+        .then((result) => {
+          if (!result.success || !result.notification) {
+            setNotificationMessage({
+              type: "error",
+              text: "error" in result && result.error
+                ? result.error
+                : "Could not create a test reminder.",
+            })
+            return
+          }
 
-      setPermission(nextPermission)
-      if (nextPermission === "granted") {
-        new window.Notification("Eckintosh task reminder", {
-          body: "Reminder flow is live. Your deadlines will not sneak past the perimeter.",
+          setNotifications((current) => [result.notification, ...current].slice(0, 6))
+          setUnreadNotifications(result.unreadNotifications ?? unreadNotifications)
+
+          const localNotificationDisplayed = showLocalTestNotification()
+          const pushDelivered = result.pushResult?.success && (result.pushResult.sentCount ?? 0) > 0
+
+          const text = pushDelivered
+            ? `Test reminder sent. ${result.pushResult.sentCount} browser subscription${result.pushResult.sentCount === 1 ? "" : "s"} received it.`
+            : localNotificationDisplayed
+              ? "Test reminder created and shown in this browser. Add VAPID keys if you want true background push delivery."
+              : result.pushResult?.error
+                ? `Test reminder created. ${result.pushResult.error}`
+                : "Test reminder created in-app."
+
+          setNotificationMessage({ type: "success", text })
         })
-        setNotificationMessage("Test reminder sent.")
-        return
-      }
-    }
-
-    setNotificationMessage("Test reminder saved here. Browser push needs permission before desktop alerts can appear.")
+        .catch(() => {
+          setNotificationMessage({
+            type: "error",
+            text: "Could not create a test reminder.",
+          })
+        })
+    })
   }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -281,7 +465,7 @@ export function SettingsContent({ settings }: SettingsContentProps) {
 
     const formData = new FormData(event.currentTarget)
 
-    startTransition(() => {
+    startProfileTransition(() => {
       void updateProfileAction(formData)
         .then((result) => {
           if (!result.success || !result.profile) {
@@ -306,6 +490,102 @@ export function SettingsContent({ settings }: SettingsContentProps) {
         })
         .catch(() => {
           setProfileMessage({ type: "error", text: "Something went wrong while saving your profile." })
+        })
+    })
+  }
+
+  function updateNotificationState(notificationId: string, read: boolean) {
+    setNotifications((current) =>
+      current.map((notification) =>
+        notification.id === notificationId
+          ? { ...notification, read }
+          : notification,
+      ),
+    )
+  }
+
+  function toggleNotificationRead(notificationId: string, read: boolean) {
+    startNotificationTransition(() => {
+      void markNotificationReadAction(notificationId, read)
+        .then((result) => {
+          if (!result.success) {
+            setNotificationMessage({
+              type: "error",
+              text: "Could not update the notification state.",
+            })
+            return
+          }
+
+          updateNotificationState(notificationId, read)
+          setUnreadNotifications(result.unreadNotifications)
+        })
+        .catch(() => {
+          setNotificationMessage({
+            type: "error",
+            text: "Could not update the notification state.",
+          })
+        })
+    })
+  }
+
+  function handleNotificationOpen(notification: SettingsNotification) {
+    if (!notification.read) {
+      toggleNotificationRead(notification.id, true)
+    }
+
+    if (notification.link) {
+      router.push(notification.link)
+    }
+  }
+
+  function markAllNotificationsRead() {
+    startNotificationTransition(() => {
+      void markAllNotificationsReadAction()
+        .then((result) => {
+          if (!result.success) {
+            setNotificationMessage({
+              type: "error",
+              text: "Could not mark notifications as read.",
+            })
+            return
+          }
+
+          setNotifications((current) => current.map((notification) => ({ ...notification, read: true })))
+          setUnreadNotifications(result.unreadNotifications)
+          setNotificationMessage({
+            type: "success",
+            text: "All recent notifications marked as read.",
+          })
+        })
+        .catch(() => {
+          setNotificationMessage({
+            type: "error",
+            text: "Could not mark notifications as read.",
+          })
+        })
+    })
+  }
+
+  function handleDeleteAccount() {
+    startDeleteTransition(() => {
+      void deleteOwnAccountAction()
+        .then((result) => {
+          if (!result.success || !result.redirectTo) {
+            setProfileMessage({
+              type: "error",
+              text: "Could not delete your account right now.",
+            })
+            return
+          }
+
+          setDeleteDialogOpen(false)
+          window.location.assign(result.redirectTo)
+        })
+        .catch(() => {
+          setProfileMessage({
+            type: "error",
+            text: "Could not delete your account right now.",
+          })
         })
     })
   }
@@ -446,10 +726,10 @@ export function SettingsContent({ settings }: SettingsContentProps) {
 
           <Button
             type="submit"
-            disabled={isPending}
+            disabled={isProfilePending}
             className="bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 shadow-lg shadow-primary/20"
           >
-            {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+            {isProfilePending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
             Save Changes
           </Button>
         </div>
@@ -467,7 +747,7 @@ export function SettingsContent({ settings }: SettingsContentProps) {
             </div>
           </div>
           <div className="glass rounded-xl px-3 py-2 text-xs text-muted-foreground border border-border/40">
-            <span className="font-mono text-primary">{settings.unreadNotifications}</span> unread in-app alerts
+            <span className="font-mono text-primary">{unreadNotifications}</span> unread in-app alerts
           </div>
         </div>
 
@@ -478,7 +758,7 @@ export function SettingsContent({ settings }: SettingsContentProps) {
                 key: "email" as const,
                 label: "Email notifications",
                 description: "Account activity, security updates, and delivery summaries.",
-                detail: "Best for durable audit trails.",
+                detail: "Saved on your account and ready for future delivery hooks.",
                 icon: Mail,
                 checked: preferences.email,
                 onChange: (checked: boolean) => updatePreference("email", checked),
@@ -487,7 +767,14 @@ export function SettingsContent({ settings }: SettingsContentProps) {
                 key: "push" as const,
                 label: "Push notifications",
                 description: permission === "denied" ? "Blocked in browser settings." : "Browser alerts for urgent work.",
-                detail: permission === "granted" ? "Permission granted." : permission === "unsupported" ? "Not supported here." : "Permission requested when enabled.",
+                detail:
+                  permission === "granted"
+                    ? settings.pushDeliveryConfigured
+                      ? "Permission granted and web push delivery is configured."
+                      : "Permission granted. Add VAPID keys for true background web push."
+                    : permission === "unsupported"
+                      ? "This browser does not support web notifications."
+                      : "Permission will be requested when enabled.",
                 icon: Smartphone,
                 checked: preferences.push,
                 onChange: handlePushChange,
@@ -505,7 +792,7 @@ export function SettingsContent({ settings }: SettingsContentProps) {
                 key: "teamUpdates" as const,
                 label: "Team updates",
                 description: "Standups, sprint movement, assignments, and collaboration events.",
-                detail: "Keeps the workspace pulse visible.",
+                detail: "These preferences now gate future in-app alert writes.",
                 icon: Users,
                 checked: preferences.teamUpdates,
                 onChange: (checked: boolean) => updatePreference("teamUpdates", checked),
@@ -528,6 +815,7 @@ export function SettingsContent({ settings }: SettingsContentProps) {
                 <Switch
                   checked={item.checked}
                   onCheckedChange={item.onChange}
+                  disabled={isPreferencesPending}
                   className="data-[state=checked]:bg-primary"
                 />
               </div>
@@ -549,9 +837,10 @@ export function SettingsContent({ settings }: SettingsContentProps) {
                 type="button"
                 variant="outline"
                 onClick={testReminder}
+                disabled={isNotificationPending}
                 className="glass border-primary/20 hover:border-primary/40 hover:bg-primary/5"
               >
-                <Send className="w-4 h-4" />
+                {isNotificationPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                 Test reminder
               </Button>
             </div>
@@ -581,7 +870,7 @@ export function SettingsContent({ settings }: SettingsContentProps) {
                       key={option.value}
                       type="button"
                       onClick={() => updatePreference("reminderLeadTime", option.value)}
-                      disabled={!preferences.taskReminders}
+                      disabled={!preferences.taskReminders || isPreferencesPending}
                       className={cn(
                         "rounded-xl border p-3 text-left transition-all",
                         preferences.reminderLeadTime === option.value
@@ -627,7 +916,7 @@ export function SettingsContent({ settings }: SettingsContentProps) {
                     </div>
                     <Switch
                       checked={preferences[item.key]}
-                      disabled={!preferences.taskReminders}
+                      disabled={!preferences.taskReminders || isPreferencesPending}
                       onCheckedChange={(checked) => updatePreference(item.key, checked)}
                       className="data-[state=checked]:bg-primary"
                     />
@@ -657,7 +946,7 @@ export function SettingsContent({ settings }: SettingsContentProps) {
                           <p className="font-semibold text-sm text-foreground truncate">{task.title}</p>
                         </div>
                         <p className="text-xs text-muted-foreground mt-1">
-                          {task.project?.name ?? "No project"} · {task.status.replace("_", " ").toLowerCase()} · {formatDateTime(task.dueDate)}
+                          {task.project?.name ?? "No project"} · {task.status.replace(/_/g, " ").toLowerCase()} · {formatDateTime(task.dueDate)}
                         </p>
                       </div>
                       <span className={cn("rounded-full border px-2.5 py-1 text-xs font-semibold whitespace-nowrap", dueState.tone)}>
@@ -670,9 +959,16 @@ export function SettingsContent({ settings }: SettingsContentProps) {
             </div>
 
             {notificationMessage && (
-              <div className="mt-4 flex items-center gap-2 rounded-xl border border-primary/25 bg-primary/10 px-4 py-3 text-sm text-primary">
-                <BellRing className="w-4 h-4" />
-                {notificationMessage}
+              <div
+                className={cn(
+                  "mt-4 flex items-center gap-2 rounded-xl border px-4 py-3 text-sm",
+                  notificationMessage.type === "success"
+                    ? "border-primary/25 bg-primary/10 text-primary"
+                    : "border-destructive/30 bg-destructive/10 text-destructive",
+                )}
+              >
+                {notificationMessage.type === "success" ? <BellRing className="w-4 h-4" /> : <AlertTriangle className="w-4 h-4" />}
+                {notificationMessage.text}
               </div>
             )}
           </div>
@@ -688,21 +984,59 @@ export function SettingsContent({ settings }: SettingsContentProps) {
                   <p className="text-sm text-muted-foreground">Latest workspace alerts for this logged-in user.</p>
                 </div>
               </div>
+              {unreadNotifications > 0 && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={markAllNotificationsRead}
+                  disabled={isNotificationPending}
+                  className="glass border-primary/20 hover:border-primary/40 hover:bg-primary/5"
+                >
+                  Mark all read
+                </Button>
+              )}
             </div>
             <div className="grid gap-2">
-              {settings.notifications.length === 0 && (
+              {notifications.length === 0 && (
                 <div className="rounded-xl border border-dashed border-border/60 p-4 text-sm text-muted-foreground">
                   No notifications yet. The bell will light up when project, sprint, or task events land here.
                 </div>
               )}
-              {settings.notifications.map((notification) => (
-                <div key={notification.id} className="rounded-xl border border-border/40 bg-background/35 p-3">
+              {notifications.map((notification) => (
+                <div
+                  key={notification.id}
+                  className={cn(
+                    "rounded-xl border border-border/40 bg-background/35 p-3 transition-all",
+                    notification.link && "hover:border-primary/30 hover:bg-primary/5",
+                  )}
+                >
                   <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-semibold text-foreground">{notification.title}</p>
-                      <p className="text-xs text-muted-foreground mt-1">{notification.message}</p>
+                    <button
+                      type="button"
+                      onClick={() => handleNotificationOpen(notification)}
+                      className="flex-1 text-left"
+                    >
+                      <div className="flex items-start gap-2">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-foreground">{notification.title}</p>
+                          <p className="text-xs text-muted-foreground mt-1">{notification.message}</p>
+                        </div>
+                        {notification.link && <ExternalLink className="w-3.5 h-3.5 text-primary mt-0.5 flex-shrink-0" />}
+                      </div>
+                    </button>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      {!notification.read && <span className="h-2 w-2 rounded-full bg-primary shadow-lg shadow-primary/40" />}
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => toggleNotificationRead(notification.id, !notification.read)}
+                        disabled={isNotificationPending}
+                        className="h-7 px-2 text-xs"
+                      >
+                        {notification.read ? "Mark unread" : "Mark read"}
+                      </Button>
                     </div>
-                    {!notification.read && <span className="h-2 w-2 rounded-full bg-primary shadow-lg shadow-primary/40 mt-1" />}
                   </div>
                   <p className="text-[11px] text-muted-foreground mt-2 font-mono">{formatDateTime(notification.createdAt)}</p>
                 </div>
@@ -758,12 +1092,43 @@ export function SettingsContent({ settings }: SettingsContentProps) {
               <p className="font-medium text-foreground">Delete Account</p>
               <p className="text-sm text-muted-foreground">Permanently delete your account and all workspace data.</p>
             </div>
-            <Button type="button" variant="outline" className="border-destructive/30 text-destructive hover:bg-destructive/10 hover:border-destructive/50">
+            <Button
+              type="button"
+              variant="outline"
+              className="border-destructive/30 text-destructive hover:bg-destructive/10 hover:border-destructive/50"
+              onClick={() => setDeleteDialogOpen(true)}
+            >
+              <Trash2 className="w-4 h-4" />
               Delete Account
             </Button>
           </div>
         </div>
       </div>
+
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent className="glass-card border-destructive/20">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete your account?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This removes your user record and the workspace data tied to it. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeletePending}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(event) => {
+                event.preventDefault()
+                handleDeleteAccount()
+              }}
+              disabled={isDeletePending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeletePending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+              Delete account
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
