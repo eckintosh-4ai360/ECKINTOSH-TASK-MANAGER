@@ -4,7 +4,7 @@ import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/session"
 // Routes that do NOT require the custom eckintosh_session cookie.
 // /auth/complete is the OAuth bridge that creates the cookie after GitHub login.
 // /api/auth is NextAuth's endpoint (callback, signin, etc.).
-const PUBLIC_ROUTES = ["/login", "/auth/complete", "/api/auth"]
+const PUBLIC_ROUTES = ["/login", "/auth/complete", "/auth/reset", "/api/auth"]
 const AUTHJS_SESSION_COOKIE_NAMES = ["authjs.session-token", "__Secure-authjs.session-token"]
 
 function hasAuthJsSessionCookie(request: NextRequest) {

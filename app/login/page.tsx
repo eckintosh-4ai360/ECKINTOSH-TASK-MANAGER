@@ -14,6 +14,7 @@ const AUTH_ERROR_MESSAGES: Record<string, string> = {
   no_session: "GitHub login finished, but no authenticated session was available.",
   db_error: "Sign-in succeeded, but the app could not reach the database.",
   user_not_found: "Sign-in succeeded, but the user record could not be found.",
+  session_reset: "Saved browser session cleared. Please sign in again.",
 }
 
 // Isolated component that uses useSearchParams — must be inside <Suspense>
@@ -103,6 +104,13 @@ function LoginForm() {
           <span className="text-primary">admin@eckintosh.dev</span> to be granted admin access.
         </p>
       </div>
+
+      <a
+        href="/auth/reset"
+        className="mt-4 block text-center text-[11px] text-muted-foreground hover:text-primary transition-colors"
+      >
+        Having trouble? Clear this browser&apos;s saved session.
+      </a>
     </div>
   )
 }
