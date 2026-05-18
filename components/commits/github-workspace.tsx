@@ -469,8 +469,50 @@ export function GitHubWorkspace({ initialData, canMergePullRequests }: GitHubWor
         )}
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(320px,0.8fr)]">
-        <div className="glass-card rounded-2xl p-6">
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+        <div className="glass-card rounded-2xl p-5">
+          <div className="flex items-center gap-2">
+            <Github className="w-4 h-4 text-primary" />
+            <h3 className="font-semibold text-foreground">Integration Notes</h3>
+          </div>
+          <div className="mt-4 grid gap-3 text-sm text-muted-foreground sm:grid-cols-3">
+            <p>Admins connect repositories by saving a GitHub URL on the project record.</p>
+            <p>Developers can browse connected branches and commit file changes from the in-app editor when GitHub write access is configured.</p>
+            <p>Admins can merge pull requests from here to keep the release flow inside the workspace.</p>
+          </div>
+        </div>
+
+        <div className="glass-card rounded-2xl p-5">
+          <div className="flex items-center gap-2">
+            <GitBranch className="w-4 h-4 text-primary" />
+            <h3 className="font-semibold text-foreground">Branch Snapshot</h3>
+          </div>
+          <ScrollArea className="mt-4 h-[174px] pr-3">
+            <div className="grid gap-3 sm:grid-cols-2">
+              {branchItems.map((branch) => (
+                <div key={branch.name} className="rounded-xl border border-border/40 bg-background/35 p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-foreground">{branch.name}</p>
+                      <p className="text-[11px] text-muted-foreground font-mono">{branch.lastCommitSha.slice(0, 10)}</p>
+                    </div>
+                    {branch.protected && (
+                      <Badge className="bg-primary/10 text-primary border border-primary/25">Protected</Badge>
+                    )}
+                  </div>
+                </div>
+              ))}
+              {branchItems.length === 0 && (
+                <div className="rounded-xl border border-dashed border-border/50 p-4 text-sm text-muted-foreground sm:col-span-2">
+                  Select a tracked repository to see its branches.
+                </div>
+              )}
+            </div>
+          </ScrollArea>
+        </div>
+      </div>
+
+      <div className="glass-card rounded-2xl p-4 sm:p-6">
           <Tabs defaultValue="activity" className="space-y-4">
             <TabsList className="glass border border-border/40">
               <TabsTrigger value="activity">Activity</TabsTrigger>
@@ -662,8 +704,8 @@ export function GitHubWorkspace({ initialData, canMergePullRequests }: GitHubWor
             </TabsContent>
 
             <TabsContent value="workspace" className="space-y-4">
-              <div className="grid gap-4 xl:grid-cols-[320px_minmax(0,1fr)]">
-                <div className="rounded-2xl border border-border/40 bg-background/25 p-4">
+              <div className="grid items-stretch gap-4 xl:grid-cols-[minmax(260px,320px)_minmax(0,1fr)]">
+                <div className="rounded-2xl border border-border/40 bg-background/25 p-4 xl:min-h-[680px]">
                   <div className="mb-3 flex items-center justify-between gap-3">
                     <div>
                       <p className="text-xs uppercase tracking-[0.14em] text-primary/80">Repository Files</p>
@@ -709,7 +751,7 @@ export function GitHubWorkspace({ initialData, canMergePullRequests }: GitHubWor
                     </div>
                   )}
 
-                  <ScrollArea className="h-[560px] pr-3">
+                  <ScrollArea className="h-[560px] pr-3 xl:h-[620px]">
                     <div className="grid gap-2">
                       {sortDirectoryEntries(entries).map((entry) => (
                         <button
@@ -736,9 +778,9 @@ export function GitHubWorkspace({ initialData, canMergePullRequests }: GitHubWor
                   </ScrollArea>
                 </div>
 
-                <div className="rounded-2xl border border-border/40 bg-background/25 p-4">
+                <div className="flex rounded-2xl border border-border/40 bg-background/25 p-4 xl:min-h-[680px]">
                   {!openedFile && (
-                    <div className="flex h-[560px] flex-col items-center justify-center rounded-xl border border-dashed border-border/50 bg-background/30 p-8 text-center">
+                    <div className="flex min-h-[560px] flex-1 flex-col items-center justify-center rounded-xl border border-dashed border-border/50 bg-background/30 p-8 text-center xl:min-h-[640px]">
                       <FileCode2 className="h-12 w-12 text-primary/70" />
                       <h4 className="mt-4 text-lg font-semibold text-foreground">Open a file to start editing</h4>
                       <p className="mt-2 max-w-md text-sm text-muted-foreground">
@@ -748,7 +790,7 @@ export function GitHubWorkspace({ initialData, canMergePullRequests }: GitHubWor
                   )}
 
                   {openedFile && (
-                    <div className="space-y-4">
+                    <div className="flex min-h-[640px] flex-1 flex-col space-y-4">
                       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                         <div className="min-w-0">
                           <p className="text-xs uppercase tracking-[0.14em] text-primary/80">Editing file</p>
@@ -775,20 +817,22 @@ export function GitHubWorkspace({ initialData, canMergePullRequests }: GitHubWor
                         </div>
                       )}
 
-                      <MonacoEditor
-                        height="520px"
-                        language={getEditorLanguage(openedFile.path)}
-                        theme="vs-dark"
-                        value={editorValue}
-                        onChange={(value) => setEditorValue(value ?? "")}
-                        options={{
-                          minimap: { enabled: false },
-                          fontSize: 14,
-                          wordWrap: "on",
-                          automaticLayout: true,
-                          scrollBeyondLastLine: false,
-                        }}
-                      />
+                      <div className="min-h-[520px] flex-1 overflow-hidden rounded-xl border border-border/40">
+                        <MonacoEditor
+                          height="100%"
+                          language={getEditorLanguage(openedFile.path)}
+                          theme="vs-dark"
+                          value={editorValue}
+                          onChange={(value) => setEditorValue(value ?? "")}
+                          options={{
+                            minimap: { enabled: false },
+                            fontSize: 14,
+                            wordWrap: "on",
+                            automaticLayout: true,
+                            scrollBeyondLastLine: false,
+                          }}
+                        />
+                      </div>
 
                       <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto]">
                         <div className="space-y-2">
@@ -819,43 +863,6 @@ export function GitHubWorkspace({ initialData, canMergePullRequests }: GitHubWor
               </div>
             </TabsContent>
           </Tabs>
-        </div>
-
-        <div className="space-y-4">
-          <div className="glass-card rounded-2xl p-5">
-            <div className="flex items-center gap-2">
-              <GitBranch className="w-4 h-4 text-primary" />
-              <h3 className="font-semibold text-foreground">Branch Snapshot</h3>
-            </div>
-            <div className="mt-4 grid gap-3">
-              {branchItems.map((branch) => (
-                <div key={branch.name} className="rounded-xl border border-border/40 bg-background/35 p-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-medium text-foreground">{branch.name}</p>
-                      <p className="text-[11px] text-muted-foreground font-mono">{branch.lastCommitSha.slice(0, 10)}</p>
-                    </div>
-                    {branch.protected && (
-                      <Badge className="bg-primary/10 text-primary border border-primary/25">Protected</Badge>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="glass-card rounded-2xl p-5">
-            <div className="flex items-center gap-2">
-              <Github className="w-4 h-4 text-primary" />
-              <h3 className="font-semibold text-foreground">Integration Notes</h3>
-            </div>
-            <div className="mt-4 space-y-3 text-sm text-muted-foreground">
-              <p>Admins connect repositories by saving a GitHub URL on the project record.</p>
-              <p>Developers can browse connected branches and commit file changes from the in-app editor when GitHub write access is configured.</p>
-              <p>Admins can merge pull requests from here to keep the release flow inside the workspace.</p>
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   )
