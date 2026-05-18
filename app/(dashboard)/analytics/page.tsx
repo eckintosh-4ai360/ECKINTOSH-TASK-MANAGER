@@ -2,14 +2,12 @@ import { HeaderWithUser as Header } from "@/components/dashboard/header-with-use
 import { AnalyticsContent } from "@/components/analytics/analytics-content"
 import { Button } from "@/components/ui/button"
 import { ExportReportModal } from "@/components/modals/export-report-modal"
-import { getSession, requirePermission } from "@/lib/auth"
+import { requirePermission } from "@/lib/auth"
 import { hasPermission } from "@/lib/rbac"
 
 export default async function AnalyticsPage() {
-  // Extra permission guard beyond the layout's basic auth check
-  await requirePermission("view_analytics")
-  const session = await getSession()
-  const canExportReports = hasPermission(session!.role, "export_reports")
+  const session = await requirePermission("view_analytics")
+  const canExportReports = hasPermission(session.role, "export_reports")
 
   return (
     <>

@@ -2,12 +2,12 @@ import { HeaderWithUser as Header } from "@/components/dashboard/header-with-use
 import { TeamContent } from "@/components/team/team-content"
 import { Button } from "@/components/ui/button"
 import { AddMemberModal } from "@/components/modals/add-member-modal"
-import { getSession } from "@/lib/auth"
+import { requireSession } from "@/lib/auth"
 import { hasPermission } from "@/lib/rbac"
 
 export default async function TeamPage() {
-  const session = await getSession()
-  const canManageTeam = hasPermission(session!.role, "manage_team")
+  const session = await requireSession()
+  const canManageTeam = hasPermission(session.role, "manage_team")
 
   return (
     <>

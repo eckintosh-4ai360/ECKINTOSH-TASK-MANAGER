@@ -71,13 +71,13 @@ export async function markMessagesRead(fromUserId: string) {
 export async function getUnreadCounts() {
   const session = await requireSession()
   if (!hasPermission(session.role, "use_messages")) return {}
-  const messages = await prisma.message.findMany({
+  const unreadCounts = await prisma.message.groupBy({
+    by: ["senderId"],
     where: { receiverId: session.id, read: false },
-    select: { senderId: true },
+    _count: { _all: true },
   })
-  const counts: Record<string, number> = {}
-  for (const m of messages) {
-    counts[m.senderId] = (counts[m.senderId] ?? 0) + 1
-  }
-  return counts
+
+  return Object.fromEntries(
+    unreadCounts.map((item) => [item.senderId, item._count._all])
+  )
 }

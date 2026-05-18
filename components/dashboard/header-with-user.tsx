@@ -1,4 +1,4 @@
-import { getSession } from "@/lib/auth"
+import { requireSession } from "@/lib/auth"
 import { Header } from "./header"
 import type { ReactNode } from "react"
 
@@ -10,16 +10,13 @@ interface Props {
 
 // Server component wrapper — fetches the session and passes user to the client Header
 export async function HeaderWithUser({ title, description, actions }: Props) {
-  const session = await getSession()
-
-  const user = session
-    ? {
-        id: session.id,
-        name: session.name ?? "",
-        email: session.email,
-        role: session.role,
-      }
-    : undefined
+  const session = await requireSession()
+  const user = {
+    id: session.id,
+    name: session.name ?? "",
+    email: session.email,
+    role: session.role,
+  }
 
   return (
     <Header

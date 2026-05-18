@@ -4,12 +4,12 @@ import { Button } from "@/components/ui/button"
 import { AddSprintModal } from "@/components/modals/add-sprint-modal"
 import { getProjects } from "@/lib/actions/project-actions"
 import { getSprints } from "@/lib/actions/sprint-actions"
-import { getSession } from "@/lib/auth"
+import { requireSession } from "@/lib/auth"
 import { hasPermission } from "@/lib/rbac"
 
 export default async function SprintsPage() {
-  const session = await getSession()
-  const canManageSprints = hasPermission(session!.role, "manage_sprints")
+  const session = await requireSession()
+  const canManageSprints = hasPermission(session.role, "manage_sprints")
   const [projects, sprints] = await Promise.all([
     getProjects(),
     getSprints(),

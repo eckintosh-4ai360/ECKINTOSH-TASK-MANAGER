@@ -4,12 +4,12 @@ import { Button } from "@/components/ui/button"
 import { AddProjectModal } from "@/components/modals/add-project-modal"
 
 import { getProjects } from "@/lib/actions/project-actions"
-import { getSession } from "@/lib/auth"
+import { requireSession } from "@/lib/auth"
 import { hasPermission } from "@/lib/rbac"
 
 export default async function ProjectsPage() {
-  const session = await getSession()
-  const canManageProjects = hasPermission(session!.role, "manage_projects")
+  const session = await requireSession()
+  const canManageProjects = hasPermission(session.role, "manage_projects")
   const projects = await getProjects()
 
   return (

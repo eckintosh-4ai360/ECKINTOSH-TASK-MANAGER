@@ -3,12 +3,12 @@ import { CalendarContent } from "@/components/calendar/calendar-content"
 import { Button } from "@/components/ui/button"
 import { AddEventModal } from "@/components/modals/add-event-modal"
 import { getCalendarEvents } from "@/lib/actions/calendar-actions"
-import { getSession } from "@/lib/auth"
+import { requireSession } from "@/lib/auth"
 import { hasPermission } from "@/lib/rbac"
 
 export default async function CalendarPage() {
-  const session = await getSession()
-  const canManageCalendar = hasPermission(session!.role, "manage_calendar")
+  const session = await requireSession()
+  const canManageCalendar = hasPermission(session.role, "manage_calendar")
   const events = await getCalendarEvents()
 
   return (

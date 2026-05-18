@@ -54,6 +54,7 @@ export function ChatInterface({ currentUserId, currentUserName }: ChatInterfaceP
   const wsRef = useRef<WebSocket | null>(null)
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const reconnectDelay = useRef(1000)
+  const intentionalCloseRef = useRef(false)
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const msgRefs = useRef<Record<string, HTMLDivElement | null>>({})
@@ -70,14 +71,18 @@ export function ChatInterface({ currentUserId, currentUserName }: ChatInterfaceP
 
   // ── Stable WebSocket with auto-reconnect ─────────────────────────────────
   const connectWs = useCallback(() => {
+    if (intentionalCloseRef.current) return
+
     // Don't reconnect if already open
     if (wsRef.current?.readyState === WebSocket.OPEN) return
 
-    const wsUrl = `ws://${window.location.host}/ws?userId=${currentUserId}`
+    const protocol = window.location.protocol === "https:" ? "wss" : "ws"
+    const wsUrl = `${protocol}://${window.location.host}/ws?userId=${currentUserId}`
     const ws = new WebSocket(wsUrl)
     wsRef.current = ws
 
     ws.onopen = () => {
+      intentionalCloseRef.current = false
       setWsStatus("connected")
       reconnectDelay.current = 1000 // reset backoff on success
       if (reconnectTimer.current) { clearTimeout(reconnectTimer.current); reconnectTimer.current = null }
@@ -118,6 +123,8 @@ export function ChatInterface({ currentUserId, currentUserName }: ChatInterfaceP
     }
 
     ws.onclose = () => {
+      if (intentionalCloseRef.current) return
+
       setWsStatus("reconnecting")
       // Exponential backoff: 1s → 2s → 4s → … max 30s
       reconnectTimer.current = setTimeout(() => {
@@ -127,17 +134,22 @@ export function ChatInterface({ currentUserId, currentUserName }: ChatInterfaceP
     }
 
     ws.onerror = () => {
+      if (intentionalCloseRef.current) return
+
       setWsStatus("offline")
       ws.close() // triggers onclose → reconnect
     }
   }, [currentUserId])
 
   useEffect(() => {
+    intentionalCloseRef.current = false
     connectWs()
     return () => {
+      intentionalCloseRef.current = true
       if (reconnectTimer.current) clearTimeout(reconnectTimer.current)
-      // Mark as intentionally closed so onclose won't reconnect
+      reconnectTimer.current = null
       wsRef.current?.close()
+      wsRef.current = null
     }
   }, [connectWs])
 

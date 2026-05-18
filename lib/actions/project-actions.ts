@@ -102,22 +102,41 @@ export async function deleteProject(projectId: string) {
 export async function getProjects() {
   try {
     await requireSession()
-    const projects = await prisma.project.findMany({
-      include: {
-        _count: {
-          select: { tasks: true, members: true },
+    const [projects, completedTaskCounts] = await Promise.all([
+      prisma.project.findMany({
+        select: {
+          id: true,
+          name: true,
+          description: true,
+          status: true,
+          priority: true,
+          color: true,
+          tech: true,
+          startDate: true,
+          endDate: true,
+          ownerId: true,
+          createdAt: true,
+          updatedAt: true,
+          _count: {
+            select: { tasks: true, members: true },
+          },
         },
-        tasks: {
-          where: { status: "COMPLETED" },
-          select: { id: true },
-        },
-      },
-      orderBy: { createdAt: "desc" },
-    })
+        orderBy: { createdAt: "desc" },
+      }),
+      prisma.task.groupBy({
+        by: ["projectId"],
+        where: { status: "COMPLETED" },
+        _count: { _all: true },
+      }),
+    ])
+
+    const completedTasksByProject = new Map(
+      completedTaskCounts.map((item) => [item.projectId, item._count._all])
+    )
 
     return projects.map((project) => {
       const totalTasks = project._count.tasks
-      const completedTasks = project.tasks.length
+      const completedTasks = completedTasksByProject.get(project.id) ?? 0
       const progress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0
 
       return {

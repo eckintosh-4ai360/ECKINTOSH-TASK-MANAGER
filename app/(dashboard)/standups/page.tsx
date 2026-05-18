@@ -4,13 +4,13 @@ import { Button } from "@/components/ui/button"
 import { AddStandupModal } from "@/components/modals/add-standup-modal"
 import { getProjects } from "@/lib/actions/project-actions"
 import { getStandups } from "@/lib/actions/standup-actions"
-import { getSession } from "@/lib/auth"
+import { requireSession } from "@/lib/auth"
 import { hasPermission } from "@/lib/rbac"
 
 export default async function StandupsPage() {
-  const session = await getSession()
-  const canPostStandups = hasPermission(session!.role, "post_standups")
-  const canManageAllStandups = hasPermission(session!.role, "manage_projects")
+  const session = await requireSession()
+  const canPostStandups = hasPermission(session.role, "post_standups")
+  const canManageAllStandups = hasPermission(session.role, "manage_projects")
   const [standups, projects] = await Promise.all([
     getStandups(),
     getProjects(),
@@ -41,7 +41,7 @@ export default async function StandupsPage() {
         <StandupsView
           standups={standups}
           projects={projectOptions}
-          currentUserId={session!.id}
+          currentUserId={session.id}
           canPostStandups={canPostStandups}
           canManageAllStandups={canManageAllStandups}
         />

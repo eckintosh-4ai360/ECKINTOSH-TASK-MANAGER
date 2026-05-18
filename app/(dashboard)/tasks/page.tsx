@@ -4,12 +4,12 @@ import { Button } from "@/components/ui/button"
 import { AddTaskModal } from "@/components/modals/add-task-modal"
 
 import { getProjects, getTasks, getWorkspaceUsers } from "@/lib/actions/project-actions"
-import { getSession } from "@/lib/auth"
+import { requireSession } from "@/lib/auth"
 import { hasPermission } from "@/lib/rbac"
 
 export default async function TasksPage() {
-  const session = await getSession()
-  const canManageTasks = hasPermission(session!.role, "manage_tasks")
+  const session = await requireSession()
+  const canManageTasks = hasPermission(session.role, "manage_tasks")
   const [projects, tasks, users] = await Promise.all([
     getProjects(),
     getTasks(),
@@ -35,7 +35,7 @@ export default async function TasksPage() {
           tasks={tasks}
           projects={projects.map((project) => ({ id: project.id, name: project.name }))}
           users={users}
-          currentUserId={session!.id}
+          currentUserId={session.id}
           canManageTasks={canManageTasks}
         />
       </div>
