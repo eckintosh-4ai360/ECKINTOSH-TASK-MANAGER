@@ -8,6 +8,16 @@ function redirectTo(request: Request, path: string) {
   return NextResponse.redirect(new URL(path, request.url))
 }
 
+function getSafeReturnTo(request: Request) {
+  const returnTo = new URL(request.url).searchParams.get("returnTo")
+
+  if (!returnTo || !returnTo.startsWith("/") || returnTo.startsWith("//")) {
+    return "/"
+  }
+
+  return returnTo
+}
+
 /**
  * GET /auth/complete
  *
@@ -21,6 +31,7 @@ function redirectTo(request: Request, path: string) {
  */
 export async function GET(request: Request) {
   console.log("[auth/complete] Bridge route hit — reading NextAuth session…")
+  const returnTo = getSafeReturnTo(request)
 
   let session: Session | null = null
 
@@ -72,13 +83,13 @@ export async function GET(request: Request) {
     name: dbUser.name ?? "Developer",
     role: dbUser.role as "ADMIN" | "USER" | "GUEST",
   })
-  const response = redirectTo(request, "/")
+  const response = redirectTo(request, returnTo)
   response.cookies.set(SESSION_COOKIE_NAME, token, getSessionCookieOptions())
 
   console.log(
     "[auth/complete] ✅ Session cookie created for:",
     email,
-    "→ redirecting to /"
+    `→ redirecting to ${returnTo}`
   )
   return response
 }

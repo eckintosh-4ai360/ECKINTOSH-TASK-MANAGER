@@ -99,18 +99,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       }
       return session
     },
-
-    // Force all OAuth sign-ins to go through /auth/complete so we can
-    // set the custom session cookie before the user hits the dashboard.
-    async redirect({ url, baseUrl }) {
-      // If the redirect URL is already /auth/complete, allow it through
-      if (url.includes("/auth/complete")) return url
-      // If it's an internal URL, funnel through /auth/complete
-      if (url.startsWith(baseUrl) || url.startsWith("/")) {
-        return `${baseUrl}/auth/complete`
-      }
-      return `${baseUrl}/auth/complete`
-    },
   },
   pages: {
     signIn: "/login",

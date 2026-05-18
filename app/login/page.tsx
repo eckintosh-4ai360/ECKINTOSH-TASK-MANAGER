@@ -29,7 +29,7 @@ function LoginForm() {
     setLoading(true)
     setError(null)
     try {
-      await signIn("github", { callbackUrl: "/auth/complete" })
+      await signIn("github", { redirectTo: "/auth/complete?returnTo=/" })
     } catch {
       setError("Sign-in failed. Please try again.")
       setLoading(false)
