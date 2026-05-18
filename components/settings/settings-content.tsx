@@ -50,15 +50,17 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import {
-  createTestReminderAction,
-  deleteOwnAccountAction,
-  deletePushSubscriptionAction,
   type SettingsNotification,
   type SettingsNotificationPreferences,
   type SettingsPageData,
   type SettingsProfile,
   type SettingsReminderLeadTime,
   DEFAULT_NOTIFICATION_PREFERENCES,
+} from "@/lib/settings"
+import {
+  createTestReminderAction,
+  deleteOwnAccountAction,
+  deletePushSubscriptionAction,
   markAllNotificationsReadAction,
   markNotificationReadAction,
   saveNotificationPreferencesAction,
@@ -439,14 +441,24 @@ export function SettingsContent({ settings }: SettingsContentProps) {
 
           const localNotificationDisplayed = showLocalTestNotification()
           const pushDelivered = result.pushResult?.success && (result.pushResult.sentCount ?? 0) > 0
+          const emailDelivered = result.emailResult?.success
+          const emailStatus = preferencesRef.current.email
+            ? emailDelivered
+              ? " Real inbox email sent too."
+              : result.emailResult?.skipped
+                ? " Add Resend or SMTP env vars to send real inbox emails."
+                : result.emailResult?.error
+                  ? ` Email delivery failed: ${result.emailResult.error}`
+                  : ""
+            : ""
 
           const text = pushDelivered
-            ? `Test reminder sent. ${result.pushResult.sentCount} browser subscription${result.pushResult.sentCount === 1 ? "" : "s"} received it.`
+            ? `Test reminder sent. ${result.pushResult.sentCount} browser subscription${result.pushResult.sentCount === 1 ? "" : "s"} received it.${emailStatus}`
             : localNotificationDisplayed
-              ? "Test reminder created and shown in this browser. Add VAPID keys if you want true background push delivery."
+              ? `Test reminder created and shown in this browser. Add VAPID keys if you want true background push delivery.${emailStatus}`
               : result.pushResult?.error
-                ? `Test reminder created. ${result.pushResult.error}`
-                : "Test reminder created in-app."
+                ? `Test reminder created. ${result.pushResult.error}${emailStatus}`
+                : `Test reminder created in-app.${emailStatus}`
 
           setNotificationMessage({ type: "success", text })
         })
@@ -758,7 +770,11 @@ export function SettingsContent({ settings }: SettingsContentProps) {
                 key: "email" as const,
                 label: "Email notifications",
                 description: "Account activity, security updates, and delivery summaries.",
-                detail: "Saved on your account and ready for future delivery hooks.",
+                detail: preferences.email
+                  ? settings.externalEmailConfigured
+                    ? "Real inbox delivery is active through Resend or SMTP."
+                    : "Saved. Add Resend or SMTP env vars to deliver real inbox email."
+                  : "Muted for in-app email copies and real inbox delivery.",
                 icon: Mail,
                 checked: preferences.email,
                 onChange: (checked: boolean) => updatePreference("email", checked),

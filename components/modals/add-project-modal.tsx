@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Plus, Layers, Calendar, Users, AlertCircle } from "lucide-react"
+import { Plus, Layers, Calendar, Users, AlertCircle, Github } from "lucide-react"
 
 import { useTransition } from "react"
 import { createProject } from "@/lib/actions/project-actions"
@@ -25,6 +25,7 @@ export function AddProjectModal({ children }: AddProjectModalProps) {
     description: "",
     priority: "medium",
     dueDate: "",
+    repositoryUrl: "",
     team: "",
   })
 
@@ -37,14 +38,18 @@ export function AddProjectModal({ children }: AddProjectModalProps) {
         description: formData.description,
         priority: formData.priority,
         dueDate: formData.dueDate,
+        repositoryUrl: formData.repositoryUrl,
       })
 
       if (result.success) {
         toast.success("Project created successfully!")
+        if (result.repositoryWarning) {
+          toast.warning(result.repositoryWarning)
+        }
         setOpen(false)
-        setFormData({ name: "", description: "", priority: "medium", dueDate: "", team: "" })
+        setFormData({ name: "", description: "", priority: "medium", dueDate: "", repositoryUrl: "", team: "" })
       } else {
-        toast.error("Failed to create project")
+        toast.error(result.error ?? "Failed to create project")
       }
     })
   }
@@ -87,6 +92,20 @@ export function AddProjectModal({ children }: AddProjectModalProps) {
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               className="glass border-border/50 focus:border-primary/50 min-h-[100px] resize-none"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="repository-url" className="text-sm text-muted-foreground flex items-center gap-2">
+              <Github className="w-3.5 h-3.5 text-primary" />
+              GitHub Repository URL
+            </Label>
+            <Input
+              id="repository-url"
+              placeholder="https://github.com/owner/repository"
+              value={formData.repositoryUrl}
+              onChange={(e) => setFormData({ ...formData, repositoryUrl: e.target.value })}
+              className="glass border-border/50 focus:border-primary/50 h-11"
             />
           </div>
 

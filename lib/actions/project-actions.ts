@@ -2,6 +2,7 @@
 
 import prisma from "@/lib/prisma"
 import { requireSession } from "@/lib/auth"
+import { syncProjectRepository } from "@/lib/actions/github-actions"
 import { createNotificationsForUsers, getWorkspaceRecipientIds } from "@/lib/notifications"
 import { canUpdateTaskStatus, getPermissionError, hasPermission } from "@/lib/rbac"
 import { revalidatePath } from "next/cache"
@@ -11,6 +12,7 @@ export async function createProject(formData: {
   description?: string
   priority?: string
   dueDate?: string
+  repositoryUrl?: string
 }) {
   try {
     const session = await requireSession()
@@ -29,6 +31,14 @@ export async function createProject(formData: {
       },
     })
 
+    let repositoryWarning: string | undefined
+    if (formData.repositoryUrl?.trim()) {
+      const repositoryResult = await syncProjectRepository(project.id, formData.repositoryUrl)
+      if (!repositoryResult.success) {
+        repositoryWarning = repositoryResult.error ?? "The project was created, but the repository could not be connected yet."
+      }
+    }
+
     const recipients = await getWorkspaceRecipientIds(session.id)
     await createNotificationsForUsers({
       userIds: recipients,
@@ -46,7 +56,7 @@ export async function createProject(formData: {
     revalidatePath("/")
     revalidatePath("/projects")
 
-    return { success: true, project }
+    return { success: true, project, repositoryWarning }
   } catch (error) {
     console.error("Failed to create project:", error)
     return { success: false, error: "Failed to create project" }
@@ -60,6 +70,7 @@ export async function updateProject(input: {
   priority?: string
   status?: string
   dueDate?: string
+  repositoryUrl?: string
 }) {
   try {
     const session = await requireSession()
@@ -77,6 +88,14 @@ export async function updateProject(input: {
         endDate: input.dueDate ? new Date(input.dueDate) : null,
       },
     })
+
+    const repositoryResult = await syncProjectRepository(input.id, input.repositoryUrl)
+    if (!repositoryResult.success) {
+      return {
+        success: false,
+        error: repositoryResult.error ?? "The repository connection could not be updated.",
+      }
+    }
 
     const recipients = await getWorkspaceRecipientIds(session.id)
     await createNotificationsForUsers({
@@ -165,6 +184,13 @@ export async function getProjects() {
           ownerId: true,
           createdAt: true,
           updatedAt: true,
+          repository: {
+            select: {
+              url: true,
+              defaultBranch: true,
+              provider: true,
+            },
+          },
           _count: {
             select: { tasks: true, members: true },
           },
@@ -190,6 +216,9 @@ export async function getProjects() {
       return {
         ...project,
         progress,
+        repositoryUrl: project.repository?.url ?? null,
+        repositoryProvider: project.repository?.provider ?? null,
+        repositoryDefaultBranch: project.repository?.defaultBranch ?? null,
       }
     })
   } catch (error) {

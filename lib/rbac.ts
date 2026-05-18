@@ -11,6 +11,8 @@ export type Permission =
   | "manage_team"
   | "use_messages"
   | "use_email"
+  | "use_repository_workspace"
+  | "merge_pull_requests"
   | "manage_own_notes"
   | "view_analytics"
   | "export_reports"
@@ -35,6 +37,8 @@ const ALL_PERMISSIONS: Permission[] = [
   "manage_team",
   "use_messages",
   "use_email",
+  "use_repository_workspace",
+  "merge_pull_requests",
   "manage_own_notes",
   "view_analytics",
   "export_reports",
@@ -47,6 +51,7 @@ const ROLE_PERMISSIONS: Record<AppRole, Permission[]> = {
     "post_standups",
     "use_messages",
     "use_email",
+    "use_repository_workspace",
     "manage_own_notes",
     "view_analytics",
   ],
@@ -64,6 +69,8 @@ const PERMISSION_ERRORS: Record<Permission, string> = {
   manage_team: "Only admins can manage team membership.",
   use_messages: "Your role does not allow direct messaging.",
   use_email: "Your role does not allow internal email.",
+  use_repository_workspace: "Your role does not allow repository workspace access.",
+  merge_pull_requests: "Only admins can merge pull requests from inside the workspace.",
   manage_own_notes: "Your role does not allow private notes.",
   view_analytics: "Your role does not have access to analytics.",
   export_reports: "Only admins can export workspace reports.",

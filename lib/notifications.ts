@@ -1,3 +1,4 @@
+import { sendExternalEmail } from "@/lib/email-delivery"
 import prisma from "@/lib/prisma"
 
 export type NotificationChannel = "teamUpdates" | "taskReminders" | "system"
@@ -26,6 +27,45 @@ type CreateNotificationsInput = NotificationPayload & {
 const CHANNEL_PREFERENCE_FIELD: Partial<Record<NotificationChannel, PreferenceField>> = {
   teamUpdates: "teamUpdatesEnabled",
   taskReminders: "taskRemindersEnabled",
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;")
+}
+
+function buildNotificationEmailHtml({
+  title,
+  message,
+  link,
+}: {
+  title: string
+  message: string
+  link?: string | null
+}) {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? process.env.APP_URL ?? ""
+  const href = link
+    ? link.startsWith("http")
+      ? link
+      : appUrl
+        ? `${appUrl.replace(/\/$/, "")}${link.startsWith("/") ? link : `/${link}`}`
+        : null
+    : null
+
+  return `
+    <div style="font-family:Arial,sans-serif;background:#09111f;color:#f8fafc;padding:24px;">
+      <div style="max-width:640px;margin:0 auto;background:#121e37;border:1px solid rgba(0,212,255,0.2);border-radius:16px;padding:24px;">
+        <p style="margin:0 0 8px;font-size:12px;letter-spacing:0.08em;color:#00d4ff;text-transform:uppercase;">Eckintosh Notification</p>
+        <h1 style="margin:0 0 12px;font-size:22px;color:#f8fafc;">${escapeHtml(title)}</h1>
+        <p style="margin:0 0 20px;font-size:14px;line-height:1.6;color:#cbd5e1;">${escapeHtml(message)}</p>
+        ${href ? `<a href="${escapeHtml(href)}" style="display:inline-block;background:#00d4ff;color:#04111f;text-decoration:none;padding:12px 18px;border-radius:999px;font-weight:700;">Open workspace</a>` : ""}
+      </div>
+    </div>
+  `
 }
 
 async function filterRecipientsByPreference(userIds: string[], preferenceField?: PreferenceField) {
@@ -91,6 +131,28 @@ export async function createNotificationsForUsers({
           body: email.body ?? message,
         })),
       })
+
+      const recipients = await prisma.user.findMany({
+        where: { id: { in: emailRecipientIds } },
+        select: {
+          email: true,
+        },
+      })
+
+      await Promise.allSettled(
+        recipients.map((recipient) =>
+          sendExternalEmail({
+            to: recipient.email,
+            subject: email.subject ?? title,
+            text: email.body ?? message,
+            html: buildNotificationEmailHtml({
+              title: email.subject ?? title,
+              message: email.body ?? message,
+              link,
+            }),
+          }),
+        ),
+      )
     }
   }
 

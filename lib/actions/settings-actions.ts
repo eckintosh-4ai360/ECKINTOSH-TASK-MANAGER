@@ -2,8 +2,19 @@
 
 import { cookies } from "next/headers"
 import { revalidatePath } from "next/cache"
+import { hasExternalEmailDeliveryConfig, sendExternalEmail } from "@/lib/email-delivery"
 import prisma from "@/lib/prisma"
 import { createNotificationForUser } from "@/lib/notifications"
+import {
+  DEFAULT_NOTIFICATION_PREFERENCES,
+  type SettingsNotification,
+  type SettingsNotificationPreferences,
+  type SettingsPageData,
+  type SettingsProfile,
+  type SettingsReminderLeadTime,
+  type SettingsReminderSummary,
+  type SettingsReminderTask,
+} from "@/lib/settings"
 import {
   deletePushSubscription,
   getPublicVapidKey,
@@ -16,7 +27,7 @@ import { createSession, requireSession } from "@/lib/auth"
 import { SESSION_COOKIE_NAME } from "@/lib/session"
 
 const ACTIVE_TASK_STATUSES = ["BACKLOG", "TODO", "IN_PROGRESS", "IN_REVIEW"] as const
-const REMINDER_LEAD_TIME_VALUES = ["15m", "1h", "1d", "3d"] as const
+const REMINDER_LEAD_TIME_VALUES: SettingsReminderLeadTime[] = ["15m", "1h", "1d", "3d"]
 const MANAGED_AUTH_COOKIE_NAMES = [
   SESSION_COOKIE_NAME,
   "authjs.session-token",
@@ -32,80 +43,6 @@ const MANAGED_AUTH_COOKIE_NAMES = [
   "authjs.nonce",
   "__Secure-authjs.nonce",
 ] as const
-
-export type SettingsReminderLeadTime = (typeof REMINDER_LEAD_TIME_VALUES)[number]
-
-export type SettingsNotificationPreferences = {
-  email: boolean
-  push: boolean
-  taskReminders: boolean
-  teamUpdates: boolean
-  dailyDigest: boolean
-  overdueEscalation: boolean
-  quietHours: boolean
-  reminderLeadTime: SettingsReminderLeadTime
-}
-
-export const DEFAULT_NOTIFICATION_PREFERENCES: SettingsNotificationPreferences = {
-  email: true,
-  push: false,
-  taskReminders: true,
-  teamUpdates: true,
-  dailyDigest: true,
-  overdueEscalation: true,
-  quietHours: false,
-  reminderLeadTime: "1d",
-}
-
-export type SettingsProfile = {
-  id: string
-  email: string
-  name: string
-  role: "ADMIN" | "USER" | "GUEST"
-  avatar: string | null
-  title: string | null
-  timezone: string | null
-  joinedAt: string | null
-}
-
-export type SettingsNotification = {
-  id: string
-  title: string
-  message: string
-  type: string
-  read: boolean
-  link: string | null
-  createdAt: string
-}
-
-export type SettingsReminderTask = {
-  id: string
-  title: string
-  status: string
-  priority: string
-  dueDate: string | null
-  project: {
-    name: string
-    color: string
-  } | null
-}
-
-export type SettingsReminderSummary = {
-  activeAssigned: number
-  dueSoon: number
-  overdue: number
-}
-
-export type SettingsPageData = {
-  profile: SettingsProfile
-  preferences: SettingsNotificationPreferences
-  notifications: SettingsNotification[]
-  unreadNotifications: number
-  reminderTasks: SettingsReminderTask[]
-  reminderSummary: SettingsReminderSummary
-  pushDeliveryConfigured: boolean
-  vapidPublicKey: string | null
-}
 
 function normalizeProfile(user: {
   id: string
@@ -170,7 +107,7 @@ function preferencesFromRecord(record: {
     dailyDigest: record.dailyDigestEnabled,
     overdueEscalation: record.overdueEscalationEnabled,
     quietHours: record.quietHoursEnabled,
-    reminderLeadTime: record.reminderLeadTime,
+    reminderLeadTime: normalizeReminderLeadTime(record.reminderLeadTime),
   })
 }
 
@@ -325,6 +262,7 @@ export async function getSettingsPageData(): Promise<SettingsPageData> {
         dueSoon,
         overdue,
       },
+      externalEmailConfigured: hasExternalEmailDeliveryConfig(),
       pushDeliveryConfigured: hasWebPushConfig(),
       vapidPublicKey: getPublicVapidKey(),
     }
@@ -341,6 +279,7 @@ export async function getSettingsPageData(): Promise<SettingsPageData> {
         dueSoon: 0,
         overdue: 0,
       },
+      externalEmailConfigured: hasExternalEmailDeliveryConfig(),
       pushDeliveryConfigured: hasWebPushConfig(),
       vapidPublicKey: getPublicVapidKey(),
     }
@@ -491,6 +430,12 @@ export async function createTestReminderAction() {
     },
   })
 
+  let emailResult: Awaited<ReturnType<typeof sendExternalEmail>> = {
+    success: false,
+    skipped: true,
+    error: "Email notifications are disabled for this account.",
+  }
+
   if (preferences.email) {
     await prisma.internalEmail.create({
       data: {
@@ -500,9 +445,24 @@ export async function createTestReminderAction() {
         body: `Reminder pipeline checked with ${preferences.reminderLeadTime} lead time.`,
       },
     })
+
+    emailResult = await sendExternalEmail({
+      to: session.email,
+      subject: "Task reminder test",
+      text: `Reminder pipeline checked with ${preferences.reminderLeadTime} lead time.`,
+      html: `
+        <div style="font-family:Arial,sans-serif;background:#09111f;color:#f8fafc;padding:24px;">
+          <div style="max-width:640px;margin:0 auto;background:#121e37;border:1px solid rgba(0,212,255,0.2);border-radius:16px;padding:24px;">
+            <p style="margin:0 0 8px;font-size:12px;letter-spacing:0.08em;color:#00d4ff;text-transform:uppercase;">Eckintosh Reminder Test</p>
+            <h1 style="margin:0 0 12px;font-size:22px;color:#f8fafc;">Task reminder pipeline is live</h1>
+            <p style="margin:0;font-size:14px;line-height:1.6;color:#cbd5e1;">Reminder pipeline checked with ${preferences.reminderLeadTime} lead time.</p>
+          </div>
+        </div>
+      `,
+    })
   }
 
-  let pushResult = {
+  let pushResult: Awaited<ReturnType<typeof sendPushNotificationToUserSubscriptions>> = {
     success: false,
     sentCount: 0,
     error: "Push delivery is disabled for this account.",
@@ -530,6 +490,7 @@ export async function createTestReminderAction() {
       createdAt: notification.createdAt.toISOString(),
     },
     unreadNotifications,
+    emailResult,
     pushResult,
   }
 }

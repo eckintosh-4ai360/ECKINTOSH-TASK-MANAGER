@@ -2,8 +2,39 @@
 
 import prisma from "@/lib/prisma"
 import { requireSession } from "@/lib/auth"
+import { sendExternalEmail } from "@/lib/email-delivery"
 import { getPermissionError, hasPermission } from "@/lib/rbac"
 import { revalidatePath } from "next/cache"
+
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;")
+}
+
+function buildInternalEmailHtml({
+  senderName,
+  subject,
+  body,
+}: {
+  senderName: string
+  subject: string
+  body: string
+}) {
+  return `
+    <div style="font-family:Arial,sans-serif;background:#09111f;color:#f8fafc;padding:24px;">
+      <div style="max-width:640px;margin:0 auto;background:#121e37;border:1px solid rgba(0,212,255,0.2);border-radius:16px;padding:24px;">
+        <p style="margin:0 0 8px;font-size:12px;letter-spacing:0.08em;color:#00d4ff;text-transform:uppercase;">Eckintosh Email</p>
+        <h1 style="margin:0 0 12px;font-size:22px;color:#f8fafc;">${escapeHtml(subject)}</h1>
+        <p style="margin:0 0 16px;font-size:13px;color:#94a3b8;">From ${escapeHtml(senderName)}</p>
+        <div style="font-size:14px;line-height:1.7;color:#cbd5e1;white-space:pre-wrap;">${escapeHtml(body)}</div>
+      </div>
+    </div>
+  `
+}
 
 // Send internal email
 export async function sendEmail(formData: FormData) {
@@ -19,13 +50,53 @@ export async function sendEmail(formData: FormData) {
     return { error: "All fields are required" }
   }
 
-  await prisma.internalEmail.create({
-    data: { fromId: session.id, toId, subject: subject.trim(), body: body.trim() },
+  const recipient = await prisma.user.findUnique({
+    where: { id: toId },
+    select: {
+      email: true,
+      name: true,
+      notificationPreference: {
+        select: { emailEnabled: true },
+      },
+    },
   })
+
+  if (!recipient) {
+    return { error: "Recipient not found" }
+  }
+
+  const cleanSubject = subject.trim()
+  const cleanBody = body.trim()
+
+  await prisma.internalEmail.create({
+    data: { fromId: session.id, toId, subject: cleanSubject, body: cleanBody },
+  })
+
+  let externalWarning: string | null = null
+  const recipientAllowsExternalEmail = recipient.notificationPreference?.emailEnabled ?? true
+  if (recipientAllowsExternalEmail) {
+    const deliveryResult = await sendExternalEmail({
+      to: recipient.email,
+      subject: cleanSubject,
+      text: cleanBody,
+      html: buildInternalEmailHtml({
+        senderName: session.name ?? session.email,
+        subject: cleanSubject,
+        body: cleanBody,
+      }),
+      replyTo: session.email,
+    })
+
+    if (!deliveryResult.success) {
+      externalWarning = deliveryResult.skipped
+        ? "Internal email saved. Configure Resend or SMTP to send it to the recipient's real inbox too."
+        : `Internal email saved, but external delivery failed: ${deliveryResult.error}`
+    }
+  }
 
   // Only revalidate on send so the recipient's inbox updates
   revalidatePath("/emails")
-  return { success: true }
+  return { success: true, externalWarning }
 }
 
 // Get inbox (emails received by current user)

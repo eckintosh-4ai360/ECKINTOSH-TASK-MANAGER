@@ -109,6 +109,9 @@ export function EmailInterface({ inbox: initialInbox, sent: initialSent, users }
         setError(result.error)
       } else {
         toast.success("Email sent!")
+        if (result?.externalWarning) {
+          toast.warning(result.externalWarning)
+        }
         setComposeOpen(false)
         setToId("")
         setReplySubject("")

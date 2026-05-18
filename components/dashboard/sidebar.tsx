@@ -37,6 +37,7 @@ type NavItem = {
 const workspaceItems: NavItem[] = [
   { icon: LayoutDashboard, label: "Overview", href: "/", badge: null },
   { icon: Layers, label: "Projects", href: "/projects", badge: null },
+  { icon: GitBranch, label: "Code Ops", href: "/commits", badge: "Live" },
   { icon: Zap, label: "Sprints", href: "/sprints", badge: "New" },
   { icon: CheckSquare, label: "Tasks", href: "/tasks", badge: null },
   { icon: NotebookPen, label: "Jot it", href: "/jot-it", badge: "New" },
@@ -118,6 +119,7 @@ function NavSection({ title, items }: { title: string; items: NavItem[] }) {
 export function Sidebar({ role }: { role: AppRole }) {
   const pathname = usePathname()
   const visibleWorkspaceItems = workspaceItems.filter((item) => {
+    if (item.href === "/commits") return hasPermission(role, "use_repository_workspace")
     if (item.href === "/jot-it") return hasPermission(role, "manage_own_notes")
     if (item.href === "/analytics") return hasPermission(role, "view_analytics")
     return true

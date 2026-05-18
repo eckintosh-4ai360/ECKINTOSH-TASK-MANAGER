@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { updateProject, deleteProject } from "@/lib/actions/project-actions"
-import { Search, MoreHorizontal, Clock, Users, ArrowUpRight, Pencil, Trash2 } from "lucide-react"
+import { Search, MoreHorizontal, Clock, Users, ArrowUpRight, Pencil, Trash2, Github, GitBranch } from "lucide-react"
 import { useEffect, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
@@ -23,6 +23,9 @@ interface Project {
   priority: string
   endDate: Date | null
   progress: number
+  repositoryUrl?: string | null
+  repositoryProvider?: string | null
+  repositoryDefaultBranch?: string | null
 }
 
 interface ProjectsContentProps {
@@ -37,6 +40,7 @@ const EMPTY_FORM = {
   priority: "medium",
   status: "active",
   dueDate: "",
+  repositoryUrl: "",
 }
 
 export function ProjectsContent({ projects, canManageProjects }: ProjectsContentProps) {
@@ -61,6 +65,7 @@ export function ProjectsContent({ projects, canManageProjects }: ProjectsContent
       priority: editingProject.priority,
       status: editingProject.status,
       dueDate: editingProject.endDate ? new Date(editingProject.endDate).toISOString().slice(0, 10) : "",
+      repositoryUrl: editingProject.repositoryUrl ?? "",
     })
   }, [editingProject])
 
@@ -238,6 +243,31 @@ export function ProjectsContent({ projects, canManageProjects }: ProjectsContent
                 </div>
               </div>
 
+              {project.repositoryUrl && (
+                <div className="rounded-xl border border-primary/20 bg-primary/5 p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-xs uppercase tracking-[0.14em] text-primary/80 mb-1">GitHub Connected</p>
+                      <p className="text-sm font-medium text-foreground truncate">{project.repositoryUrl}</p>
+                      <p className="text-[11px] text-muted-foreground mt-1 flex items-center gap-1">
+                        <GitBranch className="w-3 h-3" />
+                        {project.repositoryDefaultBranch ?? "main"}
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="glass border-primary/20 hover:border-primary/40 hover:bg-primary/5"
+                      onClick={() => router.push(`/commits?projectId=${project.id}`)}
+                    >
+                      <Github className="w-4 h-4" />
+                      Code Ops
+                    </Button>
+                  </div>
+                </div>
+              )}
+
               <div className="flex items-center justify-between pt-2 border-t border-border/50">
                 <div className="flex items-center gap-3">
                   <div className="flex -space-x-2">
@@ -287,6 +317,20 @@ export function ProjectsContent({ projects, canManageProjects }: ProjectsContent
                 value={formData.description}
                 onChange={(event) => setFormData((current) => ({ ...current, description: event.target.value }))}
                 className="glass border-border/50 focus:border-primary/50 min-h-[96px] resize-none"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="edit-project-repository" className="flex items-center gap-2">
+                <Github className="w-4 h-4 text-primary" />
+                GitHub Repository URL
+              </Label>
+              <Input
+                id="edit-project-repository"
+                value={formData.repositoryUrl}
+                onChange={(event) => setFormData((current) => ({ ...current, repositoryUrl: event.target.value }))}
+                placeholder="https://github.com/owner/repository"
+                className="glass border-border/50 focus:border-primary/50 h-11"
               />
             </div>
 
