@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { updateProject, deleteProject } from "@/lib/actions/project-actions"
-import { Search, MoreHorizontal, Clock, Users, ArrowUpRight, Pencil, Trash2, Github, GitBranch } from "lucide-react"
+import { Search, MoreHorizontal, Clock, Users, ArrowUpRight, Pencil, Trash2, Github, GitBranch, UserCheck } from "lucide-react"
 import { useEffect, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
@@ -23,6 +23,15 @@ interface Project {
   priority: string
   endDate: Date | null
   progress: number
+  owner: {
+    id: string
+    name: string | null
+    email: string
+    avatar: string | null
+  }
+  _count?: {
+    members: number
+  }
   repositoryUrl?: string | null
   repositoryProvider?: string | null
   repositoryDefaultBranch?: string | null
@@ -180,7 +189,11 @@ export function ProjectsContent({ projects, canManageProjects }: ProjectsContent
             <p className="text-muted-foreground italic">No projects found. Create one to see it here!</p>
           </div>
         )}
-        {visibleProjects.map((project, index) => (
+        {visibleProjects.map((project, index) => {
+          const leaderName = project.owner.name ?? project.owner.email
+          const leaderInitial = leaderName.charAt(0).toUpperCase()
+
+          return (
           <div
             key={project.id}
             className="glass-card rounded-xl p-5 hover:border-primary/30 transition-all duration-300 cursor-pointer animate-slide-in group"
@@ -272,13 +285,20 @@ export function ProjectsContent({ projects, canManageProjects }: ProjectsContent
                 <div className="flex items-center gap-3">
                   <div className="flex -space-x-2">
                     <Avatar className="w-7 h-7 border-2 border-card">
-                      <AvatarFallback className="text-[10px] bg-primary/10 text-primary">U</AvatarFallback>
+                      {project.owner.avatar && <AvatarImage src={project.owner.avatar} alt={leaderName} />}
+                      <AvatarFallback className="text-[10px] bg-primary/10 text-primary">{leaderInitial}</AvatarFallback>
                     </Avatar>
                   </div>
-                  <span className="text-xs text-muted-foreground flex items-center gap-1">
-                    <Users className="w-3.5 h-3.5" />
-                    1
-                  </span>
+                  <div className="min-w-0">
+                    <span className="flex items-center gap-1 text-xs text-foreground">
+                      <UserCheck className="w-3.5 h-3.5 text-primary" />
+                      <span className="truncate">Lead: {leaderName}</span>
+                    </span>
+                    <span className="mt-0.5 flex items-center gap-1 text-[11px] text-muted-foreground">
+                      <Users className="w-3.5 h-3.5" />
+                      {project._count?.members ?? 1} member{(project._count?.members ?? 1) === 1 ? "" : "s"}
+                    </span>
+                  </div>
                 </div>
 
                 <div className="flex items-center gap-4 text-xs text-muted-foreground font-mono">
@@ -290,7 +310,8 @@ export function ProjectsContent({ projects, canManageProjects }: ProjectsContent
               </div>
             </div>
           </div>
-        ))}
+          )
+        })}
       </div>
 
       <Dialog open={Boolean(editingProject)} onOpenChange={(open) => !open && setEditingProject(null)}>

@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Plus, Layers, Calendar, Users, AlertCircle, Github } from "lucide-react"
+import { Plus, Layers, Calendar, AlertCircle, Github, UserCheck } from "lucide-react"
 
 import { useTransition } from "react"
 import { createProject } from "@/lib/actions/project-actions"
@@ -15,22 +15,38 @@ import { toast } from "sonner"
 
 interface AddProjectModalProps {
   children: React.ReactNode
+  workspaceUsers?: WorkspaceUser[]
 }
 
-export function AddProjectModal({ children }: AddProjectModalProps) {
+type WorkspaceUser = {
+  id: string
+  name: string | null
+  email: string
+  role: string
+}
+
+const EMPTY_FORM = {
+  name: "",
+  description: "",
+  priority: "medium",
+  dueDate: "",
+  repositoryUrl: "",
+  teamLeaderId: "",
+}
+
+export function AddProjectModal({ children, workspaceUsers = [] }: AddProjectModalProps) {
   const [open, setOpen] = useState(false)
   const [isPending, startTransition] = useTransition()
-  const [formData, setFormData] = useState({
-    name: "",
-    description: "",
-    priority: "medium",
-    dueDate: "",
-    repositoryUrl: "",
-    team: "",
-  })
+  const [formData, setFormData] = useState(EMPTY_FORM)
+  const teamLeaderOptions = workspaceUsers.filter((user) => user.role !== "GUEST")
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+
+    if (!formData.teamLeaderId) {
+      toast.error("Select a team leader for this project.")
+      return
+    }
     
     startTransition(async () => {
       const result = await createProject({
@@ -39,6 +55,7 @@ export function AddProjectModal({ children }: AddProjectModalProps) {
         priority: formData.priority,
         dueDate: formData.dueDate,
         repositoryUrl: formData.repositoryUrl,
+        teamLeaderId: formData.teamLeaderId,
       })
 
       if (result.success) {
@@ -47,7 +64,7 @@ export function AddProjectModal({ children }: AddProjectModalProps) {
           toast.warning(result.repositoryWarning)
         }
         setOpen(false)
-        setFormData({ name: "", description: "", priority: "medium", dueDate: "", repositoryUrl: "", team: "" })
+        setFormData(EMPTY_FORM)
       } else {
         toast.error(result.error ?? "Failed to create project")
       }
@@ -147,18 +164,22 @@ export function AddProjectModal({ children }: AddProjectModalProps) {
 
           <div className="space-y-2">
             <Label className="text-sm text-muted-foreground flex items-center gap-2">
-              <Users className="w-3.5 h-3.5 text-primary" />
-              Assign Team
+              <UserCheck className="w-3.5 h-3.5 text-primary" />
+              Team Leader
             </Label>
-            <Select value={formData.team} onValueChange={(value) => setFormData({ ...formData, team: value })}>
+            <Select value={formData.teamLeaderId} onValueChange={(value) => setFormData({ ...formData, teamLeaderId: value })}>
               <SelectTrigger className="glass border-border/50 focus:border-primary/50 h-11">
-                <SelectValue placeholder="Select team" />
+                <SelectValue placeholder="Select team leader" />
               </SelectTrigger>
               <SelectContent className="glass-card border-primary/20">
-                <SelectItem value="frontend">Frontend Team</SelectItem>
-                <SelectItem value="backend">Backend Team</SelectItem>
-                <SelectItem value="design">Design Team</SelectItem>
-                <SelectItem value="qa">QA Team</SelectItem>
+                {teamLeaderOptions.map((user) => (
+                  <SelectItem key={user.id} value={user.id}>
+                    {user.name ?? user.email} - {user.role.toLowerCase()}
+                  </SelectItem>
+                ))}
+                {teamLeaderOptions.length === 0 && (
+                  <SelectItem value="none" disabled>No eligible team leaders found</SelectItem>
+                )}
               </SelectContent>
             </Select>
           </div>
@@ -174,7 +195,7 @@ export function AddProjectModal({ children }: AddProjectModalProps) {
             </Button>
             <Button
               type="submit"
-              disabled={isPending}
+              disabled={isPending || !formData.teamLeaderId || teamLeaderOptions.length === 0}
               className="flex-1 bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 shadow-lg shadow-primary/20"
             >
               {isPending ? (

@@ -8,16 +8,17 @@ import { TeamActivity } from "@/components/dashboard/team-activity"
 import { Button } from "@/components/ui/button"
 import { AddProjectModal } from "@/components/modals/add-project-modal"
 
-import { getDashboardStats, getProjects } from "@/lib/actions/project-actions"
+import { getDashboardStats, getProjects, getWorkspaceUsers } from "@/lib/actions/project-actions"
 import { requireSession } from "@/lib/auth"
 import { hasPermission } from "@/lib/rbac"
 
 export default async function DashboardPage() {
   const session = await requireSession()
   const canManageProjects = hasPermission(session.role, "manage_projects")
-  const [projects, stats] = await Promise.all([
+  const [projects, stats, workspaceUsers] = await Promise.all([
     getProjects(),
     getDashboardStats(),
+    canManageProjects ? getWorkspaceUsers() : Promise.resolve([]),
   ])
 
   return (
@@ -27,7 +28,7 @@ export default async function DashboardPage() {
         description="Your dev team's operations hub — sprints, deploys, standups, all in one place."
         actions={canManageProjects ? (
           <>
-            <AddProjectModal>
+            <AddProjectModal workspaceUsers={workspaceUsers}>
               <Button
                 id="new-project-btn"
                 className="w-full sm:w-auto h-9 text-sm bg-gradient-to-r from-primary to-primary/80 text-primary-foreground hover:from-primary/90 hover:to-primary/70 transition-all duration-300 shadow-lg shadow-primary/30 hover:shadow-xl hover:shadow-primary/40 hover:scale-105 border border-primary/50"

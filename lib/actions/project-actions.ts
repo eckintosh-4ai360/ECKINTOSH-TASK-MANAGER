@@ -13,6 +13,7 @@ export async function createProject(formData: {
   priority?: string
   dueDate?: string
   repositoryUrl?: string
+  teamLeaderId?: string
 }) {
   try {
     const session = await requireSession()
@@ -20,14 +21,42 @@ export async function createProject(formData: {
       return { success: false, error: getPermissionError("manage_projects") }
     }
 
+    const name = formData.name.trim()
+    if (!name) {
+      return { success: false, error: "Project name is required." }
+    }
+
+    if (!formData.teamLeaderId) {
+      return { success: false, error: "Select a team leader for this project." }
+    }
+
+    const teamLeader = await prisma.user.findUnique({
+      where: { id: formData.teamLeaderId },
+      select: { id: true, name: true, email: true, role: true },
+    })
+
+    if (!teamLeader || teamLeader.role === "GUEST") {
+      return { success: false, error: "Select an active workspace member as team leader." }
+    }
+
     const project = await prisma.project.create({
       data: {
-        name: formData.name,
-        description: formData.description || "",
+        name,
+        description: formData.description?.trim() || "",
         priority: (formData.priority || "medium").toLowerCase(),
         endDate: formData.dueDate ? new Date(formData.dueDate) : null,
         tech: [],
-        ownerId: session.id,
+        owner: {
+          connect: { id: teamLeader.id },
+        },
+        members: {
+          create: {
+            user: {
+              connect: { id: teamLeader.id },
+            },
+            role: "lead",
+          },
+        },
       },
     })
 
@@ -44,7 +73,7 @@ export async function createProject(formData: {
       userIds: recipients,
       channel: "teamUpdates",
       title: "New project created",
-      message: `${session.name} created ${project.name}.`,
+      message: `${session.name} created ${project.name} with ${teamLeader.name ?? teamLeader.email} as team leader.`,
       type: "info",
       link: "/projects",
       email: {
@@ -182,6 +211,14 @@ export async function getProjects() {
           startDate: true,
           endDate: true,
           ownerId: true,
+          owner: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              avatar: true,
+            },
+          },
           createdAt: true,
           updatedAt: true,
           repository: {
