@@ -2,8 +2,16 @@ import NextAuth from "next-auth"
 import GitHub from "next-auth/providers/github"
 import prisma from "@/lib/prisma"
 
-const githubClientId = process.env.AUTH_GITHUB_ID ?? process.env.GITHUB_ID
-const githubClientSecret = process.env.AUTH_GITHUB_SECRET ?? process.env.GITHUB_SECRET
+const githubClientId =
+  process.env.AUTH_GITHUB_ID
+  ?? process.env.GITHUB_ID
+  ?? process.env.AUTH_GITHUB_CLIENT_ID
+  ?? process.env.GITHUB_CLIENT_ID
+const githubClientSecret =
+  process.env.AUTH_GITHUB_SECRET
+  ?? process.env.GITHUB_SECRET
+  ?? process.env.AUTH_GITHUB_CLIENT_SECRET
+  ?? process.env.GITHUB_CLIENT_SECRET
 const authSecret =
   process.env.AUTH_SECRET
   ?? process.env.NEXTAUTH_SECRET
@@ -14,7 +22,9 @@ if (!authSecret) {
 }
 
 if (!githubClientId || !githubClientSecret) {
-  console.warn("[auth] Missing GITHUB_ID/GITHUB_SECRET (or AUTH_GITHUB_ID/AUTH_GITHUB_SECRET). GitHub sign-in is disabled.")
+  console.warn(
+    "[auth] Missing GitHub OAuth env vars. Set AUTH_GITHUB_ID/AUTH_GITHUB_SECRET, GITHUB_ID/GITHUB_SECRET, or *_CLIENT_ID/*_CLIENT_SECRET equivalents."
+  )
 }
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
@@ -102,5 +112,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   },
   pages: {
     signIn: "/login",
+    error: "/login",
   },
 })
