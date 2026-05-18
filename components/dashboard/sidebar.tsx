@@ -211,6 +211,19 @@ export function Sidebar({ role }: { role: AppRole }) {
             {visibleSystemItems.map((item) => {
               const isActive = pathname === item.href
               const isDanger = item.label === "Sign Out"
+              if (isDanger) {
+                return (
+                  <a
+                    key={item.label}
+                    href={item.href}
+                    className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 border border-transparent text-muted-foreground hover:text-red-400 hover:bg-red-500/10 hover:border-red-500/20"
+                  >
+                    <item.icon className="w-4 h-4 flex-shrink-0" />
+                    <span className="text-sm">{item.label}</span>
+                  </a>
+                )
+              }
+
               return (
                 <Link
                   key={item.label}

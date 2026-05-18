@@ -1,7 +1,7 @@
-import type { NextResponse } from "next/server"
+import type { NextRequest, NextResponse } from "next/server"
 import { SESSION_COOKIE_NAME } from "@/lib/session"
 
-const AUTH_COOKIE_NAMES = [
+const AUTH_COOKIE_PREFIXES = [
   SESSION_COOKIE_NAME,
   "authjs.session-token",
   "__Secure-authjs.session-token",
@@ -19,14 +19,34 @@ const AUTH_COOKIE_NAMES = [
   "__Secure-authjs.challenge",
 ]
 
-export function clearAuthCookies(response: NextResponse) {
-  for (const name of AUTH_COOKIE_NAMES) {
-    response.cookies.delete(name)
+function isManagedAuthCookie(name: string) {
+  return AUTH_COOKIE_PREFIXES.some((prefix) => name === prefix || name.startsWith(`${prefix}.`))
+}
 
-    // Auth.js can split large cookies into numbered chunks.
-    for (let index = 0; index < 8; index += 1) {
-      response.cookies.delete(`${name}.${index}`)
+export function clearAuthCookies(response: NextResponse, request?: NextRequest | Request) {
+  const cookieNames = new Set<string>()
+
+  if (request && "cookies" in request) {
+    for (const { name } of request.cookies.getAll()) {
+      if (isManagedAuthCookie(name)) {
+        cookieNames.add(name)
+      }
     }
+  }
+
+  // Keep a small fallback list so logout still works even when no request cookies are visible.
+  if (cookieNames.size === 0) {
+    cookieNames.add(SESSION_COOKIE_NAME)
+    cookieNames.add("authjs.session-token")
+    cookieNames.add("__Secure-authjs.session-token")
+    cookieNames.add("authjs.callback-url")
+    cookieNames.add("__Secure-authjs.callback-url")
+    cookieNames.add("authjs.csrf-token")
+    cookieNames.add("__Host-authjs.csrf-token")
+  }
+
+  for (const name of cookieNames) {
+    response.cookies.delete(name)
   }
 
   return response
