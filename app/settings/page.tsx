@@ -1,9 +1,11 @@
 import { SidebarWithUser as Sidebar } from "@/components/dashboard/sidebar-with-user"
 import { HeaderWithUser as Header } from "@/components/dashboard/header-with-user"
 import { SettingsContent } from "@/components/settings/settings-content"
+import { requireSession } from "@/lib/auth"
 import { getSettingsPageData } from "@/lib/actions/settings-actions"
 
 export default async function SettingsPage() {
+  await requireSession()
   const settings = await getSettingsPageData()
 
   return (

@@ -1,6 +1,7 @@
 import { SidebarWithUser as Sidebar } from "@/components/dashboard/sidebar-with-user"
 import { HeaderWithUser as Header } from "@/components/dashboard/header-with-user"
 import { Badge } from "@/components/ui/badge"
+import { requireSession } from "@/lib/auth"
 import { GitBranch, GitCommit, UserRound } from "lucide-react"
 
 const commits = [
@@ -10,7 +11,9 @@ const commits = [
   { id: "6f0d11b", author: "Tunde", project: "DevFlow Platform", message: "Polish task board empty states", time: "13:07", branch: "ui/task-board" },
 ]
 
-export default function CommitsPage() {
+export default async function CommitsPage() {
+  await requireSession()
+
   return (
     <div className="flex min-h-screen bg-background">
       <div className="hidden lg:block">

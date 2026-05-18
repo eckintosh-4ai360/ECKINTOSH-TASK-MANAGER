@@ -1,8 +1,11 @@
 import { SidebarWithUser as Sidebar } from "@/components/dashboard/sidebar-with-user"
 import { HeaderWithUser as Header } from "@/components/dashboard/header-with-user"
 import { HelpContent } from "@/components/help/help-content"
+import { requireSession } from "@/lib/auth"
 
-export default function HelpPage() {
+export default async function HelpPage() {
+  await requireSession()
+
   return (
     <div className="flex min-h-screen bg-background">
       <div className="hidden lg:block">
