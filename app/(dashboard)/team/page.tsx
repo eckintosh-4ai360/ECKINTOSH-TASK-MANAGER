@@ -1,0 +1,31 @@
+import { HeaderWithUser as Header } from "@/components/dashboard/header-with-user"
+import { TeamContent } from "@/components/team/team-content"
+import { Button } from "@/components/ui/button"
+import { AddMemberModal } from "@/components/modals/add-member-modal"
+import { getSession } from "@/lib/auth"
+import { hasPermission } from "@/lib/rbac"
+
+export default async function TeamPage() {
+  const session = await getSession()
+  const canManageTeam = hasPermission(session!.role, "manage_team")
+
+  return (
+    <>
+      <Header
+        title="Team Network"
+        description="Manage your team members and their roles."
+        actions={canManageTeam ? (
+          <AddMemberModal>
+            <Button className="w-full sm:w-auto h-10 text-sm bg-gradient-to-r from-primary to-primary/80 text-primary-foreground hover:from-primary/90 hover:to-primary/70 transition-all duration-300 shadow-lg shadow-primary/30 hover:shadow-xl hover:shadow-primary/40 hover:scale-105 border border-primary/50">
+              + Add Member
+            </Button>
+          </AddMemberModal>
+        ) : undefined}
+      />
+
+      <div className="mt-6">
+        <TeamContent />
+      </div>
+    </>
+  )
+}

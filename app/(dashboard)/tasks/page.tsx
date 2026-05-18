@@ -1,0 +1,44 @@
+import { HeaderWithUser as Header } from "@/components/dashboard/header-with-user"
+import { TasksContent } from "@/components/tasks/tasks-content"
+import { Button } from "@/components/ui/button"
+import { AddTaskModal } from "@/components/modals/add-task-modal"
+
+import { getProjects, getTasks, getWorkspaceUsers } from "@/lib/actions/project-actions"
+import { getSession } from "@/lib/auth"
+import { hasPermission } from "@/lib/rbac"
+
+export default async function TasksPage() {
+  const session = await getSession()
+  const canManageTasks = hasPermission(session!.role, "manage_tasks")
+  const [projects, tasks, users] = await Promise.all([
+    getProjects(),
+    getTasks(),
+    getWorkspaceUsers(),
+  ])
+
+  return (
+    <>
+      <Header
+        title="Task Control"
+        description="Manage and organize your tasks efficiently."
+        actions={canManageTasks ? (
+          <AddTaskModal projects={projects}>
+            <Button className="w-full sm:w-auto h-10 text-sm bg-gradient-to-r from-primary to-primary/80 text-primary-foreground hover:from-primary/90 hover:to-primary/70 transition-all duration-300 shadow-lg shadow-primary/30 hover:shadow-xl hover:shadow-primary/40 hover:scale-105 border border-primary/50">
+              + Add Task
+            </Button>
+          </AddTaskModal>
+        ) : undefined}
+      />
+
+      <div className="mt-6">
+        <TasksContent
+          tasks={tasks}
+          projects={projects.map((project) => ({ id: project.id, name: project.name }))}
+          users={users}
+          currentUserId={session!.id}
+          canManageTasks={canManageTasks}
+        />
+      </div>
+    </>
+  )
+}

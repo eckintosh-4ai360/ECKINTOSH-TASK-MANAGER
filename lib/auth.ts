@@ -1,3 +1,4 @@
+import { cache } from "react"
 import { cookies } from "next/headers"
 import { redirect } from "next/navigation"
 import { auth } from "@/auth"
@@ -25,7 +26,9 @@ export async function createSession(user: SessionUser) {
 // ─── Read session ─────────────────────────────────────────────────────────────
 // Reads the custom JWT cookie set by createSession().
 // Both email/password login and GitHub OAuth (via /auth/complete) set this cookie.
-export async function getSession(): Promise<SessionUser | null> {
+// Wrapped in React.cache() so repeated calls in the same render tree (layout,
+// sidebar, header, page) share one result — no redundant DB round-trips.
+export const getSession = cache(async (): Promise<SessionUser | null> => {
   try {
     const cookieStore = await cookies()
     const token = cookieStore.get(SESSION_COOKIE_NAME)?.value
@@ -55,7 +58,7 @@ export async function getSession(): Promise<SessionUser | null> {
   } catch {
     return null
   }
-}
+})
 
 // ─── Require session (redirects to /login if not authenticated) ───────────────
 export async function requireSession(): Promise<SessionUser> {
