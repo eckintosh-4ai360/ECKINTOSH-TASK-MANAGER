@@ -11,6 +11,7 @@ import { AddProjectModal } from "@/components/modals/add-project-modal"
 import { getDashboardStats, getProjects, getWorkspaceUsers, getDeployments } from "@/lib/actions/project-actions"
 import { getSprints } from "@/lib/actions/sprint-actions"
 import { getStandups } from "@/lib/actions/standup-actions"
+import { getTeamActivityData } from "@/lib/actions/team-actions"
 import { requireSession } from "@/lib/auth"
 import { hasPermission } from "@/lib/rbac"
 
@@ -18,13 +19,14 @@ export default async function DashboardPage() {
   const session = await requireSession()
   const canManageProjects = hasPermission(session.role, "manage_projects")
   
-  const [projects, stats, workspaceUsers, sprints, deployments, standups] = await Promise.all([
+  const [projects, stats, workspaceUsers, sprints, deployments, standups, teamActivities] = await Promise.all([
     getProjects(),
     getDashboardStats(),
     canManageProjects ? getWorkspaceUsers() : Promise.resolve([]),
     getSprints(),
     getDeployments(),
     getStandups(),
+    getTeamActivityData(),
   ])
 
   // Get active/recent sprints (up to 3) for the overview
@@ -82,10 +84,8 @@ export default async function DashboardPage() {
         </div>
 
         {/* Row 4: Team Activity */}
-        <TeamActivity />
+        <TeamActivity currentUserId={session.id} initialActivities={teamActivities} />
       </div>
     </>
   )
 }
-
-

@@ -4,10 +4,12 @@ import { Button } from "@/components/ui/button"
 import { ExportReportModal } from "@/components/modals/export-report-modal"
 import { requirePermission } from "@/lib/auth"
 import { hasPermission } from "@/lib/rbac"
+import { getAnalyticsData } from "@/lib/actions/analytics-actions"
 
 export default async function AnalyticsPage() {
   const session = await requirePermission("view_analytics")
   const canExportReports = hasPermission(session.role, "export_reports")
+  const analytics = await getAnalyticsData()
 
   return (
     <>
@@ -27,7 +29,13 @@ export default async function AnalyticsPage() {
       />
 
       <div className="mt-6">
-        <AnalyticsContent />
+        {"error" in analytics ? (
+          <div className="glass-card rounded-xl p-8 text-center border border-destructive/30">
+            <p className="text-destructive font-mono text-sm">{analytics.error}</p>
+          </div>
+        ) : (
+          <AnalyticsContent data={analytics} />
+        )}
       </div>
     </>
   )

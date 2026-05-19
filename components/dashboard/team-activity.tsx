@@ -1,64 +1,90 @@
 "use client"
 
+import { useEffect, useState, useRef, useCallback } from "react"
 import { Users, GitCommit, Clock, CheckCircle2 } from "lucide-react"
 import Link from "next/link"
 import { useSearch } from "./search-context"
+import type { TeamMemberActivity } from "@/lib/actions/team-actions"
 
-const teamMembers = [
-  {
-    id: 1,
-    name: "Eckintosh",
-    initials: "EC",
-    role: "Lead Dev / Full Stack",
-    color: "#00d4ff",
-    online: true,
-    tasksToday: 4,
-    commits: 7,
-    hoursLogged: 3.5,
-    project: "DevFlow Platform",
-  },
-  {
-    id: 2,
-    name: "Jay",
-    initials: "JY",
-    role: "Backend Engineer",
-    color: "#a855f7",
-    online: true,
-    tasksToday: 3,
-    commits: 5,
-    hoursLogged: 4.0,
-    project: "E-Commerce API",
-  },
-  {
-    id: 3,
-    name: "Kemi",
-    initials: "KM",
-    role: "Mobile Developer",
-    color: "#10b981",
-    online: false,
-    tasksToday: 2,
-    commits: 3,
-    hoursLogged: 2.0,
-    project: "Mobile App v2",
-  },
-  {
-    id: 4,
-    name: "Tunde",
-    initials: "TU",
-    role: "Frontend Engineer",
-    color: "#f59e0b",
-    online: true,
-    tasksToday: 5,
-    commits: 9,
-    hoursLogged: 5.5,
-    project: "E-Commerce API",
-  },
-]
+interface TeamActivityProps {
+  currentUserId: string
+  initialActivities: TeamMemberActivity[]
+}
 
-export function TeamActivity() {
+export function TeamActivity({ currentUserId, initialActivities }: TeamActivityProps) {
   const { matches, isSearching } = useSearch()
+  const [activities, setActivities] = useState<TeamMemberActivity[]>(initialActivities)
+  const wsRef = useRef<WebSocket | null>(null)
+  const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const reconnectDelay = useRef(1000)
+  const intentionalCloseRef = useRef(false)
 
-  const filtered = teamMembers.filter((m) =>
+  // Sync state if initialProps change
+  useEffect(() => {
+    setActivities(initialActivities)
+  }, [initialActivities])
+
+  // Establish a real-time WebSocket connection to listen to presence events
+  const connectWs = useCallback(() => {
+    if (intentionalCloseRef.current) return
+    if (wsRef.current?.readyState === WebSocket.OPEN) return
+
+    const protocol = window.location.protocol === "https:" ? "wss" : "ws"
+    const wsUrl = `${protocol}://${window.location.host}/ws?userId=${currentUserId}`
+    const ws = new WebSocket(wsUrl)
+    wsRef.current = ws
+
+    ws.onopen = () => {
+      intentionalCloseRef.current = false
+      reconnectDelay.current = 1000
+      if (reconnectTimer.current) {
+        clearTimeout(reconnectTimer.current)
+        reconnectTimer.current = null
+      }
+    }
+
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data)
+        if (data.type === "presence") {
+          setActivities((prev) =>
+            prev.map((member) =>
+              member.id === data.userId ? { ...member, online: data.online } : member
+            )
+          )
+        }
+      } catch (err) {
+        console.error("Error parsing WebSocket message inside TeamActivity:", err)
+      }
+    }
+
+    ws.onclose = () => {
+      if (intentionalCloseRef.current) return
+      reconnectTimer.current = setTimeout(() => {
+        reconnectDelay.current = Math.min(reconnectDelay.current * 2, 30_000)
+        connectWs()
+      }, reconnectDelay.current)
+    }
+
+    ws.onerror = () => {
+      if (intentionalCloseRef.current) return
+      ws.close()
+    }
+  }, [currentUserId])
+
+  useEffect(() => {
+    intentionalCloseRef.current = false
+    connectWs()
+    return () => {
+      intentionalCloseRef.current = true
+      if (reconnectTimer.current) clearTimeout(reconnectTimer.current)
+      reconnectTimer.current = null
+      wsRef.current?.close()
+      wsRef.current = null
+    }
+  }, [connectWs])
+
+  const filtered = activities.filter((m) =>
     matches(m.name, m.role, m.project)
   )
 
@@ -120,7 +146,7 @@ export function TeamActivity() {
 
             {/* Project tag */}
             <div
-              className="text-[9px] font-bold px-2 py-1 rounded-lg mb-3 truncate"
+              className="text-[9px] font-bold px-2 py-1 rounded-lg mb-3 truncate text-center"
               style={{ backgroundColor: `${member.color}15`, color: member.color, border: `1px solid ${member.color}30` }}
             >
               {member.project}

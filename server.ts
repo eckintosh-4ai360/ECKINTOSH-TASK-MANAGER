@@ -26,6 +26,7 @@ const prisma = new PrismaClient({ adapter })
 
 // ─── Connected clients: userId → WebSocket ─────────────────────────────────────
 const clients = new Map<string, WebSocket>()
+;(global as any).onlineUsersSet = clients
 
 function getCookieValue(cookieHeader: string | undefined, name: string) {
   if (!cookieHeader) return null

@@ -14,8 +14,7 @@ import {
 
 export type { SessionUser } from "@/lib/session"
 
-// ─── Create + store session ───────────────────────────────────────────────────
-// Called by: email/password loginAction AND /auth/complete (OAuth bridge)
+
 export async function createSession(user: SessionUser) {
   const token = await createSessionToken(user)
 
@@ -23,11 +22,6 @@ export async function createSession(user: SessionUser) {
   cookieStore.set(SESSION_COOKIE_NAME, token, getSessionCookieOptions())
 }
 
-// ─── Read session ─────────────────────────────────────────────────────────────
-// Reads the custom JWT cookie set by createSession().
-// Both email/password login and GitHub OAuth (via /auth/complete) set this cookie.
-// Wrapped in React.cache() so repeated calls in the same render tree (layout,
-// sidebar, header, page) share one result — no redundant DB round-trips.
 export const getSession = cache(async (): Promise<SessionUser | null> => {
   try {
     const cookieStore = await cookies()
