@@ -626,3 +626,21 @@ export async function getDashboardStats() {
     }
   }
 }
+
+export async function getDeployments() {
+  try {
+    await requireSession()
+    return await prisma.deployment.findMany({
+      include: {
+        project: {
+          select: { name: true, color: true },
+        },
+      },
+      orderBy: { deployedAt: "desc" },
+      take: 20,
+    })
+  } catch (error) {
+    console.error("Failed to fetch deployments:", error)
+    return []
+  }
+}

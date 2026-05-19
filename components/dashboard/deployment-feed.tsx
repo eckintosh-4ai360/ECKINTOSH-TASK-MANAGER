@@ -4,48 +4,25 @@ import { Rocket, CheckCircle2, XCircle, Clock, RefreshCw, ChevronRight } from "l
 import Link from "next/link"
 import { useSearch } from "./search-context"
 
-const deployments = [
-  {
-    id: 1,
-    version: "v2.4.1",
-    project: "E-Commerce API",
-    projectColor: "#00d4ff",
-    environment: "production",
-    status: "success",
-    time: "2h ago",
-    duration: "3m 12s",
-  },
-  {
-    id: 2,
-    version: "v1.8.0",
-    project: "DevFlow Platform",
-    projectColor: "#a855f7",
-    environment: "staging",
-    status: "running",
-    time: "45m ago",
-    duration: "1m 48s",
-  },
-  {
-    id: 3,
-    version: "v2.4.0",
-    project: "E-Commerce API",
-    projectColor: "#00d4ff",
-    environment: "production",
-    status: "failed",
-    time: "5h ago",
-    duration: "0m 22s",
-  },
-  {
-    id: 4,
-    version: "v1.2.3",
-    project: "Mobile App v2",
-    projectColor: "#10b981",
-    environment: "staging",
-    status: "success",
-    time: "1d ago",
-    duration: "4m 05s",
-  },
-]
+import { formatDistanceToNow } from "date-fns"
+
+export type DeploymentItem = {
+  id: string
+  version: string
+  environment: string
+  status: string
+  deployedAt: Date
+  duration: number | null
+  project: {
+    name: string
+    color: string
+  }
+}
+
+interface DeploymentFeedProps {
+  deployments: DeploymentItem[]
+}
+
 
 const statusConfig = {
   success: {
@@ -84,11 +61,11 @@ const envConfig: Record<string, string> = {
   development: "bg-primary/10 text-primary border-primary/20",
 }
 
-export function DeploymentFeed() {
+export function DeploymentFeed({ deployments }: DeploymentFeedProps) {
   const { matches, isSearching } = useSearch()
 
   const filtered = deployments.filter((d) =>
-    matches(d.project, d.version, d.environment, d.status)
+    matches(d.project.name, d.version, d.environment, d.status)
   )
 
   return (
@@ -119,9 +96,12 @@ export function DeploymentFeed() {
           <p className="text-xs text-muted-foreground text-center py-6 italic">No deployments match your search.</p>
         )}
         {filtered.map((deploy) => {
-          const cfg = statusConfig[deploy.status as keyof typeof statusConfig]
+          const cfg = statusConfig[deploy.status as keyof typeof statusConfig] || statusConfig.pending
           const StatusIcon = cfg.icon
           const isRunning = deploy.status === "running"
+          
+          const timeAgo = formatDistanceToNow(new Date(deploy.deployedAt), { addSuffix: true })
+          const durationStr = deploy.duration ? `${Math.floor(deploy.duration / 60)}m ${deploy.duration % 60}s` : "0m 0s"
 
           return (
             <div
@@ -146,15 +126,15 @@ export function DeploymentFeed() {
                 <div className="flex items-center gap-1.5">
                   <div
                     className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                    style={{ backgroundColor: deploy.projectColor }}
+                    style={{ backgroundColor: deploy.project.color }}
                   />
-                  <p className="text-[10px] text-muted-foreground truncate">{deploy.project}</p>
+                  <p className="text-[10px] text-muted-foreground truncate">{deploy.project.name}</p>
                 </div>
               </div>
 
               <div className="text-right flex-shrink-0">
-                <p className="text-[10px] text-muted-foreground">{deploy.time}</p>
-                <p className="text-[9px] font-mono text-muted-foreground/60">{deploy.duration}</p>
+                <p className="text-[10px] text-muted-foreground">{timeAgo}</p>
+                <p className="text-[9px] font-mono text-muted-foreground/60">{durationStr}</p>
               </div>
             </div>
           )

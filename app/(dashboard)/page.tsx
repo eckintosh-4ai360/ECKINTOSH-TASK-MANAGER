@@ -8,25 +8,35 @@ import { TeamActivity } from "@/components/dashboard/team-activity"
 import { Button } from "@/components/ui/button"
 import { AddProjectModal } from "@/components/modals/add-project-modal"
 
-import { getDashboardStats, getProjects, getWorkspaceUsers } from "@/lib/actions/project-actions"
+import { getDashboardStats, getProjects, getWorkspaceUsers, getDeployments } from "@/lib/actions/project-actions"
 import { getSprints } from "@/lib/actions/sprint-actions"
+import { getStandups } from "@/lib/actions/standup-actions"
 import { requireSession } from "@/lib/auth"
 import { hasPermission } from "@/lib/rbac"
 
 export default async function DashboardPage() {
   const session = await requireSession()
   const canManageProjects = hasPermission(session.role, "manage_projects")
-  const [projects, stats, workspaceUsers, sprints] = await Promise.all([
+  
+  const [projects, stats, workspaceUsers, sprints, deployments, standups] = await Promise.all([
     getProjects(),
     getDashboardStats(),
     canManageProjects ? getWorkspaceUsers() : Promise.resolve([]),
     getSprints(),
+    getDeployments(),
+    getStandups(),
   ])
 
   // Get active/recent sprints (up to 3) for the overview
   const overviewSprints = sprints
     .filter((s) => s.status !== "CANCELLED" && s.status !== "COMPLETED")
     .slice(0, 3)
+
+  // Get recent deployments (up to 4)
+  const recentDeployments = deployments.slice(0, 4)
+
+  // Get recent standups (up to 3)
+  const recentStandups = standups.slice(0, 3)
 
   return (
     <>
@@ -57,7 +67,7 @@ export default async function DashboardPage() {
             <SprintOverview sprints={overviewSprints} />
           </div>
           <div>
-            <DeploymentFeed />
+            <DeploymentFeed deployments={recentDeployments} />
           </div>
         </div>
 
@@ -67,7 +77,7 @@ export default async function DashboardPage() {
             <ProjectMatrix projects={projects} />
           </div>
           <div>
-            <StandupFeed />
+            <StandupFeed standups={recentStandups} />
           </div>
         </div>
 
@@ -77,4 +87,5 @@ export default async function DashboardPage() {
     </>
   )
 }
+
 

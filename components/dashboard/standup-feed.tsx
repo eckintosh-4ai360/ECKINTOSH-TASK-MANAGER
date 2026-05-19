@@ -4,44 +4,13 @@ import { ClipboardList, Plus, ChevronRight, Smile, Meh, Frown } from "lucide-rea
 import Link from "next/link"
 import { useSearch } from "./search-context"
 
-const standups = [
-  {
-    id: 1,
-    user: "Eckintosh",
-    initials: "EC",
-    color: "#00d4ff",
-    project: "DevFlow Platform",
-    time: "9:02 AM",
-    did: "Finished the sidebar redesign and sprint overview component",
-    doing: "Working on deployment feed and standup page",
-    blockers: null,
-    mood: 5,
-  },
-  {
-    id: 2,
-    user: "Jay",
-    initials: "JY",
-    color: "#a855f7",
-    project: "E-Commerce API",
-    time: "9:15 AM",
-    did: "Resolved the 401 auth error on order endpoints",
-    doing: "Integrating payment webhook from Paystack",
-    blockers: "Waiting for sandbox credentials from the client",
-    mood: 3,
-  },
-  {
-    id: 3,
-    user: "Kemi",
-    initials: "KM",
-    color: "#10b981",
-    project: "Mobile App v2",
-    time: "9:30 AM",
-    did: "Set up Flutter project structure and CI/CD pipeline",
-    doing: "Building the authentication flow screens",
-    blockers: null,
-    mood: 4,
-  },
-]
+import { formatDistanceToNow } from "date-fns"
+import { StandupItem } from "@/lib/actions/standup-actions"
+
+interface StandupFeedProps {
+  standups: StandupItem[]
+}
+
 
 const moodMap = {
   5: { icon: Smile, color: "text-emerald-400" },
@@ -51,11 +20,11 @@ const moodMap = {
   1: { icon: Frown, color: "text-red-400" },
 }
 
-export function StandupFeed() {
+export function StandupFeed({ standups }: StandupFeedProps) {
   const { matches, isSearching } = useSearch()
 
   const filtered = standups.filter((s) =>
-    matches(s.user, s.project, s.did, s.doing, s.blockers)
+    matches(s.user, s.project, s.didYesterday, s.doingToday, s.blockers)
   )
 
   return (
@@ -85,6 +54,7 @@ export function StandupFeed() {
         {filtered.map((standup) => {
           const mood = moodMap[standup.mood as keyof typeof moodMap] ?? moodMap[3]
           const MoodIcon = mood.icon
+          const timeAgo = formatDistanceToNow(new Date(standup.createdAt), { addSuffix: true })
           return (
             <div key={standup.id} className="rounded-xl p-3.5 border border-white/5 bg-white/[0.02] hover:bg-white/[0.04] transition-all duration-200 cursor-pointer">
               <div className="flex items-center gap-2.5 mb-2.5">
@@ -101,16 +71,16 @@ export function StandupFeed() {
                   </div>
                   <p className="text-[9px] text-muted-foreground truncate">{standup.project}</p>
                 </div>
-                <span className="text-[9px] text-muted-foreground flex-shrink-0">{standup.time}</span>
+                <span className="text-[9px] text-muted-foreground flex-shrink-0">{timeAgo}</span>
               </div>
               <div className="space-y-1.5">
                 <div className="flex gap-2">
                   <span className="text-[9px] font-bold text-emerald-400/80 uppercase flex-shrink-0 w-12">DONE</span>
-                  <p className="text-[10px] text-muted-foreground line-clamp-1">{standup.did}</p>
+                  <p className="text-[10px] text-muted-foreground line-clamp-1">{standup.didYesterday}</p>
                 </div>
                 <div className="flex gap-2">
                   <span className="text-[9px] font-bold text-primary/80 uppercase flex-shrink-0 w-12">TODAY</span>
-                  <p className="text-[10px] text-muted-foreground line-clamp-1">{standup.doing}</p>
+                  <p className="text-[10px] text-muted-foreground line-clamp-1">{standup.doingToday}</p>
                 </div>
                 {standup.blockers && (
                   <div className="flex gap-2">
