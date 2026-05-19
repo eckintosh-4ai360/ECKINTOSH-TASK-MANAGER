@@ -4,52 +4,17 @@ import { Zap, Calendar, ChevronRight, Clock, CheckCircle2, Circle, AlertCircle }
 import Link from "next/link"
 import { useSearch } from "./search-context"
 
-const sprints = [
-  {
-    id: 1,
-    name: "Sprint 7 – Auth & Dashboard",
-    project: "Eckintosh Platform",
-    projectColor: "#a855f7",
-    status: "ACTIVE",
-    daysLeft: 4,
-    totalTasks: 25,
-    doneTasks: 17,
-    inProgressTasks: 5,
-    blockedTasks: 1,
-    endDate: "May 18",
-  },
-  {
-    id: 2,
-    name: "Sprint 3 – Checkout Flow",
-    project: "E-Commerce API",
-    projectColor: "#00d4ff",
-    status: "ACTIVE",
-    daysLeft: 2,
-    totalTasks: 18,
-    doneTasks: 14,
-    inProgressTasks: 3,
-    blockedTasks: 0,
-    endDate: "May 16",
-  },
-  {
-    id: 3,
-    name: "Sprint 1 – Setup & CI/CD",
-    project: "Mobile App v2",
-    projectColor: "#10b981",
-    status: "PLANNING",
-    daysLeft: 12,
-    totalTasks: 12,
-    doneTasks: 0,
-    inProgressTasks: 0,
-    blockedTasks: 0,
-    endDate: "May 26",
-  },
-]
+import { SprintBoardItem } from "@/lib/actions/sprint-actions"
 
-export function SprintOverview() {
+interface SprintOverviewProps {
+  sprints: SprintBoardItem[]
+}
+
+
+export function SprintOverview({ sprints }: SprintOverviewProps) {
   const { matches, isSearching } = useSearch()
 
-  const filtered = sprints.filter((s) => matches(s.name, s.project, s.status))
+  const filtered = sprints.filter((s) => matches(s.name, s.project.name, s.status))
   return (
     <div
       className="glass-card rounded-xl p-5 transition-all duration-500 hover:border-primary/30 animate-slide-in-up border border-white/5"
@@ -78,8 +43,24 @@ export function SprintOverview() {
           <p className="text-xs text-muted-foreground text-center py-6 italic">No sprints match your search.</p>
         )}
         {filtered.map((sprint) => {
-          const progress = sprint.totalTasks > 0 ? Math.round((sprint.doneTasks / sprint.totalTasks) * 100) : 0
-          const isUrgent = sprint.daysLeft <= 3 && sprint.status === "ACTIVE"
+          const totalTasks = sprint.stats.total
+          const doneTasks = sprint.stats.done
+          const inProgressTasks = sprint.stats.inProgress
+          const blockedTasks = sprint.stats.blocked
+
+          const progress = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0
+          
+          let daysLeft = 0
+          if (sprint.endDate) {
+            const diffTime = new Date(sprint.endDate).getTime() - new Date().getTime()
+            daysLeft = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+            if (daysLeft < 0) daysLeft = 0
+          }
+
+          const isUrgent = daysLeft <= 3 && sprint.status === "ACTIVE"
+          const displayEndDate = sprint.endDate 
+            ? new Date(sprint.endDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+            : "No date"
 
           return (
             <div
@@ -90,11 +71,11 @@ export function SprintOverview() {
                 <div className="flex items-center gap-2 min-w-0">
                   <div
                     className="w-2 h-2 rounded-full flex-shrink-0"
-                    style={{ backgroundColor: sprint.projectColor, boxShadow: `0 0 6px ${sprint.projectColor}60` }}
+                    style={{ backgroundColor: sprint.project.color, boxShadow: `0 0 6px ${sprint.project.color}60` }}
                   />
                   <div className="min-w-0">
                     <p className="text-xs font-semibold text-foreground truncate">{sprint.name}</p>
-                    <p className="text-[10px] text-muted-foreground">{sprint.project}</p>
+                    <p className="text-[10px] text-muted-foreground">{sprint.project.name}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
@@ -110,7 +91,7 @@ export function SprintOverview() {
                   <div className={`flex items-center gap-1 text-[10px] font-mono ${isUrgent ? "text-red-400" : "text-muted-foreground"}`}>
                     {isUrgent && <AlertCircle className="w-3 h-3" />}
                     <Clock className="w-3 h-3" />
-                    {sprint.daysLeft}d left
+                    {daysLeft}d left
                   </div>
                 </div>
               </div>
@@ -130,21 +111,21 @@ export function SprintOverview() {
               <div className="flex items-center gap-4">
                 <div className="flex items-center gap-1 text-[10px] text-emerald-400">
                   <CheckCircle2 className="w-3 h-3" />
-                  {sprint.doneTasks} done
+                  {doneTasks} done
                 </div>
                 <div className="flex items-center gap-1 text-[10px] text-primary">
                   <Circle className="w-3 h-3" />
-                  {sprint.inProgressTasks} in progress
+                  {inProgressTasks} in progress
                 </div>
-                {sprint.blockedTasks > 0 && (
+                {blockedTasks > 0 && (
                   <div className="flex items-center gap-1 text-[10px] text-red-400">
                     <AlertCircle className="w-3 h-3" />
-                    {sprint.blockedTasks} blocked
+                    {blockedTasks} blocked
                   </div>
                 )}
                 <div className="ml-auto flex items-center gap-1 text-[10px] text-muted-foreground">
                   <Calendar className="w-3 h-3" />
-                  {sprint.endDate}
+                  {displayEndDate}
                 </div>
               </div>
             </div>

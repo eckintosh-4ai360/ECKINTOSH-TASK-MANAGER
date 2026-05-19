@@ -9,17 +9,24 @@ import { Button } from "@/components/ui/button"
 import { AddProjectModal } from "@/components/modals/add-project-modal"
 
 import { getDashboardStats, getProjects, getWorkspaceUsers } from "@/lib/actions/project-actions"
+import { getSprints } from "@/lib/actions/sprint-actions"
 import { requireSession } from "@/lib/auth"
 import { hasPermission } from "@/lib/rbac"
 
 export default async function DashboardPage() {
   const session = await requireSession()
   const canManageProjects = hasPermission(session.role, "manage_projects")
-  const [projects, stats, workspaceUsers] = await Promise.all([
+  const [projects, stats, workspaceUsers, sprints] = await Promise.all([
     getProjects(),
     getDashboardStats(),
     canManageProjects ? getWorkspaceUsers() : Promise.resolve([]),
+    getSprints(),
   ])
+
+  // Get active/recent sprints (up to 3) for the overview
+  const overviewSprints = sprints
+    .filter((s) => s.status !== "CANCELLED" && s.status !== "COMPLETED")
+    .slice(0, 3)
 
   return (
     <>
@@ -47,7 +54,7 @@ export default async function DashboardPage() {
         {/* Row 2: Sprint Overview + Deployment Feed */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <div className="lg:col-span-2">
-            <SprintOverview />
+            <SprintOverview sprints={overviewSprints} />
           </div>
           <div>
             <DeploymentFeed />
@@ -70,3 +77,4 @@ export default async function DashboardPage() {
     </>
   )
 }
+
