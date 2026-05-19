@@ -11,8 +11,9 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { Search, Calendar, Tag, SlidersHorizontal, MoreHorizontal, Pencil, Trash2 } from "lucide-react"
+import { Search, Calendar, Tag, SlidersHorizontal, MoreHorizontal, Pencil, Trash2, Flag } from "lucide-react"
 import { deleteTask, toggleTaskStatus, updateTask } from "@/lib/actions/project-actions"
+import type { SprintOption } from "@/lib/actions/sprint-actions"
 import { useSearch } from "@/components/dashboard/search-context"
 import { toast } from "sonner"
 
@@ -24,9 +25,11 @@ interface Task {
   dueDate: Date | string | null
   status: string
   projectId: string
+  sprintId?: string | null
   assigneeId?: string | null
   tags?: string[]
   project?: { name: string }
+  sprint?: { id: string; name: string } | null
 }
 
 interface ProjectOption {
@@ -43,6 +46,7 @@ interface UserOption {
 interface TasksContentProps {
   tasks: Task[]
   projects: ProjectOption[]
+  sprints: SprintOption[]
   users: UserOption[]
   currentUserId: string
   canManageTasks: boolean
@@ -53,6 +57,7 @@ const EMPTY_FORM = {
   title: "",
   description: "",
   projectId: "",
+  sprintId: "none",
   priority: "medium",
   dueDate: "",
   tags: "",
@@ -60,7 +65,7 @@ const EMPTY_FORM = {
   assigneeId: "unassigned",
 }
 
-export function TasksContent({ tasks, projects, users, currentUserId, canManageTasks }: TasksContentProps) {
+export function TasksContent({ tasks, projects, sprints, users, currentUserId, canManageTasks }: TasksContentProps) {
   const [filter, setFilter] = useState("all")
   const [isPending, startTransition] = useTransition()
   const [editingTask, setEditingTask] = useState<Task | null>(null)
@@ -80,6 +85,7 @@ export function TasksContent({ tasks, projects, users, currentUserId, canManageT
       title: editingTask.title,
       description: editingTask.description ?? "",
       projectId: editingTask.projectId,
+      sprintId: editingTask.sprintId ?? "none",
       priority: editingTask.priority,
       dueDate: editingTask.dueDate ? new Date(editingTask.dueDate).toISOString().slice(0, 10) : "",
       tags: editingTask.tags?.join(", ") ?? "",
@@ -87,6 +93,20 @@ export function TasksContent({ tasks, projects, users, currentUserId, canManageT
       assigneeId: editingTask.assigneeId ?? "unassigned",
     })
   }, [editingTask])
+
+  const availableSprints = formData.projectId
+    ? sprints.filter((sprint) => sprint.projectId === formData.projectId)
+    : []
+
+  useEffect(() => {
+    if (formData.sprintId === "none") {
+      return
+    }
+
+    if (!availableSprints.some((sprint) => sprint.id === formData.sprintId)) {
+      setFormData((current) => ({ ...current, sprintId: "none" }))
+    }
+  }, [availableSprints, formData.sprintId])
 
   const handleToggle = (taskId: string, currentStatus: string) => {
     startTransition(async () => {
@@ -108,13 +128,14 @@ export function TasksContent({ tasks, projects, users, currentUserId, canManageT
         : tasks.filter((t) => t.status !== "COMPLETED")
 
   const filteredTasks = baseTasks.filter((t) =>
-    matches(t.title, t.project?.name, t.priority, t.status)
+    matches(t.title, t.project?.name, t.sprint?.name, t.priority, t.status)
   )
 
   const handleSaveTask = () => {
     startTransition(async () => {
       const result = await updateTask({
         ...formData,
+        sprintId: formData.sprintId === "none" ? undefined : formData.sprintId,
         assigneeId: formData.assigneeId === "unassigned" ? undefined : formData.assigneeId,
       })
 
@@ -256,6 +277,12 @@ export function TasksContent({ tasks, projects, users, currentUserId, canManageT
                       {task.project.name}
                     </span>
                   )}
+                  {task.sprint && (
+                    <span className="flex items-center gap-1.5 font-mono text-xs">
+                      <Flag className="w-3.5 h-3.5 text-primary" />
+                      {task.sprint.name}
+                    </span>
+                  )}
                   <span className="flex items-center gap-1.5 font-mono text-xs">
                     <Calendar className="w-3.5 h-3.5 text-primary" />
                     {task.dueDate ? new Date(task.dueDate).toLocaleDateString() : "No date"}
@@ -294,7 +321,7 @@ export function TasksContent({ tasks, projects, users, currentUserId, canManageT
               />
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-4 sm:grid-cols-3">
               <div className="space-y-2">
                 <Label>Project</Label>
                 <Select value={formData.projectId} onValueChange={(value) => setFormData((current) => ({ ...current, projectId: value }))}>
@@ -307,6 +334,30 @@ export function TasksContent({ tasks, projects, users, currentUserId, canManageT
                         {project.name}
                       </SelectItem>
                     ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Sprint</Label>
+                <Select
+                  value={formData.sprintId}
+                  onValueChange={(value) => setFormData((current) => ({ ...current, sprintId: value }))}
+                  disabled={!formData.projectId}
+                >
+                  <SelectTrigger className="glass border-border/50 focus:border-primary/50 h-11">
+                    <SelectValue placeholder={formData.projectId ? "Select sprint" : "Select project first"} />
+                  </SelectTrigger>
+                  <SelectContent className="glass-card border-primary/20">
+                    <SelectItem value="none">No sprint</SelectItem>
+                    {availableSprints.map((sprint) => (
+                      <SelectItem key={sprint.id} value={sprint.id}>
+                        {sprint.name}
+                      </SelectItem>
+                    ))}
+                    {formData.projectId && availableSprints.length === 0 && (
+                      <SelectItem value="no-sprints" disabled>No sprints for this project</SelectItem>
+                    )}
                   </SelectContent>
                 </Select>
               </div>

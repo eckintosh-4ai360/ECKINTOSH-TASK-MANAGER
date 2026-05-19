@@ -21,7 +21,7 @@ export default async function TeamPage() {
 
   const teamMembers: TeamMember[] = users.map((user) => {
     const totalTasks = user.tasks.length
-    const completedTasks = user.tasks.filter((t) => t.status === "DONE").length
+    const completedTasks = user.tasks.filter((t) => t.status === "COMPLETED").length
     const name = user.name || "Unknown User"
     
     // Calculate initials

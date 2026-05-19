@@ -1,0 +1,2 @@
+[baseline-browser-mapping] The data in this module is over two months old.  To ensure accurate Baseline data, please update: `npm i baseline-browser-mapping@latest -D`
+[auth] Missing GitHub OAuth env vars. Set AUTH_GITHUB_ID/AUTH_GITHUB_SECRET, GITHUB_ID/GITHUB_SECRET, or *_CLIENT_ID/*_CLIENT_SECRET equivalents.

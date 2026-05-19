@@ -7,6 +7,32 @@ import { createNotificationsForUsers, getWorkspaceRecipientIds } from "@/lib/not
 import { canUpdateTaskStatus, getPermissionError, hasPermission } from "@/lib/rbac"
 import { revalidatePath } from "next/cache"
 
+async function resolveSprintAssignment(projectId: string, sprintId?: string | null) {
+  const normalizedSprintId = sprintId?.trim()
+
+  if (!normalizedSprintId) {
+    return { sprintId: null }
+  }
+
+  const sprint = await prisma.sprint.findUnique({
+    where: { id: normalizedSprintId },
+    select: {
+      id: true,
+      projectId: true,
+    },
+  })
+
+  if (!sprint) {
+    return { error: "Selected sprint could not be found." }
+  }
+
+  if (sprint.projectId !== projectId) {
+    return { error: "Selected sprint must belong to the same project as the task." }
+  }
+
+  return { sprintId: sprint.id }
+}
+
 export async function createProject(formData: {
   name: string
   description?: string
@@ -268,6 +294,7 @@ export async function createTask(formData: {
   title: string
   description?: string
   projectId: string
+  sprintId?: string
   priority?: string
   dueDate?: string
   tags?: string
@@ -278,11 +305,22 @@ export async function createTask(formData: {
       return { success: false, error: getPermissionError("manage_tasks") }
     }
 
+    const title = formData.title.trim()
+    if (!title) {
+      return { success: false, error: "Task title is required." }
+    }
+
+    const sprintAssignment = await resolveSprintAssignment(formData.projectId, formData.sprintId)
+    if ("error" in sprintAssignment) {
+      return { success: false, error: sprintAssignment.error }
+    }
+
     const task = await prisma.task.create({
       data: {
-        title: formData.title,
+        title,
         description: formData.description || "",
         projectId: formData.projectId,
+        sprintId: sprintAssignment.sprintId,
         priority: (formData.priority || "medium").toLowerCase(),
         dueDate: formData.dueDate ? new Date(formData.dueDate) : null,
         tags: formData.tags
@@ -307,7 +345,8 @@ export async function createTask(formData: {
 
     revalidatePath("/")
     revalidatePath("/tasks")
-    revalidatePath(`/projects/${formData.projectId}`)
+    revalidatePath("/projects")
+    revalidatePath("/sprints")
 
     return { success: true, task }
   } catch (error) {
@@ -321,6 +360,7 @@ export async function updateTask(input: {
   title: string
   description?: string
   projectId: string
+  sprintId?: string
   priority?: string
   dueDate?: string
   tags?: string
@@ -333,12 +373,23 @@ export async function updateTask(input: {
       return { success: false, error: getPermissionError("manage_tasks") }
     }
 
+    const title = input.title.trim()
+    if (!title) {
+      return { success: false, error: "Task title is required." }
+    }
+
+    const sprintAssignment = await resolveSprintAssignment(input.projectId, input.sprintId)
+    if ("error" in sprintAssignment) {
+      return { success: false, error: sprintAssignment.error }
+    }
+
     const task = await prisma.task.update({
       where: { id: input.id },
       data: {
-        title: input.title.trim(),
+        title,
         description: input.description?.trim() || "",
         projectId: input.projectId,
+        sprintId: sprintAssignment.sprintId,
         priority: (input.priority || "medium").toLowerCase(),
         dueDate: input.dueDate ? new Date(input.dueDate) : null,
         status: (input.status as any) || "TODO",
@@ -444,6 +495,9 @@ export async function getTasks() {
       include: {
         project: {
           select: { name: true, color: true },
+        },
+        sprint: {
+          select: { id: true, name: true },
         },
         assignee: {
           select: { name: true, avatar: true },

@@ -22,7 +22,7 @@ import {
   Circle,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { hasPermission, type AppRole } from "@/lib/rbac"
@@ -68,6 +68,7 @@ const recentProjects = [
   { name: "DevFlow Platform", color: "#a855f7", status: "active" },
   { name: "Mobile App v2", color: "#10b981", status: "paused" },
 ]
+
 
 function NavSection({ title, items }: { title: string; items: NavItem[] }) {
   const pathname = usePathname()
@@ -117,7 +118,10 @@ function NavSection({ title, items }: { title: string; items: NavItem[] }) {
 }
 
 export function Sidebar({ role }: { role: AppRole }) {
+  const [dynamicRecent, setDynamicRecent] = useState<{ name: string; color: string; status: string }[]>([]);
+  const [activeSprintInfo, setActiveSprintInfo] = useState<{ id: string; name: string; status: string; project: { id: string; name: string; color: string }; stats?: { total: number; done: number } } | null>(null);
   const pathname = usePathname()
+
   const visibleWorkspaceItems = workspaceItems.filter((item) => {
     if (item.href === "/commits") return hasPermission(role, "use_repository_workspace")
     if (item.href === "/jot-it") return hasPermission(role, "manage_own_notes")
@@ -130,6 +134,30 @@ export function Sidebar({ role }: { role: AppRole }) {
     if (item.href === "/emails") return hasPermission(role, "use_email")
     return true
   })
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const pr = await fetch('/api/recent-projects')
+        if (pr.ok) {
+          const data = await pr.json()
+          if (Array.isArray(data)) setDynamicRecent(data)
+        }
+        const spr = await fetch('/api/active-sprint')
+        if (spr.ok) {
+          const data = await spr.json()
+          if (data?.sprint) setActiveSprintInfo(data.sprint)
+        }
+      } catch { /* ignore */ }
+    }
+    fetchData()
+  }, [])
+
+  const recentList = dynamicRecent.length > 0 ? dynamicRecent : [
+    { name: "E-Commerce API", color: "#00d4ff", status: "active" },
+    { name: "DevFlow Platform", color: "#a855f7", status: "active" },
+    { name: "Mobile App v2", color: "#10b981", status: "paused" },
+  ]
 
   const visibleSystemItems = systemItems.filter((item) => {
     if (item.href === "/admin/users") return hasPermission(role, "manage_users")
@@ -175,7 +203,7 @@ export function Sidebar({ role }: { role: AppRole }) {
             Recent Projects
           </p>
           <nav className="space-y-0.5">
-            {recentProjects.map((proj) => (
+            {recentList.map((proj) => (
               <Link
                 key={proj.name}
                 href="/projects"
@@ -259,17 +287,32 @@ export function Sidebar({ role }: { role: AppRole }) {
             </span>
           </div>
           <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] text-muted-foreground">Active Sprint</span>
-              <span className="text-[10px] font-mono text-primary">Sprint 7</span>
-            </div>
-            <div className="w-full h-1.5 bg-secondary rounded-full overflow-hidden">
-              <div className="h-full w-[68%] bg-gradient-to-r from-primary to-primary/60 rounded-full" />
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] text-muted-foreground">Tasks Done</span>
-              <span className="text-[10px] font-mono text-foreground">17 / 25</span>
-            </div>
+            {activeSprintInfo ? (
+              <>
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] text-muted-foreground">Active Sprint</span>
+                  <span className="text-[10px] font-mono text-primary max-w-[120px] truncate">{activeSprintInfo.name}</span>
+                </div>
+                <div className="w-full h-1.5 bg-secondary rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-primary to-primary/60 rounded-full transition-all"
+                    style={{
+                      width: activeSprintInfo.stats && activeSprintInfo.stats.total > 0
+                        ? `${(activeSprintInfo.stats.done / activeSprintInfo.stats.total) * 100}%`
+                        : "0%"
+                    }}
+                  />
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] text-muted-foreground">Tasks Done</span>
+                  <span className="text-[10px] font-mono text-foreground">
+                    {activeSprintInfo.stats ? `${activeSprintInfo.stats.done} / ${activeSprintInfo.stats.total}` : "—"}
+                  </span>
+                </div>
+              </>
+            ) : (
+              <p className="text-[10px] text-muted-foreground">No active sprint</p>
+            )}
           </div>
           <div className="mt-2 pt-2 border-t border-white/5 flex items-center gap-1.5">
             <Rocket className="w-3 h-3 text-primary" />

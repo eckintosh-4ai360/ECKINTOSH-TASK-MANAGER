@@ -1,16 +1,16 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState, useTransition } from "react"
+import { useRouter } from "next/navigation"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Plus, CheckSquare, Calendar, Tag, Folder } from "lucide-react"
-
-import { useTransition } from "react"
+import { Plus, CheckSquare, Calendar, Tag, Folder, Flag } from "lucide-react"
 import { createTask } from "@/lib/actions/project-actions"
+import type { SprintOption } from "@/lib/actions/sprint-actions"
 import { toast } from "sonner"
 
 interface Project {
@@ -21,19 +21,60 @@ interface Project {
 interface AddTaskModalProps {
   children: React.ReactNode
   projects: Project[]
+  sprints: SprintOption[]
+  initialProjectId?: string
+  initialSprintId?: string
 }
 
-export function AddTaskModal({ children, projects }: AddTaskModalProps) {
-  const [open, setOpen] = useState(false)
-  const [isPending, startTransition] = useTransition()
-  const [formData, setFormData] = useState({
+function getInitialFormData(initialProjectId?: string, initialSprintId?: string) {
+  return {
     title: "",
     description: "",
-    projectId: "",
+    projectId: initialProjectId ?? "",
+    sprintId: initialSprintId ?? "none",
     priority: "medium",
     dueDate: "",
     tags: "",
-  })
+  }
+}
+
+export function AddTaskModal({
+  children,
+  projects,
+  sprints,
+  initialProjectId,
+  initialSprintId,
+}: AddTaskModalProps) {
+  const router = useRouter()
+  const [open, setOpen] = useState(false)
+  const [isPending, startTransition] = useTransition()
+  const [formData, setFormData] = useState(() => getInitialFormData(initialProjectId, initialSprintId))
+  const availableSprints = formData.projectId
+    ? sprints.filter((sprint) => sprint.projectId === formData.projectId)
+    : []
+
+  useEffect(() => {
+    if (!open) {
+      setFormData(getInitialFormData(initialProjectId, initialSprintId))
+      return
+    }
+
+    setFormData((current) => ({
+      ...current,
+      projectId: current.projectId || initialProjectId || "",
+      sprintId: current.sprintId !== "none" ? current.sprintId : initialSprintId || "none",
+    }))
+  }, [open, initialProjectId, initialSprintId])
+
+  useEffect(() => {
+    if (formData.sprintId === "none") {
+      return
+    }
+
+    if (!availableSprints.some((sprint) => sprint.id === formData.sprintId)) {
+      setFormData((current) => ({ ...current, sprintId: "none" }))
+    }
+  }, [availableSprints, formData.sprintId])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -48,6 +89,7 @@ export function AddTaskModal({ children, projects }: AddTaskModalProps) {
         title: formData.title,
         description: formData.description,
         projectId: formData.projectId,
+        sprintId: formData.sprintId === "none" ? undefined : formData.sprintId,
         priority: formData.priority,
         dueDate: formData.dueDate,
         tags: formData.tags,
@@ -56,9 +98,10 @@ export function AddTaskModal({ children, projects }: AddTaskModalProps) {
       if (result.success) {
         toast.success("Task added successfully!")
         setOpen(false)
-        setFormData({ title: "", description: "", projectId: "", priority: "medium", dueDate: "", tags: "" })
+        setFormData(getInitialFormData(initialProjectId, initialSprintId))
+        router.refresh()
       } else {
-        toast.error("Failed to add task")
+        toast.error(result.error ?? "Failed to add task")
       }
     })
   }
@@ -132,6 +175,35 @@ export function AddTaskModal({ children, projects }: AddTaskModalProps) {
 
             <div className="space-y-2">
               <Label className="text-sm text-muted-foreground flex items-center gap-2">
+                <Flag className="w-3.5 h-3.5 text-primary" />
+                Sprint
+              </Label>
+              <Select
+                value={formData.sprintId}
+                onValueChange={(value) => setFormData({ ...formData, sprintId: value })}
+                disabled={!formData.projectId}
+              >
+                <SelectTrigger className="glass border-border/50 focus:border-primary/50 h-11">
+                  <SelectValue placeholder={formData.projectId ? "Select sprint" : "Select project first"} />
+                </SelectTrigger>
+                <SelectContent className="glass-card border-primary/20">
+                  <SelectItem value="none">No sprint</SelectItem>
+                  {availableSprints.map((sprint) => (
+                    <SelectItem key={sprint.id} value={sprint.id}>
+                      {sprint.name}
+                    </SelectItem>
+                  ))}
+                  {formData.projectId && availableSprints.length === 0 && (
+                    <SelectItem value="no-sprints" disabled>No sprints for this project</SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label className="text-sm text-muted-foreground flex items-center gap-2">
                 <Tag className="w-3.5 h-3.5 text-primary" />
                 Priority
               </Label>
@@ -149,9 +221,7 @@ export function AddTaskModal({ children, projects }: AddTaskModalProps) {
                 </SelectContent>
               </Select>
             </div>
-          </div>
 
-          <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="task-due-date" className="text-sm text-muted-foreground flex items-center gap-2">
                 <Calendar className="w-3.5 h-3.5 text-primary" />

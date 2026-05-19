@@ -10,6 +10,7 @@ import { hasPermission } from "@/lib/rbac"
 export default async function SprintsPage() {
   const session = await requireSession()
   const canManageSprints = hasPermission(session.role, "manage_sprints")
+  const canManageTasks = hasPermission(session.role, "manage_tasks")
   const [projects, sprints] = await Promise.all([
     getProjects(),
     getSprints(),
@@ -37,7 +38,12 @@ export default async function SprintsPage() {
         ) : undefined}
       />
       <div className="mt-5">
-        <SprintsBoard sprints={sprints} projects={projectOptions} canManageSprints={canManageSprints} />
+        <SprintsBoard
+          sprints={sprints}
+          projects={projectOptions}
+          canManageSprints={canManageSprints}
+          canManageTasks={canManageTasks}
+        />
       </div>
     </>
   )

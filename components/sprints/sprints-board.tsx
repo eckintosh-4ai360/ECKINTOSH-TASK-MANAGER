@@ -22,6 +22,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
+import { AddTaskModal } from "@/components/modals/add-task-modal"
 import { deleteSprint, updateSprint, type SprintBoardItem } from "@/lib/actions/sprint-actions"
 import { toast } from "sonner"
 
@@ -73,10 +74,12 @@ export function SprintsBoard({
   sprints,
   projects,
   canManageSprints,
+  canManageTasks,
 }: {
   sprints: SprintBoardItem[]
   projects: ProjectOption[]
   canManageSprints: boolean
+  canManageTasks: boolean
 }) {
   const [expandedSprint, setExpandedSprint] = useState<string | null>(sprints[0]?.id ?? null)
   const [filter, setFilter] = useState<string>("all")
@@ -85,6 +88,12 @@ export function SprintsBoard({
   const [formData, setFormData] = useState(EMPTY_FORM)
   const [isPending, startTransition] = useTransition()
   const router = useRouter()
+  const sprintOptions = sprints.map((sprint) => ({
+    id: sprint.id,
+    name: sprint.name,
+    projectId: sprint.project.id,
+    status: sprint.status as "PLANNING" | "ACTIVE" | "COMPLETED" | "CANCELLED",
+  }))
 
   useEffect(() => {
     if (!editingSprint) {
@@ -303,13 +312,22 @@ export function SprintsBoard({
                       </div>
                     </Link>
                   ))}
-                  <Link
-                    href="/tasks"
-                    className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg border border-dashed border-primary/20 text-xs text-primary/70 hover:text-primary hover:border-primary/40 hover:bg-primary/5 transition-all"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    Add task to sprint
-                  </Link>
+                  {canManageTasks && (
+                    <AddTaskModal
+                      projects={projects}
+                      sprints={sprintOptions}
+                      initialProjectId={sprint.project.id}
+                      initialSprintId={sprint.id}
+                    >
+                      <button
+                        type="button"
+                        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg border border-dashed border-primary/20 text-xs text-primary/70 hover:text-primary hover:border-primary/40 hover:bg-primary/5 transition-all"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        Add task to sprint
+                      </button>
+                    </AddTaskModal>
+                  )}
                 </div>
               </div>
             )}

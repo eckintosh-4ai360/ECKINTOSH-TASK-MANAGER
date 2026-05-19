@@ -15,6 +15,13 @@ type SprintInput = {
   endDate?: string
 }
 
+export type SprintOption = {
+  id: string
+  name: string
+  projectId: string
+  status: "PLANNING" | "ACTIVE" | "COMPLETED" | "CANCELLED"
+}
+
 function serializeSprint(sprint: {
   id: string
   name: string
@@ -97,6 +104,22 @@ export async function getSprints() {
   })
 
   return sprints.map(serializeSprint)
+}
+
+export async function getSprintOptions(): Promise<SprintOption[]> {
+  await requireSession()
+
+  const sprints = await prisma.sprint.findMany({
+    select: {
+      id: true,
+      name: true,
+      projectId: true,
+      status: true,
+    },
+    orderBy: [{ status: "asc" }, { createdAt: "desc" }],
+  })
+
+  return sprints as SprintOption[]
 }
 
 export async function createSprint(input: SprintInput) {
