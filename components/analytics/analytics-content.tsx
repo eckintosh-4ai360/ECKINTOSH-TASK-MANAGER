@@ -30,6 +30,11 @@ import {
   PieChart,
   Pie,
   Legend,
+  RadarChart,
+  Radar,
+  PolarGrid,
+  PolarAngleAxis,
+  PolarRadiusAxis,
 } from "recharts"
 import type { AnalyticsData } from "@/lib/actions/analytics-actions"
 
@@ -393,7 +398,7 @@ export function AnalyticsContent({ data }: AnalyticsContentProps) {
           </div>
         </div>
 
-        {/* Task status breakdown – horizontal bar */}
+        {/* Task status breakdown – Radar Chart */}
         <div className="glass-card rounded-xl p-6 relative overflow-hidden border border-chart-3/20">
           <div className="absolute inset-0 bg-gradient-to-br from-chart-3/5 to-transparent pointer-events-none" />
           <div className="relative">
@@ -401,32 +406,65 @@ export function AnalyticsContent({ data }: AnalyticsContentProps) {
               <div className="w-2.5 h-2.5 rounded-full bg-chart-3 animate-pulse" />
               Task Status Breakdown
             </h3>
-            <div className="space-y-3">
-              {taskStatusData.map((item) => {
-                const pct = totalTasksForRate > 0 ? Math.round((item.value / totalTasksForRate) * 100) : 0
-                return (
-                  <div key={item.name} className="space-y-1">
-                    <div className="flex items-center justify-between text-xs font-mono">
-                      <span className="uppercase font-bold text-muted-foreground">{item.name}</span>
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold" style={{ color: item.fill }}>{item.value}</span>
-                        <span className="text-muted-foreground">({pct}%)</span>
-                      </div>
-                    </div>
-                    <div className="w-full bg-secondary/40 rounded-full h-2 overflow-hidden">
-                      <div
-                        className="h-full rounded-full transition-all duration-1000 ease-out"
-                        style={{
-                          width: `${pct}%`,
-                          backgroundColor: item.fill,
-                          boxShadow: `0 0 8px ${item.fill}60`,
-                        }}
+            {totalTasksForRate === 0 ? (
+              <div className="h-40 flex items-center justify-center text-muted-foreground text-sm font-mono">
+                No tasks yet
+              </div>
+            ) : (
+              <div className="flex flex-col sm:flex-row items-center gap-4">
+                <div className="w-full h-[180px] flex items-center justify-center">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <RadarChart cx="50%" cy="50%" outerRadius="70%" data={taskStatusData}>
+                      <PolarGrid stroke="rgba(255,255,255,0.06)" />
+                      <PolarAngleAxis
+                        dataKey="name"
+                        tick={{ fontSize: 9, fontFamily: "monospace", fill: "rgba(255,255,255,0.6)" }}
                       />
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
+                      <PolarRadiusAxis
+                        angle={30}
+                        domain={[0, 'auto']}
+                        tick={{ fontSize: 8, fontFamily: "monospace", fill: "rgba(255,255,255,0.4)" }}
+                        axisLine={false}
+                      />
+                      <Radar
+                        name="Tasks"
+                        dataKey="value"
+                        stroke="var(--color-chart-3)"
+                        fill="var(--color-chart-3)"
+                        fillOpacity={0.25}
+                        dot={{ r: 4, fill: "var(--color-chart-3)", strokeWidth: 0 }}
+                        activeDot={{ r: 6, fill: "var(--color-chart-3)", stroke: "rgba(168,85,247,0.4)", strokeWidth: 3 }}
+                      />
+                      <Tooltip content={<ChartTooltip />} />
+                    </RadarChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="space-y-2 min-w-[130px] w-full sm:w-auto">
+                  {taskStatusData.map((item) => {
+                    const pct = totalTasksForRate > 0 ? Math.round((item.value / totalTasksForRate) * 100) : 0
+                    return (
+                      <div key={item.name} className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2">
+                          <div
+                            className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                            style={{ backgroundColor: item.fill, boxShadow: `0 0 8px ${item.fill}` }}
+                          />
+                          <span className="text-xs font-mono font-bold uppercase text-foreground">
+                            {item.name}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1.5 font-mono">
+                          <span className="text-sm font-black" style={{ color: item.fill }}>
+                            {item.value}
+                          </span>
+                          <span className="text-[10px] text-muted-foreground">({pct}%)</span>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -479,17 +517,37 @@ export function AnalyticsContent({ data }: AnalyticsContentProps) {
             <div className="grid grid-cols-2 gap-3">
 
               {/* Completion rate */}
-              <div className="p-4 rounded-xl border border-emerald-500/20 bg-emerald-500/5 hover:bg-emerald-500/10 transition-all duration-200">
-                <div className="flex items-center gap-2 mb-1">
-                  <CheckCircle className="w-3.5 h-3.5 text-emerald-500" />
-                  <span className="text-[10px] uppercase font-bold text-muted-foreground font-mono">Completion Rate</span>
+              <div className="p-4 rounded-xl border border-emerald-500/20 bg-emerald-500/5 hover:bg-emerald-500/10 transition-all duration-200 flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <CheckCircle className="w-3.5 h-3.5 text-emerald-500" />
+                    <span className="text-[10px] uppercase font-bold text-muted-foreground font-mono">Completion Rate</span>
+                  </div>
+                  <p className="text-2xl font-black font-mono text-emerald-500">{data.completionRate}%</p>
                 </div>
-                <p className="text-2xl font-black font-mono text-emerald-500">{data.completionRate}%</p>
-                <div className="mt-2 w-full bg-secondary/40 h-1 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-emerald-500 rounded-full transition-all duration-1000"
-                    style={{ width: `${data.completionRate}%` }}
-                  />
+                <div className="flex items-center justify-between mt-3 gap-2">
+                  <span className="text-[10px] text-muted-foreground font-mono leading-none">Completed tasks</span>
+                  <div className="relative w-8 h-8 flex-shrink-0 flex items-center justify-center">
+                    <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
+                      <path
+                        className="text-secondary/40"
+                        strokeWidth="3.5"
+                        stroke="currentColor"
+                        fill="none"
+                        d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                      />
+                      <path
+                        className="text-emerald-500 transition-all duration-1000 ease-out"
+                        strokeWidth="3.5"
+                        strokeDasharray={`${data.completionRate}, 100`}
+                        strokeLinecap="round"
+                        stroke="currentColor"
+                        fill="none"
+                        d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                        style={{ filter: "drop-shadow(0 0 2px #10b981)" }}
+                      />
+                    </svg>
+                  </div>
                 </div>
               </div>
 

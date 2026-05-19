@@ -15,7 +15,11 @@ import {
   Plus,
   Search,
   Trash2,
+  Eye,
+  Edit2,
+  Columns,
 } from "lucide-react"
+import { MarkdownPreview } from "./markdown-preview"
 import {
   createNote,
   deleteNote,
@@ -55,6 +59,7 @@ export function JotItContent({ initialNotes }: { initialNotes: JotNote[] }) {
   const [query, setQuery] = useState("")
   const [message, setMessage] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
+  const [mode, setMode] = useState<"edit" | "preview" | "split">("edit")
 
   const filteredNotes = useMemo(() => {
     const value = query.trim().toLowerCase()
@@ -71,6 +76,7 @@ export function JotItContent({ initialNotes }: { initialNotes: JotNote[] }) {
   function resetDraft() {
     setDraft(EMPTY_DRAFT)
     setMessage(null)
+    setMode("edit")
   }
 
   function selectNote(note: JotNote) {
@@ -208,17 +214,62 @@ export function JotItContent({ initialNotes }: { initialNotes: JotNote[] }) {
       </section>
 
       <section className="glass-card rounded-2xl p-5">
-        <div className="flex flex-col gap-3 border-b border-border/40 pb-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-lg font-semibold text-foreground">
-                {selectedNote ? "Edit note" : "New note"}
-              </h2>
-              {selectedNote?.pinned && <Badge className="bg-primary/10 text-primary border border-primary/25">Pinned</Badge>}
+        <div className="flex flex-col gap-3 border-b border-border/40 pb-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-lg font-semibold text-foreground">
+                  {selectedNote ? "Edit note" : "New note"}
+                </h2>
+                {selectedNote?.pinned && <Badge className="bg-primary/10 text-primary border border-primary/25">Pinned</Badge>}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {selectedNote ? `Updated ${formatUpdated(selectedNote.updatedAt)}` : "Capture the thought before it wanders off."}
+              </p>
             </div>
-            <p className="text-xs text-muted-foreground">
-              {selectedNote ? `Updated ${formatUpdated(selectedNote.updatedAt)}` : "Capture the thought before it wanders off."}
-            </p>
+            
+            {/* Mode Switcher */}
+            <div className="flex rounded-lg bg-secondary/30 p-0.5 border border-border/40 w-fit">
+              <button
+                type="button"
+                onClick={() => setMode("edit")}
+                className={cn(
+                  "flex items-center gap-1 px-2.5 py-1 text-xs font-mono font-bold rounded-md transition-all",
+                  mode === "edit"
+                    ? "bg-primary/25 text-primary border border-primary/30"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                <Edit2 className="w-3.5 h-3.5" />
+                <span>Edit</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setMode("preview")}
+                className={cn(
+                  "flex items-center gap-1 px-2.5 py-1 text-xs font-mono font-bold rounded-md transition-all",
+                  mode === "preview"
+                    ? "bg-primary/25 text-primary border border-primary/30"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                <Eye className="w-3.5 h-3.5" />
+                <span>Preview</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setMode("split")}
+                className={cn(
+                  "hidden md:flex items-center gap-1 px-2.5 py-1 text-xs font-mono font-bold rounded-md transition-all",
+                  mode === "split"
+                    ? "bg-primary/25 text-primary border border-primary/30"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                <Columns className="w-3.5 h-3.5" />
+                <span>Split</span>
+              </button>
+            </div>
           </div>
 
           <div className="flex items-center gap-2">
@@ -261,28 +312,94 @@ export function JotItContent({ initialNotes }: { initialNotes: JotNote[] }) {
             className="h-12 glass border-primary/20 text-base font-semibold"
           />
 
-          <div className="flex flex-wrap items-center gap-2">
-            {NOTE_COLORS.map((color) => (
-              <button
-                key={color}
-                type="button"
-                onClick={() => setDraft((current) => ({ ...current, color }))}
-                className={cn(
-                  "h-8 w-8 rounded-full border transition-all",
-                  draft.color === color ? "scale-110 border-foreground shadow-lg" : "border-transparent hover:scale-105",
-                )}
-                style={{ backgroundColor: color }}
-                aria-label={`Set note color ${color}`}
-              />
-            ))}
-          </div>
+          {mode !== "preview" && (
+            <div className="flex flex-wrap items-center gap-2">
+              {NOTE_COLORS.map((color) => (
+                <button
+                  key={color}
+                  type="button"
+                  onClick={() => setDraft((current) => ({ ...current, color }))}
+                  className={cn(
+                    "h-8 w-8 rounded-full border transition-all",
+                    draft.color === color ? "scale-110 border-foreground shadow-lg" : "border-transparent hover:scale-105",
+                  )}
+                  style={{ backgroundColor: color }}
+                  aria-label={`Set note color ${color}`}
+                />
+              ))}
+            </div>
+          )}
 
-          <Textarea
-            value={draft.content}
-            onChange={(event) => setDraft((current) => ({ ...current, content: event.target.value }))}
-            placeholder="Write your note..."
-            className="min-h-[360px] resize-none glass border-primary/20 leading-7"
-          />
+          {mode === "edit" && (
+            <Textarea
+              value={draft.content}
+              onChange={(event) => setDraft((current) => ({ ...current, content: event.target.value }))}
+              placeholder="Write your note (supports Markdown)..."
+              className="min-h-[360px] resize-none glass border-primary/20 leading-7 font-mono text-sm"
+            />
+          )}
+
+          {mode === "preview" && (
+            <div
+              className="min-h-[360px] p-5 rounded-xl glass border-primary/10 overflow-y-auto max-h-[calc(100vh-320px)] border-l-4"
+              style={{ borderLeftColor: draft.color }}
+            >
+              <MarkdownPreview
+                content={draft.content}
+                onContentChange={(newContent) => {
+                  setDraft((current) => ({ ...current, content: newContent }))
+                  const noteId = draft.id
+                  if (noteId) {
+                    startTransition(async () => {
+                      const updatedDraft = { ...draft, content: newContent }
+                      const result = await updateNote(noteId, updatedDraft)
+                      if (result.success && result.note) {
+                        setNotes((current) =>
+                          current.map((n) => (n.id === result.note?.id ? result.note : n))
+                        )
+                        setMessage("Auto-saved check state.")
+                      }
+                    })
+                  }
+                }}
+              />
+            </div>
+          )}
+
+          {mode === "split" && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Textarea
+                value={draft.content}
+                onChange={(event) => setDraft((current) => ({ ...current, content: event.target.value }))}
+                placeholder="Write your note (supports Markdown)..."
+                className="min-h-[360px] resize-none glass border-primary/20 leading-7 font-mono text-sm"
+              />
+              <div
+                className="min-h-[360px] p-5 rounded-xl glass border-primary/10 overflow-y-auto max-h-[calc(100vh-320px)] border-l-4"
+                style={{ borderLeftColor: draft.color }}
+              >
+                <MarkdownPreview
+                  content={draft.content}
+                  onContentChange={(newContent) => {
+                    setDraft((current) => ({ ...current, content: newContent }))
+                    const noteId = draft.id
+                    if (noteId) {
+                      startTransition(async () => {
+                        const updatedDraft = { ...draft, content: newContent }
+                        const result = await updateNote(noteId, updatedDraft)
+                        if (result.success && result.note) {
+                          setNotes((current) =>
+                            current.map((n) => (n.id === result.note?.id ? result.note : n))
+                          )
+                          setMessage("Auto-saved check state.")
+                        }
+                      })
+                    }
+                  }}
+                />
+              </div>
+            </div>
+          )}
 
           {message && (
             <p className="rounded-xl border border-primary/25 bg-primary/10 px-3 py-2 text-sm text-primary">
