@@ -12,6 +12,7 @@ interface DashboardStats {
   activeSprints: number
   teamMembers: number
   deployments: number
+  commitsToday: number
 }
 
 interface StatsCardsProps {
@@ -81,7 +82,7 @@ export function StatsCards({ stats }: StatsCardsProps) {
     {
       title: "Team Members",
       value: stats.teamMembers.toString(),
-      badge: "ONLINE 4",
+      badge: "ACTIVE",
       subtitle: "Active contributors",
       icon: Users,
       color: "chart-5",
@@ -94,7 +95,7 @@ export function StatsCards({ stats }: StatsCardsProps) {
     },
     {
       title: "Commits Today",
-      value: "23",
+      value: stats.commitsToday.toString(),
       badge: "TODAY",
       subtitle: "Across all repos",
       icon: GitBranch,

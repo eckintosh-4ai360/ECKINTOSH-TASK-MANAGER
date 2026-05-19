@@ -2,7 +2,7 @@
 
 import prisma from "@/lib/prisma"
 import { requireSession } from "@/lib/auth"
-import { syncProjectRepository } from "@/lib/actions/github-actions"
+import { syncProjectRepository, getGitHubWorkspaceData } from "@/lib/actions/github-actions"
 import { createNotificationsForUsers, getWorkspaceRecipientIds } from "@/lib/notifications"
 import { canUpdateTaskStatus, getPermissionError, hasPermission } from "@/lib/rbac"
 import { revalidatePath } from "next/cache"
@@ -582,7 +582,10 @@ export async function getDashboardStats() {
     const weekAgo = new Date()
     weekAgo.setDate(weekAgo.getDate() - 7)
 
-    const [totalProjects, completedProjects, activeProjects, pendingTasks, teamMembers, activeSprints, deployments] =
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+
+    const [totalProjects, completedProjects, activeProjects, pendingTasks, teamMembers, activeSprints, deployments, workspaceData] =
       await Promise.all([
         prisma.project.count(),
         prisma.project.count({ where: { status: "completed" } }),
@@ -591,7 +594,13 @@ export async function getDashboardStats() {
         prisma.user.count(),
         prisma.sprint.count({ where: { status: "ACTIVE" } }),
         prisma.deployment.count({ where: { deployedAt: { gte: weekAgo } } }),
+        getGitHubWorkspaceData().catch(() => null)
       ])
+
+    let commitsToday = 0
+    if (workspaceData && workspaceData.activityStream) {
+      commitsToday = workspaceData.activityStream.filter(c => new Date(c.committedAt) >= today).length
+    }
 
     return {
       totalProjects,
@@ -601,6 +610,7 @@ export async function getDashboardStats() {
       activeSprints,
       teamMembers,
       deployments,
+      commitsToday,
     }
   } catch (error) {
     console.error("Failed to fetch dashboard stats:", error)
@@ -612,6 +622,7 @@ export async function getDashboardStats() {
       activeSprints: 0,
       teamMembers: 0,
       deployments: 0,
+      commitsToday: 0,
     }
   }
 }
