@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button"
 import { AddMemberModal } from "@/components/modals/add-member-modal"
 import { requireSession } from "@/lib/auth"
 import { hasPermission } from "@/lib/rbac"
-import { prisma } from "@/lib/prisma"
+import prisma from "@/lib/prisma"
 
 export default async function TeamPage() {
   const session = await requireSession()
