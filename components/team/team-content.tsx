@@ -5,50 +5,22 @@ import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Mail, MessageCircle, MoreHorizontal, CheckCircle2, Clock } from "lucide-react"
 
-const teamMembers = [
-  {
-    name: "Alexandra Deff",
-    role: "Product Designer",
-    email: "alexandra@tasko.com",
-    status: "active",
-    tasks: 12,
-    completed: 8,
-    avatar: "/avatars/avatar-1.jpg",
-    initials: "AD",
-  },
-  {
-    name: "Edwin Adenike",
-    role: "Frontend Developer",
-    email: "edwin@tasko.com",
-    status: "active",
-    tasks: 8,
-    completed: 5,
-    avatar: "/avatars/avatar-2.jpg",
-    initials: "EA",
-  },
-  {
-    name: "Isaac Oluwatemilorun",
-    role: "Backend Developer",
-    email: "isaac@tasko.com",
-    status: "away",
-    tasks: 15,
-    completed: 12,
-    avatar: "/avatars/avatar-3.jpg",
-    initials: "IO",
-  },
-  {
-    name: "David Oshodi",
-    role: "UI/UX Designer",
-    email: "david@tasko.com",
-    status: "active",
-    tasks: 6,
-    completed: 4,
-    avatar: "/avatars/avatar-4.jpg",
-    initials: "DO",
-  },
-]
+export type TeamMember = {
+  name: string
+  role: string
+  email: string
+  status: string
+  tasks: number
+  completed: number
+  avatar: string | null
+  initials: string
+}
 
-export function TeamContent() {
+interface TeamContentProps {
+  teamMembers: TeamMember[]
+}
+
+export function TeamContent({ teamMembers }: TeamContentProps) {
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

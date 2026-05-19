@@ -1,13 +1,46 @@
 import { HeaderWithUser as Header } from "@/components/dashboard/header-with-user"
-import { TeamContent } from "@/components/team/team-content"
+import { TeamContent, TeamMember } from "@/components/team/team-content"
 import { Button } from "@/components/ui/button"
 import { AddMemberModal } from "@/components/modals/add-member-modal"
 import { requireSession } from "@/lib/auth"
 import { hasPermission } from "@/lib/rbac"
+import { prisma } from "@/lib/prisma"
 
 export default async function TeamPage() {
   const session = await requireSession()
   const canManageTeam = hasPermission(session.role, "manage_team")
+
+  const users = await prisma.user.findMany({
+    include: {
+      tasks: true,
+    },
+    orderBy: {
+      name: 'asc'
+    }
+  })
+
+  const teamMembers: TeamMember[] = users.map((user) => {
+    const totalTasks = user.tasks.length
+    const completedTasks = user.tasks.filter((t) => t.status === "DONE").length
+    const name = user.name || "Unknown User"
+    
+    // Calculate initials
+    const nameParts = name.split(" ")
+    const initials = nameParts.length > 1 
+      ? `${nameParts[0][0]}${nameParts[nameParts.length - 1][0]}`.toUpperCase()
+      : name.substring(0, 2).toUpperCase()
+
+    return {
+      name,
+      role: user.title || user.role || "Member",
+      email: user.email,
+      status: "active", // You could add actual presence status if available
+      tasks: totalTasks,
+      completed: completedTasks,
+      avatar: user.avatar,
+      initials,
+    }
+  })
 
   return (
     <>
@@ -24,7 +57,7 @@ export default async function TeamPage() {
       />
 
       <div className="mt-6">
-        <TeamContent />
+        <TeamContent teamMembers={teamMembers} />
       </div>
     </>
   )
