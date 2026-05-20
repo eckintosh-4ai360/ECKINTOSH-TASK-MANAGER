@@ -6,6 +6,7 @@ import {
   Calendar,
   BarChart3,
   Users,
+  User,
   Settings,
   HelpCircle,
   LogOut,
@@ -57,6 +58,7 @@ const commsItems: NavItem[] = [
 
 const systemItems: NavItem[] = [
   { icon: ShieldCheck, label: "Admin", href: "/admin/users" },
+  { icon: User, label: "Profile", href: "/profile" },
   { icon: Settings, label: "Settings", href: "/settings" },
   { icon: HelpCircle, label: "Help", href: "/help" },
   { icon: LogOut, label: "Sign Out", href: "/logout" },

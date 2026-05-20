@@ -348,6 +348,7 @@ export async function updateProfileAction(formData: FormData) {
   })
 
   revalidatePath("/")
+  revalidatePath("/profile")
   revalidatePath("/settings")
 
   return {
