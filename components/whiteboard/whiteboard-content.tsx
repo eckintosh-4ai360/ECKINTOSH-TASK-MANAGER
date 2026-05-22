@@ -212,6 +212,7 @@ export function WhiteboardContent({
   const canvasRef = useRef<ExcalidrawCanvasHandle>(null)
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pendingDataRef = useRef<WhiteboardData | null>(null)
+  const lastSavedDataStrRef = useRef<string>("")
 
   async function handleGenerateDiagram(e: React.FormEvent) {
     e.preventDefault()
@@ -255,7 +256,12 @@ export function WhiteboardContent({
     setCanvasData(null)
     setSaveStatus("idle")
     const data = await getWhiteboardData(id)
-    setCanvasData(data ?? EMPTY_DATA)
+    const initialData = data ?? EMPTY_DATA
+    setCanvasData(initialData)
+    lastSavedDataStrRef.current = JSON.stringify({
+      elements: initialData.elements,
+      files: initialData.files,
+    })
     setIsLoadingBoard(false)
   }
 
@@ -263,12 +269,22 @@ export function WhiteboardContent({
 
   const handleCanvasChange = useCallback(
     (data: WhiteboardData) => {
+      const currentDataStr = JSON.stringify({
+        elements: data.elements,
+        files: data.files,
+      })
+
+      if (currentDataStr === lastSavedDataStrRef.current) {
+        return
+      }
+
       pendingDataRef.current = data
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
       setSaveStatus("saving")
       saveTimerRef.current = setTimeout(async () => {
         if (!activeBoardId || !pendingDataRef.current) return
         await updateWhiteboard(activeBoardId, pendingDataRef.current)
+        lastSavedDataStrRef.current = currentDataStr
         setSaveStatus("saved")
         // Update board updatedAt in sidebar
         setBoards((prev) =>

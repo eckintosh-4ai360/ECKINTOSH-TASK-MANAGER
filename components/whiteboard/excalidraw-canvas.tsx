@@ -404,4 +404,41 @@ export const ExcalidrawCanvas = forwardRef<ExcalidrawCanvasHandle, Props>(
           viewBackgroundColor: typeof appState.viewBackgroundColor === "string" ? appState.viewBackgroundColor : "transparent",
         }
         onChange({
-          elements: elements
+          elements: elements as unknown[],
+          appState: safeAppState,
+          files,
+        })
+      },
+      [onChange],
+    )
+
+    return (
+      <div className="flex-1 h-full w-full" style={{ minHeight: 0 }}>
+        <Excalidraw
+          excalidrawAPI={(api) => { apiRef.current = api }}
+          initialData={{
+            elements: initialData.elements as never,
+            appState: {
+              scrollX: initialData.appState?.scrollX ?? 0,
+              scrollY: initialData.appState?.scrollY ?? 0,
+              zoom: initialData.appState?.zoom ?? { value: 1 },
+              viewBackgroundColor: initialData.appState?.viewBackgroundColor ?? "transparent",
+              theme: isDark ? "dark" : "light",
+            },
+            files: initialData.files as never,
+            scrollToContent: true,
+          }}
+          onChange={handleChange as never}
+          theme={isDark ? "dark" : "light"}
+          UIOptions={{
+            canvasActions: {
+              saveToActiveFile: false,
+              loadScene: false,
+              export: false,
+            },
+          }}
+        />
+      </div>
+    )
+  },
+)
