@@ -6,6 +6,8 @@ import { createProject, createTask } from "@/lib/actions/project-actions"
 import { createCalendarEvent } from "@/lib/actions/calendar-actions"
 import { createSprint } from "@/lib/actions/sprint-actions"
 import { createNote } from "@/lib/actions/note-actions"
+import { marked } from "marked"
+
 
 // ─── Workspace Context ──────────────────────────────────────────────────────
 
@@ -201,9 +203,10 @@ export async function aiCreateNote(args: {
   content: string
   color?: string
 }) {
+  const htmlContent = await marked.parse(args.content)
   return createNote({
     title: args.title,
-    content: args.content,
+    content: htmlContent,
     color: args.color ?? "#00d4ff",
   })
 }

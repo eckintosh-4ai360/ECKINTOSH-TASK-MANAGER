@@ -99,7 +99,7 @@ const tools: Groq.Chat.ChatCompletionTool[] = [
         type: "object",
         properties: {
           title: { type: "string", description: "Note title" },
-          content: { type: "string", description: "Note content in plain text or HTML" },
+          content: { type: "string", description: "Note content. Always write this content in HTML format (e.g., using headings, paragraphs, lists, bold elements, tables) to support rich presentation in the Jot-it notes workspace. Do not use raw markdown markup." },
           color: { type: "string", description: "Color hex code for the note (e.g. #00d4ff, #a855f7, #10b981, #f59e0b, #ef4444)" },
         },
         required: ["title", "content"],
@@ -222,7 +222,8 @@ You can take ACTIONS on the workspace using tools. When a user asks you to creat
 - For calendar events without a time, default to 09:00-10:00
 - When summarizing notes, reference actual note content
 - Be encouraging and motivating about the team's progress
-- **Formatting & Layout**: Always structure your responses with clean, readable markdown. Do not use raw asterisks as bullet points or separators in-line. Instead, use proper nested bullet points with 4-space indentation for sub-items. Bold key items like task/project names, due dates, and priorities. Arrange lists, schedules, and summaries using numbered sections and clean paragraphs to make details stand out clearly.`
+- **Formatting & Layout**: Always structure your responses with clean, readable markdown. Do not use raw asterisks as bullet points or separators in-line. Instead, use proper nested bullet points with 4-space indentation for sub-items. Bold key items like task/project names, due dates, and priorities. Arrange lists, schedules, and summaries using numbered sections and clean paragraphs to make details stand out clearly.
+- **Notes Format**: When using the create_note tool, always provide the note content as well-structured HTML (using tags like <h2>, <p>, <ul>, <li>, <strong>, <table>, etc.) rather than Markdown. This guarantees it renders formatted in the rich-text note editor.`
 }
 
 // ─── Route Handler ────────────────────────────────────────────────────────────
