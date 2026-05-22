@@ -426,7 +426,7 @@ export function WhiteboardContent({
         {activeBoardId && activeBoard ? (
           <>
             {/* Canvas Header */}
-            <div className="flex items-center justify-between px-5 py-2.5 border-b border-border/30 bg-background/30 backdrop-blur-sm flex-shrink-0">
+            <div className="relative z-10 flex items-center justify-between px-5 py-2.5 border-b border-border/30 bg-background/30 backdrop-blur-sm flex-shrink-0">
               <div className="flex items-center gap-3">
                 <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
                 <div>

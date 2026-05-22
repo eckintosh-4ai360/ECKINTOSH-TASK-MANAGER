@@ -35,8 +35,8 @@ export type ExcalidrawCanvasHandle = {
   getSnapshot: () => WhiteboardData | null
   exportPNG: () => Promise<void>
   exportSVG: () => Promise<void>
-  addStickyNote: () => void
-  addDiagram: (nodes: any[], edges: any[]) => void
+  addStickyNote: () => void | Promise<void>
+  addDiagram: (nodes: any[], edges: any[]) => void | Promise<void>
 }
 
 type Props = {
@@ -70,8 +70,9 @@ export const ExcalidrawCanvas = forwardRef<ExcalidrawCanvasHandle, Props>(
         }
       },
 
-      addStickyNote() {
+      async addStickyNote() {
         if (!apiRef.current) return
+        const { convertToExcalidrawElements } = await import("@excalidraw/excalidraw")
         const appState = apiRef.current.getAppState()
         const zoom = appState.zoom?.value || 1
         const cx = -appState.scrollX + appState.width / 2 / zoom
@@ -81,7 +82,7 @@ export const ExcalidrawCanvas = forwardRef<ExcalidrawCanvasHandle, Props>(
         const textId = `sticky_text_${Math.random().toString(36).substr(2, 9)}`
 
         const rectElement = {
-          type: "rectangle",
+          type: "rectangle" as const,
           id: rectId,
           x: cx - 100,
           y: cy - 100,
@@ -89,13 +90,13 @@ export const ExcalidrawCanvas = forwardRef<ExcalidrawCanvasHandle, Props>(
           height: 200,
           strokeColor: "#fab005",
           backgroundColor: "#ffec99",
-          fillStyle: "solid",
+          fillStyle: "solid" as const,
           strokeWidth: 1,
-          strokeStyle: "solid",
+          strokeStyle: "solid" as const,
           roughness: 1,
           opacity: 100,
-          roundness: { type: 3 },
-          boundElements: [{ type: "text", id: textId }],
+          roundness: { type: 3 as const },
+          boundElements: [{ type: "text" as const, id: textId }],
           seed: Math.floor(Math.random() * 100000),
           version: 1,
           versionNonce: Math.floor(Math.random() * 100000),
@@ -104,24 +105,22 @@ export const ExcalidrawCanvas = forwardRef<ExcalidrawCanvasHandle, Props>(
         }
 
         const textElement = {
-          type: "text",
+          type: "text" as const,
           id: textId,
           x: cx - 90,
           y: cy - 90,
           width: 180,
           height: 180,
           strokeColor: "#2b2b2b",
-          backgroundColor: "transparent",
-          fillStyle: "transparent",
           strokeWidth: 1,
-          strokeStyle: "solid",
+          strokeStyle: "solid" as const,
           roughness: 0,
           opacity: 100,
           text: "Type here",
           fontSize: 18,
           fontFamily: 1,
-          textAlign: "center",
-          verticalAlign: "middle",
+          textAlign: "center" as const,
+          verticalAlign: "middle" as const,
           containerId: rectId,
           seed: Math.floor(Math.random() * 100000),
           version: 1,
@@ -130,14 +129,16 @@ export const ExcalidrawCanvas = forwardRef<ExcalidrawCanvasHandle, Props>(
           updated: Date.now(),
         }
 
+        const newElements = convertToExcalidrawElements([rectElement, textElement])
         const existingElements = apiRef.current.getSceneElements()
         apiRef.current.updateScene({
-          elements: [...existingElements, rectElement, textElement],
+          elements: [...existingElements, ...newElements],
         })
       },
 
-      addDiagram(nodes: any[], edges: any[]) {
+      async addDiagram(nodes: any[], edges: any[]) {
         if (!apiRef.current) return
+        const { convertToExcalidrawElements } = await import("@excalidraw/excalidraw")
         const appState = apiRef.current.getAppState()
         const zoom = appState.zoom?.value || 1
         const cx = -appState.scrollX + appState.width / 2 / zoom
@@ -182,7 +183,7 @@ export const ExcalidrawCanvas = forwardRef<ExcalidrawCanvasHandle, Props>(
           const nodeH = node.height || 70
 
           const shapeElement = {
-            type: type === "circle" ? "ellipse" : type === "diamond" ? "diamond" : "rectangle",
+            type: (type === "circle" ? "ellipse" : type === "diamond" ? "diamond" : "rectangle") as "ellipse" | "diamond" | "rectangle",
             id: shapeId,
             x: nodeX,
             y: nodeY,
@@ -190,13 +191,13 @@ export const ExcalidrawCanvas = forwardRef<ExcalidrawCanvasHandle, Props>(
             height: nodeH,
             strokeColor: themeColors.stroke,
             backgroundColor: themeColors.bg,
-            fillStyle: "solid",
+            fillStyle: "solid" as const,
             strokeWidth: 2,
-            strokeStyle: "solid",
+            strokeStyle: "solid" as const,
             roughness: 1,
             opacity: 100,
             roundness: type === "rectangle" ? { type: 3 } : null,
-            boundElements: [{ type: "text", id: textId }],
+            boundElements: [{ type: "text" as const, id: textId }],
             seed: Math.floor(Math.random() * 100000),
             version: 1,
             versionNonce: Math.floor(Math.random() * 100000),
@@ -205,24 +206,22 @@ export const ExcalidrawCanvas = forwardRef<ExcalidrawCanvasHandle, Props>(
           }
 
           const textElement = {
-            type: "text",
+            type: "text" as const,
             id: textId,
             x: nodeX + 10,
             y: nodeY + 10,
             width: nodeW - 20,
             height: nodeH - 20,
             strokeColor: "#2b2b2b",
-            backgroundColor: "transparent",
-            fillStyle: "transparent",
             strokeWidth: 1,
-            strokeStyle: "solid",
+            strokeStyle: "solid" as const,
             roughness: 0,
             opacity: 100,
             text: node.label || "",
             fontSize: 14,
             fontFamily: 2,
-            textAlign: "center",
-            verticalAlign: "middle",
+            textAlign: "center" as const,
+            verticalAlign: "middle" as const,
             containerId: shapeId,
             seed: Math.floor(Math.random() * 100000),
             version: 1,
@@ -283,17 +282,15 @@ export const ExcalidrawCanvas = forwardRef<ExcalidrawCanvasHandle, Props>(
 
           const arrowId = `arrow_${Math.random().toString(36).substr(2, 9)}`
           const arrowElement = {
-            type: "arrow",
+            type: "arrow" as const,
             id: arrowId,
             x: startX,
             y: startY,
             width: Math.abs(endX - startX),
             height: Math.abs(endY - startY),
             strokeColor: "#495057",
-            backgroundColor: "transparent",
-            fillStyle: "transparent",
             strokeWidth: 2,
-            strokeStyle: "solid",
+            strokeStyle: "solid" as const,
             roughness: 1,
             opacity: 100,
             seed: Math.floor(Math.random() * 100000),
@@ -306,7 +303,7 @@ export const ExcalidrawCanvas = forwardRef<ExcalidrawCanvasHandle, Props>(
               [endX - startX, endY - startY],
             ],
             startArrowhead: null,
-            endArrowhead: "arrow",
+            endArrowhead: "arrow" as const,
           }
 
           elementsToAdd.push(arrowElement)
@@ -317,24 +314,22 @@ export const ExcalidrawCanvas = forwardRef<ExcalidrawCanvasHandle, Props>(
             const textId = `arrow_text_${Math.random().toString(36).substr(2, 9)}`
 
             const labelElement = {
-              type: "text",
+              type: "text" as const,
               id: textId,
               x: midX - 60,
               y: midY - 10,
               width: 120,
               height: 20,
               strokeColor: "#495057",
-              backgroundColor: "#ffffff",
-              fillStyle: "solid",
               strokeWidth: 1,
-              strokeStyle: "solid",
+              strokeStyle: "solid" as const,
               roughness: 0,
               opacity: 100,
               text: edge.label,
               fontSize: 11,
               fontFamily: 2,
-              textAlign: "center",
-              verticalAlign: "middle",
+              textAlign: "center" as const,
+              verticalAlign: "middle" as const,
               seed: Math.floor(Math.random() * 100000),
               version: 1,
               versionNonce: Math.floor(Math.random() * 100000),
@@ -346,9 +341,10 @@ export const ExcalidrawCanvas = forwardRef<ExcalidrawCanvasHandle, Props>(
           }
         })
 
+        const newElements = convertToExcalidrawElements(elementsToAdd)
         const existingElements = apiRef.current.getSceneElements()
         apiRef.current.updateScene({
-          elements: [...existingElements, ...elementsToAdd],
+          elements: [...existingElements, ...newElements],
         })
       },
 
