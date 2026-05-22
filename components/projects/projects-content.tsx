@@ -35,11 +35,13 @@ interface Project {
   repositoryUrl?: string | null
   repositoryProvider?: string | null
   repositoryDefaultBranch?: string | null
+  updatedAt: string | Date
 }
 
 interface ProjectsContentProps {
   projects: Project[]
   canManageProjects: boolean
+  initialFilter?: string
 }
 
 const EMPTY_FORM = {
@@ -52,14 +54,20 @@ const EMPTY_FORM = {
   repositoryUrl: "",
 }
 
-export function ProjectsContent({ projects, canManageProjects }: ProjectsContentProps) {
-  const [filter, setFilter] = useState("all")
+export function ProjectsContent({ projects, canManageProjects, initialFilter }: ProjectsContentProps) {
+  const [filter, setFilter] = useState(initialFilter || "all")
   const [search, setSearch] = useState("")
   const [editingProject, setEditingProject] = useState<Project | null>(null)
   const [deletingProject, setDeletingProject] = useState<Project | null>(null)
   const [formData, setFormData] = useState(EMPTY_FORM)
   const [isPending, startTransition] = useTransition()
   const router = useRouter()
+
+  useEffect(() => {
+    if (initialFilter) {
+      setFilter(initialFilter)
+    }
+  }, [initialFilter])
 
   useEffect(() => {
     if (!editingProject) {
@@ -78,9 +86,19 @@ export function ProjectsContent({ projects, canManageProjects }: ProjectsContent
     })
   }, [editingProject])
 
-  const filteredProjects = filter === "all" 
-    ? projects 
-    : projects.filter((p) => p.status.toLowerCase().replace(" ", "-") === filter)
+  const filteredProjects = (() => {
+    if (filter === "all") {
+      return projects
+    }
+    if (filter === "recent") {
+      return [...projects].sort((a, b) => {
+        const timeA = new Date(a.updatedAt).getTime()
+        const timeB = new Date(b.updatedAt).getTime()
+        return timeB - timeA
+      })
+    }
+    return projects.filter((p) => p.status.toLowerCase().replace(" ", "-") === filter)
+  })()
   const visibleProjects = filteredProjects.filter((project) => {
     const query = search.trim().toLowerCase()
     if (!query) return true
@@ -167,6 +185,7 @@ export function ProjectsContent({ projects, canManageProjects }: ProjectsContent
           { key: "all", label: `All (${projects.length})` },
           { key: "active", label: `Active (${projects.filter((p) => p.status === "active").length})` },
           { key: "completed", label: `Completed (${projects.filter((p) => p.status === "completed").length})` },
+          { key: "recent", label: "Recent" },
         ].map((tab) => (
           <Button
             key={tab.key}

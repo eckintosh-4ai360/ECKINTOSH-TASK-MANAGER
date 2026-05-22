@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
+import { useSpeechRecognition } from "@/hooks/use-speech-recognition"
+import { useToast } from "@/hooks/use-toast"
 import {
   Bot,
   Send,
@@ -161,6 +163,40 @@ export function AIAssistantContent({
 
   const bottomRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  const { toast } = useToast()
+
+  const {
+    isListening,
+    interimTranscript,
+    isSupported,
+    start,
+    stop,
+  } = useSpeechRecognition({
+    onResult: (text, isFinal) => {
+      if (isFinal) {
+        setInput((prev) => {
+          const trimmed = prev.trim()
+          return trimmed ? `${trimmed} ${text}` : text
+        })
+      }
+    },
+    onError: (err) => {
+      let description = "An unknown error occurred during speech recognition."
+      if (err === "not-allowed") {
+        description = "Microphone access denied. Please enable microphone permissions in your browser settings."
+      } else if (err === "no-speech") {
+        description = "No speech detected. Please try again."
+      } else if (err === "network") {
+        description = "Network error occurred. Please check your connection."
+      }
+      toast({
+        title: "Voice Input Error",
+        description,
+        variant: "destructive",
+      })
+    },
+  })
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -469,6 +505,17 @@ export function AIAssistantContent({
               rows={2}
               className="resize-none border-0 bg-transparent p-0 focus-visible:ring-0 focus-visible:ring-offset-0 text-sm placeholder:text-muted-foreground/50"
             />
+            {isListening && (
+              <div className="flex items-center gap-2 mb-2 p-1.5 rounded-lg bg-red-500/5 text-xs text-red-400 border border-red-500/10">
+                <span className="flex h-1.5 w-1.5 relative">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-red-500"></span>
+                </span>
+                <span className="italic truncate flex-1 font-mono text-[10px]">
+                  {interimTranscript || "Listening... Speak now."}
+                </span>
+              </div>
+            )}
             <div className="flex items-center justify-between mt-2">
               <div className="flex items-center gap-1.5">
                 <Sparkles className="w-3 h-3 text-primary/50" />
@@ -490,12 +537,41 @@ export function AIAssistantContent({
                 )}
                 <Button
                   size="sm"
-                  variant="outline"
-                  className="gap-1.5 h-8 border-border/50 hover:border-primary/30 text-xs rounded-lg"
-                  title="Voice input (coming soon)"
+                  variant={isListening ? "default" : "outline"}
+                  type="button"
+                  className={cn(
+                    "gap-1.5 h-8 border-border/50 text-xs rounded-lg transition-all duration-200",
+                    isListening
+                      ? "bg-red-500 hover:bg-red-600 text-white animate-pulse border-red-600"
+                      : "hover:border-primary/30"
+                  )}
+                  onClick={() => {
+                    if (!isSupported) {
+                      toast({
+                        title: "Voice Input Unavailable",
+                        description: "Speech recognition is not supported in this browser. Try Chrome, Safari, or Edge.",
+                        variant: "destructive",
+                      })
+                      return
+                    }
+                    if (isListening) {
+                      stop()
+                      toast({
+                        title: "Voice Input Stopped",
+                        description: "Recording finalized.",
+                      })
+                    } else {
+                      start()
+                      toast({
+                        title: "Voice Input Active",
+                        description: "Speak your request. Eckintosh AI is listening...",
+                      })
+                    }
+                  }}
+                  title={isListening ? "Stop listening" : "Voice input"}
                 >
                   <Mic className="w-3.5 h-3.5" />
-                  Talk
+                  {isListening ? "Listening..." : "Talk"}
                 </Button>
                 <Button
                   size="icon"

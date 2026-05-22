@@ -23,6 +23,8 @@ import {
   Type,
 } from "lucide-react"
 import { useEffect } from "react"
+import { useSpeechRecognition } from "@/hooks/use-speech-recognition"
+import { useToast } from "@/hooks/use-toast"
 import "./rich-text-editor.css"
 
 // ─── Toolbar Button ───────────────────────────────────────────────────────────
@@ -123,6 +125,37 @@ export function RichTextEditor({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [content])
+
+  const { toast } = useToast()
+
+  const {
+    isListening,
+    interimTranscript,
+    isSupported,
+    start,
+    stop,
+  } = useSpeechRecognition({
+    onResult: (text, isFinal) => {
+      if (isFinal && editor) {
+        editor.chain().focus().insertContent(text + " ").run()
+      }
+    },
+    onError: (err) => {
+      let description = "An unknown error occurred during speech recognition."
+      if (err === "not-allowed") {
+        description = "Microphone access denied. Please enable microphone permissions in your browser settings."
+      } else if (err === "no-speech") {
+        description = "No speech detected. Please try again."
+      } else if (err === "network") {
+        description = "Network error occurred. Please check your connection."
+      }
+      toast({
+        title: "Voice Typing Error",
+        description,
+        variant: "destructive",
+      })
+    },
+  })
 
   if (!editor) return null
 
@@ -241,11 +274,39 @@ export function RichTextEditor({
         <div className="flex-1" />
         <button
           type="button"
-          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium text-muted-foreground hover:text-foreground hover:bg-white/8 transition-colors border border-border/30"
-          title="Speak to Note (coming soon)"
+          onClick={() => {
+            if (!isSupported) {
+              toast({
+                title: "Voice Typing Unavailable",
+                description: "Speech recognition is not supported in this browser. Try Chrome, Safari, or Edge.",
+                variant: "destructive",
+              })
+              return
+            }
+            if (isListening) {
+              stop()
+              toast({
+                title: "Voice Typing Stopped",
+                description: "Recording finalized.",
+              })
+            } else {
+              start()
+              toast({
+                title: "Voice Typing Active",
+                description: "Speak now. The editor will capture your words...",
+              })
+            }
+          }}
+          className={cn(
+            "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all border",
+            isListening
+              ? "bg-red-500/20 text-red-400 border-red-500/30 animate-pulse"
+              : "text-muted-foreground hover:text-foreground hover:bg-white/8 border-border/30"
+          )}
+          title={isListening ? "Stop listening" : "Speak to Note"}
         >
           <Mic className="w-3.5 h-3.5" />
-          Speak to Note
+          {isListening ? "Listening..." : "Speak to Note"}
         </button>
       </div>
 
@@ -254,6 +315,19 @@ export function RichTextEditor({
         editor={editor}
         className="flex-1"
       />
+
+      {isListening && (
+        <div className="flex items-center gap-2 px-3 py-2 text-xs bg-red-500/5 border-t border-red-500/10">
+          <span className="flex h-2 w-2 relative">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+          </span>
+          <span className="font-bold text-red-400 uppercase tracking-wider text-[10px]">Listening:</span>
+          <span className="italic text-muted-foreground truncate flex-1">
+            {interimTranscript || "Speak now..."}
+          </span>
+        </div>
+      )}
     </div>
   )
 }

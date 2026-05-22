@@ -7,7 +7,13 @@ import { getProjects, getWorkspaceUsers } from "@/lib/actions/project-actions"
 import { requireSession } from "@/lib/auth"
 import { hasPermission } from "@/lib/rbac"
 
-export default async function ProjectsPage() {
+export default async function ProjectsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ filter?: string }>
+}) {
+  const resolvedParams = await searchParams
+  const filter = resolvedParams.filter
   const session = await requireSession()
   const canManageProjects = hasPermission(session.role, "manage_projects")
   const [projects, workspaceUsers] = await Promise.all([
@@ -30,7 +36,7 @@ export default async function ProjectsPage() {
       />
 
       <div className="mt-6">
-        <ProjectsContent projects={projects} canManageProjects={canManageProjects} />
+        <ProjectsContent projects={projects} canManageProjects={canManageProjects} initialFilter={filter} />
       </div>
     </>
   )
