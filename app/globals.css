@@ -316,3 +316,26 @@
   border-color: rgba(0, 212, 255, 0.4);
   box-shadow: 0 0 10px rgba(0, 212, 255, 0.2), inset 0 0 10px rgba(0, 212, 255, 0.05);
 }
+
+/* ── AI Badge special style ─────────────────────────────────────────────── */
+@keyframes ai-badge-glow {
+  0%, 100% { box-shadow: 0 0 4px rgba(0, 212, 255, 0.6); }
+  50%       { box-shadow: 0 0 8px rgba(0, 212, 255, 0.9), 0 0 14px rgba(0, 212, 255, 0.4); }
+}
+
+/* Rich-preview: renders TipTap HTML inside the split/preview pane */
+.rich-preview h1 { font-size: 1.35rem; font-weight: 700; margin: 0.6rem 0 0.3rem; border-bottom: 1px solid rgba(0,0,0,0.08); padding-bottom: 0.2rem; }
+.rich-preview h2 { font-size: 1.15rem; font-weight: 700; margin: 0.5rem 0 0.25rem; }
+.rich-preview h3 { font-size: 1rem;    font-weight: 600; margin: 0.4rem 0 0.2rem; }
+.rich-preview p   { margin: 0.15rem 0; }
+.rich-preview strong { font-weight: 700; }
+.rich-preview em     { font-style: italic; }
+.rich-preview u      { text-decoration: underline; text-underline-offset: 2px; }
+.rich-preview s      { text-decoration: line-through; opacity: 0.7; }
+.rich-preview mark   { background-color: rgba(var(--primary), 0.2); border-radius: 2px; padding: 0 2px; }
+.rich-preview blockquote { border-left: 3px solid rgba(0,212,255,0.5); padding-left: 0.8rem; margin: 0.6rem 0; opacity: 0.8; font-style: italic; }
+.rich-preview ul  { list-style: disc; padding-left: 1.4rem; margin: 0.4rem 0; }
+.rich-preview ol  { list-style: decimal; padding-left: 1.4rem; margin: 0.4rem 0; }
+.rich-preview li  { margin: 0.1rem 0; }
+.rich-preview hr  { border: none; border-top: 1px solid rgba(0,0,0,0.15); margin: 0.8rem 0; }
+.rich-preview code { background: rgba(0,0,0,0.06); border-radius: 4px; padding: 0.1em 0.35em; font-size: 0.82em; font-family: monospace; }

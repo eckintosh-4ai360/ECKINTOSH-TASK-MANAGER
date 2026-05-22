@@ -3,7 +3,6 @@
 import { useMemo, useState, useTransition } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
 import {
@@ -19,7 +18,7 @@ import {
   Edit2,
   Columns,
 } from "lucide-react"
-import { MarkdownPreview } from "./markdown-preview"
+import { RichTextEditor } from "./rich-text-editor"
 import {
   createNote,
   deleteNote,
@@ -201,7 +200,7 @@ export function JotItContent({ initialNotes }: { initialNotes: JotNote[] }) {
                     {note.pinned && <Pin className="h-3 w-3 text-primary flex-shrink-0" />}
                   </div>
                   <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
-                    {note.content || "Empty note"}
+                    {note.content.replace(/<[^>]*>/g, "") || "Empty note"}
                   </p>
                   <p className="mt-2 text-[10px] font-mono text-muted-foreground/70">
                     {formatUpdated(note.updatedAt)}
@@ -331,11 +330,11 @@ export function JotItContent({ initialNotes }: { initialNotes: JotNote[] }) {
           )}
 
           {mode === "edit" && (
-            <Textarea
-              value={draft.content}
-              onChange={(event) => setDraft((current) => ({ ...current, content: event.target.value }))}
-              placeholder="Write your note (supports Markdown)..."
-              className="min-h-[360px] resize-none glass border-primary/20 leading-7 font-mono text-sm"
+            <RichTextEditor
+              content={draft.content}
+              onChange={(html) => setDraft((current) => ({ ...current, content: html }))}
+              placeholder="Write your note..."
+              className="min-h-[360px]"
             />
           )}
 
@@ -343,61 +342,23 @@ export function JotItContent({ initialNotes }: { initialNotes: JotNote[] }) {
             <div
               className="min-h-[360px] p-5 rounded-xl glass border-primary/10 overflow-y-auto max-h-[calc(100vh-320px)] border-l-4"
               style={{ borderLeftColor: draft.color }}
-            >
-              <MarkdownPreview
-                content={draft.content}
-                onContentChange={(newContent) => {
-                  setDraft((current) => ({ ...current, content: newContent }))
-                  const noteId = draft.id
-                  if (noteId) {
-                    startTransition(async () => {
-                      const updatedDraft = { ...draft, content: newContent }
-                      const result = await updateNote(noteId, updatedDraft)
-                      if (result.success && result.note) {
-                        setNotes((current) =>
-                          current.map((n) => (n.id === result.note?.id ? result.note : n))
-                        )
-                        setMessage("Auto-saved check state.")
-                      }
-                    })
-                  }
-                }}
-              />
-            </div>
+              dangerouslySetInnerHTML={{ __html: draft.content || "<p class=\"text-muted-foreground italic\">Nothing to preview yet.</p>" }}
+            />
           )}
 
           {mode === "split" && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Textarea
-                value={draft.content}
-                onChange={(event) => setDraft((current) => ({ ...current, content: event.target.value }))}
-                placeholder="Write your note (supports Markdown)..."
-                className="min-h-[360px] resize-none glass border-primary/20 leading-7 font-mono text-sm"
+              <RichTextEditor
+                content={draft.content}
+                onChange={(html) => setDraft((current) => ({ ...current, content: html }))}
+                placeholder="Write your note..."
+                className="min-h-[360px]"
               />
               <div
-                className="min-h-[360px] p-5 rounded-xl glass border-primary/10 overflow-y-auto max-h-[calc(100vh-320px)] border-l-4"
+                className="rich-preview min-h-[360px] p-5 rounded-xl glass border-primary/10 overflow-y-auto max-h-[calc(100vh-320px)] border-l-4 text-sm leading-7"
                 style={{ borderLeftColor: draft.color }}
-              >
-                <MarkdownPreview
-                  content={draft.content}
-                  onContentChange={(newContent) => {
-                    setDraft((current) => ({ ...current, content: newContent }))
-                    const noteId = draft.id
-                    if (noteId) {
-                      startTransition(async () => {
-                        const updatedDraft = { ...draft, content: newContent }
-                        const result = await updateNote(noteId, updatedDraft)
-                        if (result.success && result.note) {
-                          setNotes((current) =>
-                            current.map((n) => (n.id === result.note?.id ? result.note : n))
-                          )
-                          setMessage("Auto-saved check state.")
-                        }
-                      })
-                    }
-                  }}
-                />
-              </div>
+                dangerouslySetInnerHTML={{ __html: draft.content || "<p class=\"text-muted-foreground italic\">Start writing on the left...</p>" }}
+              />
             </div>
           )}
 

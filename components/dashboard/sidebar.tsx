@@ -21,6 +21,8 @@ import {
   ClipboardList,
   ChevronRight,
   Circle,
+  Bot,
+  PenLine,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useEffect, useState } from "react"
@@ -41,7 +43,9 @@ const workspaceItems: NavItem[] = [
   { icon: GitBranch, label: "Code Ops", href: "/commits", badge: "Live" },
   { icon: Zap, label: "Sprints", href: "/sprints", badge: "New" },
   { icon: CheckSquare, label: "Tasks", href: "/tasks", badge: null },
-  { icon: NotebookPen, label: "Jot it", href: "/jot-it", badge: "New" },
+  { icon: NotebookPen, label: "Jot it", href: "/jot-it", badge: null },
+  { icon: PenLine, label: "Whiteboard", href: "/whiteboard", badge: "New" },
+  { icon: Bot, label: "AI Assistant", href: "/ai-assistant", badge: "AI" },
   { icon: BarChart3, label: "Analytics", href: "/analytics", badge: null },
 ]
 
@@ -127,6 +131,8 @@ export function Sidebar({ role }: { role: AppRole }) {
   const visibleWorkspaceItems = workspaceItems.filter((item) => {
     if (item.href === "/commits") return hasPermission(role, "use_repository_workspace")
     if (item.href === "/jot-it") return hasPermission(role, "manage_own_notes")
+    if (item.href === "/ai-assistant") return hasPermission(role, "manage_own_notes")
+    if (item.href === "/whiteboard") return hasPermission(role, "manage_own_notes")
     if (item.href === "/analytics") return hasPermission(role, "view_analytics")
     return true
   })

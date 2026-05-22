@@ -35,6 +35,7 @@ model User {
   standups         Standup[]
   deployments      Deployment[]    @relation("DeployedBy")
   notes            Note[]
+  whiteboards      Whiteboard[]
 
   @@map("users")
 }
@@ -277,6 +278,21 @@ model Note {
   updatedAt DateTime @updatedAt
 
   @@map("notes")
+}
+
+// ─── Whiteboard ───────────────────────────────────────────────────────────────
+
+model Whiteboard {
+  id        String   @id @default(cuid())
+  title     String   @default("Untitled whiteboard")
+  data      Json     @default("{}")   // Excalidraw elements + appState JSON
+  thumbnail String?                   // base64 PNG thumbnail preview
+  owner     User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  ownerId   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("whiteboards")
 }
 
 // ─── Time Tracking ───────────────────────────────────────────────────────────

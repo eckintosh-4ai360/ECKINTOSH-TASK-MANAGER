@@ -1,0 +1,166 @@
+/* Rich Text Editor Styles */
+/* Injected into TipTap's EditorContent via editorProps.attributes.class */
+
+.rich-text-editor-content {
+  outline: none;
+  min-height: 360px;
+  max-height: calc(100vh - 320px);
+  overflow-y: auto;
+  padding: 1.25rem 1.25rem;
+  font-size: 0.875rem;
+  line-height: 1.75;
+  color: var(--foreground);
+}
+
+/* Placeholder */
+.rich-text-editor-content.is-editor-empty::before {
+  content: attr(data-placeholder);
+  color: var(--muted-foreground);
+  opacity: 0.5;
+  pointer-events: none;
+  float: left;
+  height: 0;
+  font-style: italic;
+}
+
+/* Headings */
+.rich-text-editor-content h1 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1.3;
+  margin-top: 1rem;
+  margin-bottom: 0.5rem;
+  color: var(--foreground);
+  border-bottom: 1px solid hsl(var(--border) / 0.4);
+  padding-bottom: 0.25rem;
+}
+
+.rich-text-editor-content h2 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  line-height: 1.35;
+  margin-top: 0.875rem;
+  margin-bottom: 0.4rem;
+  color: var(--foreground);
+}
+
+.rich-text-editor-content h3 {
+  font-size: 1.05rem;
+  font-weight: 600;
+  line-height: 1.4;
+  margin-top: 0.75rem;
+  margin-bottom: 0.35rem;
+  color: var(--foreground);
+}
+
+/* Paragraph */
+.rich-text-editor-content p {
+  margin-top: 0.25rem;
+  margin-bottom: 0.25rem;
+}
+
+.rich-text-editor-content p:first-child {
+  margin-top: 0;
+}
+
+/* Inline formatting */
+.rich-text-editor-content strong {
+  font-weight: 700;
+}
+
+.rich-text-editor-content em {
+  font-style: italic;
+}
+
+.rich-text-editor-content u {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.rich-text-editor-content s {
+  text-decoration: line-through;
+  opacity: 0.7;
+}
+
+/* Highlight */
+.rich-text-editor-content mark {
+  background-color: hsl(var(--primary) / 0.25);
+  color: var(--foreground);
+  border-radius: 2px;
+  padding: 0 2px;
+}
+
+/* Blockquote */
+.rich-text-editor-content blockquote {
+  border-left: 3px solid hsl(var(--primary) / 0.5);
+  padding-left: 1rem;
+  margin: 0.75rem 0;
+  color: hsl(var(--foreground) / 0.75);
+  font-style: italic;
+}
+
+/* Lists */
+.rich-text-editor-content ul {
+  list-style-type: disc;
+  padding-left: 1.5rem;
+  margin: 0.5rem 0;
+}
+
+.rich-text-editor-content ol {
+  list-style-type: decimal;
+  padding-left: 1.5rem;
+  margin: 0.5rem 0;
+}
+
+.rich-text-editor-content li {
+  margin: 0.15rem 0;
+}
+
+.rich-text-editor-content li > p {
+  margin: 0;
+}
+
+/* Horizontal Rule */
+.rich-text-editor-content hr {
+  border: none;
+  border-top: 1px solid hsl(var(--border) / 0.5);
+  margin: 1rem 0;
+}
+
+/* Code */
+.rich-text-editor-content code {
+  background: hsl(var(--secondary) / 0.6);
+  border: 1px solid hsl(var(--border) / 0.5);
+  border-radius: 4px;
+  padding: 0.1em 0.35em;
+  font-family: 'Fira Code', 'Cascadia Code', monospace;
+  font-size: 0.82em;
+  color: hsl(var(--primary));
+}
+
+.rich-text-editor-content pre {
+  background: hsl(var(--secondary) / 0.4);
+  border: 1px solid hsl(var(--border) / 0.4);
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  margin: 0.75rem 0;
+  overflow-x: auto;
+}
+
+.rich-text-editor-content pre code {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 0.82em;
+  color: var(--foreground);
+}
+
+/* Selection */
+.rich-text-editor-content ::selection {
+  background: hsl(var(--primary) / 0.25);
+}
+
+/* Focus indicator — subtle glow on the whole container, not the content */
+.rich-text-editor-content:focus {
+  outline: none;
+}
