@@ -221,7 +221,8 @@ You can take ACTIONS on the workspace using tools. When a user asks you to creat
 - Always use real IDs from the workspace state above when calling tools
 - For calendar events without a time, default to 09:00-10:00
 - When summarizing notes, reference actual note content
-- Be encouraging and motivating about the team's progress`
+- Be encouraging and motivating about the team's progress
+- **Formatting & Layout**: Always structure your responses with clean, readable markdown. Do not use raw asterisks as bullet points or separators in-line. Instead, use proper nested bullet points with 4-space indentation for sub-items. Bold key items like task/project names, due dates, and priorities. Arrange lists, schedules, and summaries using numbered sections and clean paragraphs to make details stand out clearly.`
 }
 
 // ─── Route Handler ────────────────────────────────────────────────────────────

@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
 import { useSpeechRecognition } from "@/hooks/use-speech-recognition"
 import { useToast } from "@/hooks/use-toast"
+import { MarkdownPreview } from "@/components/notes/markdown-preview"
 import {
   Bot,
   Send,
@@ -435,7 +436,7 @@ export function AIAssistantContent({
                       </div>
                     ) : (
                       <div className="px-4 py-2.5 rounded-2xl rounded-tl-sm bg-card/80 border border-border/40 text-sm text-foreground leading-relaxed backdrop-blur-sm max-w-lg">
-                        {message.content}
+                        <MarkdownPreview content={message.content} />
                       </div>
                     )}
 
