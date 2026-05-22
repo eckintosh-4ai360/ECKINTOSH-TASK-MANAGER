@@ -44,7 +44,7 @@ export default async function DashboardPage() {
     <>
       <Header
         title="Command Center"
-        description="Your dev team's operations hub — sprints, deploys, standups, all in one place."
+        description="Dev team's operations hub — sprints, deploys, standups, all in one place."
         actions={canManageProjects ? (
           <>
             <AddProjectModal workspaceUsers={workspaceUsers}>
