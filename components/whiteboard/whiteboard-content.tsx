@@ -82,14 +82,20 @@ function BoardItem({
   const [editing, setEditing] = useState(false)
   const [title, setTitle] = useState(board.title)
   const inputRef = useRef<HTMLInputElement>(null)
+  const isEditingRef = useRef(false)
 
   function startEdit(e: React.MouseEvent) {
     e.stopPropagation()
+    isEditingRef.current = true
     setEditing(true)
-    setTimeout(() => inputRef.current?.select(), 10)
+    setTimeout(() => {
+      inputRef.current?.focus()
+      inputRef.current?.select()
+    }, 50)
   }
 
   function commitRename() {
+    isEditingRef.current = false
     setEditing(false)
     if (title.trim() && title.trim() !== board.title) {
       onRename(title.trim())
@@ -125,7 +131,11 @@ function BoardItem({
             onBlur={commitRename}
             onKeyDown={(e) => {
               if (e.key === "Enter") commitRename()
-              if (e.key === "Escape") { setEditing(false); setTitle(board.title) }
+              if (e.key === "Escape") {
+                isEditingRef.current = false
+                setEditing(false)
+                setTitle(board.title)
+              }
             }}
             onClick={(e) => e.stopPropagation()}
             className="flex-1 min-w-0 bg-transparent border-b border-primary/40 outline-none text-sm font-medium text-foreground"
@@ -142,7 +152,15 @@ function BoardItem({
               <MoreHorizontal className="w-3.5 h-3.5" />
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-40">
+          <DropdownMenuContent
+            align="end"
+            className="w-40"
+            onCloseAutoFocus={(e) => {
+              if (isEditingRef.current || editing) {
+                e.preventDefault()
+              }
+            }}
+          >
             <DropdownMenuItem onClick={startEdit}>
               <PenLine className="w-3.5 h-3.5 mr-2" />
               Rename

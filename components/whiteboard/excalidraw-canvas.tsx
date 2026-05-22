@@ -419,10 +419,10 @@ export const ExcalidrawCanvas = forwardRef<ExcalidrawCanvasHandle, Props>(
           initialData={{
             elements: initialData.elements as never,
             appState: {
-              scrollX: initialData.appState?.scrollX ?? 0,
-              scrollY: initialData.appState?.scrollY ?? 0,
-              zoom: initialData.appState?.zoom ?? { value: 1 },
-              viewBackgroundColor: initialData.appState?.viewBackgroundColor ?? "transparent",
+              scrollX: (initialData.appState as any)?.scrollX ?? 0,
+              scrollY: (initialData.appState as any)?.scrollY ?? 0,
+              zoom: (initialData.appState as any)?.zoom ?? { value: 1 },
+              viewBackgroundColor: (initialData.appState as any)?.viewBackgroundColor ?? "transparent",
               theme: isDark ? "dark" : "light",
             },
             files: initialData.files as never,
