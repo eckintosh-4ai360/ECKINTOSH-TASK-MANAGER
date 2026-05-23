@@ -502,6 +502,9 @@ export async function getTasks() {
         assignee: {
           select: { name: true, avatar: true },
         },
+        _count: {
+          select: { comments: true },
+        },
       },
       orderBy: { createdAt: "desc" },
     })

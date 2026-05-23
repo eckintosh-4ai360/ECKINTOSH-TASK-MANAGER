@@ -11,13 +11,15 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { Search, Calendar, Tag, SlidersHorizontal, MoreHorizontal, Pencil, Trash2, Flag, Brain, WandSparkles, Loader2 } from "lucide-react"
+import { Search, Calendar, Tag, SlidersHorizontal, MoreHorizontal, Pencil, Trash2, Flag, Brain, WandSparkles, Loader2, LayoutGrid, List } from "lucide-react"
 import { createTask, deleteTask, toggleTaskStatus, updateTask } from "@/lib/actions/project-actions"
 import { aiParseTaskCapture, type SmartTaskDraft } from "@/lib/actions/ai-actions"
 import { scoreTaskPriority } from "@/lib/ai/productivity-engine"
 import type { SprintOption } from "@/lib/actions/sprint-actions"
 import { useSearch } from "@/components/dashboard/search-context"
 import { toast } from "sonner"
+import { KanbanBoard } from "./kanban-board"
+import { TaskDetailSheet } from "./task-detail-sheet"
 
 interface Task {
   id: string
@@ -34,6 +36,8 @@ interface Task {
   updatedAt?: Date | string | null
   project?: { name: string }
   sprint?: { id: string; name: string } | null
+  assignee?: { name: string | null; avatar: string | null } | null
+  _count?: { comments?: number }
 }
 
 interface ProjectOption {
@@ -70,6 +74,9 @@ const EMPTY_FORM = {
 }
 
 export function TasksContent({ tasks, projects, sprints, users, currentUserId, canManageTasks }: TasksContentProps) {
+  const [viewMode, setViewMode] = useState<"list" | "board">("board")
+  const [activeDetailTask, setActiveDetailTask] = useState<Task | null>(null)
+  const [isDetailOpen, setIsDetailOpen] = useState(false)
   const [filter, setFilter] = useState("all")
   const [sortMode, setSortMode] = useState<"ai" | "recent">("ai")
   const [captureText, setCaptureText] = useState("")
@@ -117,6 +124,16 @@ export function TasksContent({ tasks, projects, sprints, users, currentUserId, c
       setFormData((current) => ({ ...current, sprintId: "none" }))
     }
   }, [availableSprints, formData.sprintId])
+
+  // Synchronize activeDetailTask with parent tasks changes
+  useEffect(() => {
+    if (activeDetailTask) {
+      const updated = tasks.find((t) => t.id === activeDetailTask.id)
+      if (updated) {
+        setActiveDetailTask(updated)
+      }
+    }
+  }, [tasks, activeDetailTask])
 
   const handleToggle = (taskId: string, currentStatus: string) => {
     startTransition(async () => {
@@ -419,7 +436,7 @@ export function TasksContent({ tasks, projects, sprints, users, currentUserId, c
         </div>
       )}
 
-      <div className="flex gap-2 flex-wrap">
+      <div className="flex gap-2 flex-wrap items-center w-full">
         {[
           { key: "all", label: `All (${tasks.length})` },
           { key: "active", label: `Active (${tasks.filter((t) => t.status !== "COMPLETED").length})` },
@@ -451,93 +468,149 @@ export function TasksContent({ tasks, projects, sprints, users, currentUserId, c
           <Brain className="h-3.5 w-3.5" />
           {sortMode === "ai" ? "AI ranked" : "Recent order"}
         </Button>
+
+        <div className="ml-auto flex items-center gap-1 border border-primary/15 rounded-lg p-0.5 glass">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => setViewMode("board")}
+            className={`h-7 px-2.5 rounded-md gap-1.5 text-xs transition-all ${
+              viewMode === "board"
+                ? "bg-primary/20 text-primary border border-primary/25"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <LayoutGrid className="w-3.5 h-3.5" />
+            Board
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => setViewMode("list")}
+            className={`h-7 px-2.5 rounded-md gap-1.5 text-xs transition-all ${
+              viewMode === "list"
+                ? "bg-primary/20 text-primary border border-primary/25"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <List className="w-3.5 h-3.5" />
+            List
+          </Button>
+        </div>
       </div>
 
-      <div className="grid gap-3">
-        {tasks.length === 0 && (
-          <p className="text-sm text-muted-foreground text-center py-8 italic">No tasks found. Create one to get started!</p>
-        )}
-        {displayTasks.map(({ task, ai }, index) => (
-          <div
-            key={task.id}
-            className="glass-card rounded-xl p-4 hover:border-primary/30 transition-all duration-300 cursor-pointer animate-slide-in"
-            style={{ animationDelay: `${index * 50}ms` }}
-          >
-            <div className="flex items-start gap-4">
-              <Checkbox 
-                checked={task.status === "COMPLETED"} 
-                onCheckedChange={() => handleToggle(task.id, task.status)}
-                disabled={isPending || (!canManageTasks && task.assigneeId !== currentUserId)}
-                className="mt-1 border-primary/30 data-[state=checked]:bg-primary data-[state=checked]:border-primary" 
-              />
-              <div className="flex-1 space-y-2">
-                <div className="flex items-start justify-between gap-4">
-                  <h3 className={`font-semibold text-foreground ${task.status === "COMPLETED" ? "line-through opacity-60" : ""}`}>
-                    {task.title}
-                  </h3>
-                  <div className="flex items-center gap-2">
-                    <span className={`text-[10px] px-2 py-0.5 rounded border font-mono uppercase ${
-                      ai.score >= 75
-                        ? "bg-destructive/20 text-destructive border-destructive/30"
-                        : ai.score >= 45
-                          ? "bg-amber-400/15 text-amber-300 border-amber-400/25"
-                          : "bg-emerald-400/15 text-emerald-300 border-emerald-400/25"
-                    }`}>
-                      AI {ai.score}
+      {viewMode === "board" ? (
+        <KanbanBoard
+          tasks={displayTasks.map(({ task }) => task)}
+          onCardClick={(task) => {
+            setActiveDetailTask(task)
+            setIsDetailOpen(true)
+          }}
+          projects={projects}
+          sprints={sprints}
+          canManageTasks={canManageTasks}
+          aiScores={rankedTasks.reduce((acc, curr) => {
+            acc[curr.task.id] = curr.ai.score
+            return acc
+          }, {} as Record<string, number>)}
+        />
+      ) : (
+        <div className="grid gap-3">
+          {displayTasks.length === 0 && (
+            <p className="text-sm text-muted-foreground text-center py-8 italic">No tasks found. Create one to get started!</p>
+          )}
+          {displayTasks.map(({ task, ai }, index) => (
+            <div
+              key={task.id}
+              onClick={(e) => {
+                const target = e.target as HTMLElement
+                if (target.closest('button') || target.closest('input') || target.closest('[role="checkbox"]')) {
+                  return
+                }
+                setActiveDetailTask(task)
+                setIsDetailOpen(true)
+              }}
+              className="glass-card rounded-xl p-4 hover:border-primary/30 transition-all duration-300 cursor-pointer animate-slide-in"
+              style={{ animationDelay: `${index * 50}ms` }}
+            >
+              <div className="flex items-start gap-4">
+                <Checkbox 
+                  checked={task.status === "COMPLETED"} 
+                  onCheckedChange={() => handleToggle(task.id, task.status)}
+                  disabled={isPending || (!canManageTasks && task.assigneeId !== currentUserId)}
+                  className="mt-1 border-primary/30 data-[state=checked]:bg-primary data-[state=checked]:border-primary" 
+                />
+                <div className="flex-1 space-y-2">
+                  <div className="flex items-start justify-between gap-4">
+                    <h3 className={`font-semibold text-foreground ${task.status === "COMPLETED" ? "line-through opacity-60" : ""}`}>
+                      {task.title}
+                    </h3>
+                    <div className="flex items-center gap-2">
+                      <span className={`text-[10px] px-2 py-0.5 rounded border font-mono uppercase ${
+                        ai.score >= 75
+                          ? "bg-destructive/20 text-destructive border-destructive/30"
+                          : ai.score >= 45
+                            ? "bg-amber-400/15 text-amber-300 border-amber-400/25"
+                            : "bg-emerald-400/15 text-emerald-300 border-emerald-400/25"
+                      }`}>
+                        AI {ai.score}
+                      </span>
+                      <span className={`text-[10px] px-2 py-0.5 rounded border font-mono uppercase ${getPriorityStyle(task.priority)}`}>
+                        {task.priority}
+                      </span>
+                      {canManageTasks && (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={(e) => e.stopPropagation()}>
+                              <MoreHorizontal className="w-4 h-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="glass-card border-primary/20">
+                            <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setEditingTask(task); }}>
+                              <Pencil className="w-4 h-4 text-primary" />
+                              Edit task
+                            </DropdownMenuItem>
+                            <DropdownMenuItem variant="destructive" onClick={(e) => { e.stopPropagation(); setDeletingTask(task); }}>
+                              <Trash2 className="w-4 h-4" />
+                              Delete task
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+                    {task.project && (
+                      <span className="flex items-center gap-1.5 font-mono text-xs">
+                        <Tag className="w-3.5 h-3.5 text-primary" />
+                        {task.project.name}
+                      </span>
+                    )}
+                    {task.sprint && (
+                      <span className="flex items-center gap-1.5 font-mono text-xs">
+                        <Flag className="w-3.5 h-3.5 text-primary" />
+                        {task.sprint.name}
+                      </span>
+                    )}
+                    <span className="flex items-center gap-1.5 font-mono text-xs">
+                      <Calendar className="w-3.5 h-3.5 text-primary" />
+                      {task.dueDate ? new Date(task.dueDate).toLocaleDateString() : "No date"}
                     </span>
-                    <span className={`text-[10px] px-2 py-0.5 rounded border font-mono uppercase ${getPriorityStyle(task.priority)}`}>
-                      {task.priority}
-                    </span>
-                    {canManageTasks && (
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-8 w-8">
-                            <MoreHorizontal className="w-4 h-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="glass-card border-primary/20">
-                          <DropdownMenuItem onClick={() => setEditingTask(task)}>
-                            <Pencil className="w-4 h-4 text-primary" />
-                            Edit task
-                          </DropdownMenuItem>
-                          <DropdownMenuItem variant="destructive" onClick={() => setDeletingTask(task)}>
-                            <Trash2 className="w-4 h-4" />
-                            Delete task
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                    {ai.reasons[0] && (
+                      <span className="flex items-center gap-1.5 font-mono text-xs text-primary/80">
+                        <Brain className="w-3.5 h-3.5" />
+                        {ai.reasons.slice(0, 2).join(", ")}
+                      </span>
                     )}
                   </div>
                 </div>
-                <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
-                  {task.project && (
-                    <span className="flex items-center gap-1.5 font-mono text-xs">
-                      <Tag className="w-3.5 h-3.5 text-primary" />
-                      {task.project.name}
-                    </span>
-                  )}
-                  {task.sprint && (
-                    <span className="flex items-center gap-1.5 font-mono text-xs">
-                      <Flag className="w-3.5 h-3.5 text-primary" />
-                      {task.sprint.name}
-                    </span>
-                  )}
-                  <span className="flex items-center gap-1.5 font-mono text-xs">
-                    <Calendar className="w-3.5 h-3.5 text-primary" />
-                    {task.dueDate ? new Date(task.dueDate).toLocaleDateString() : "No date"}
-                  </span>
-                  {ai.reasons[0] && (
-                    <span className="flex items-center gap-1.5 font-mono text-xs text-primary/80">
-                      <Brain className="w-3.5 h-3.5" />
-                      {ai.reasons.slice(0, 2).join(", ")}
-                    </span>
-                  )}
-                </div>
               </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
 
       <Dialog open={Boolean(editingTask)} onOpenChange={(open) => !open && setEditingTask(null)}>
         <DialogContent className="glass-card border-primary/20 sm:max-w-[560px]">
@@ -722,6 +795,17 @@ export function TasksContent({ tasks, projects, sprints, users, currentUserId, c
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <TaskDetailSheet
+        task={activeDetailTask}
+        isOpen={isDetailOpen}
+        onClose={() => setIsDetailOpen(false)}
+        projects={projects}
+        sprints={sprints}
+        users={users}
+        currentUserId={currentUserId}
+        canManageTasks={canManageTasks}
+      />
     </div>
   )
 }

@@ -23,6 +23,7 @@ model User {
   projects         Project[]
   projectMembers   ProjectMember[]
   tasks            Task[]
+  taskComments     TaskComment[]
   teamMembers      TeamMember[]
   notifications    Notification[]
   notificationPreference NotificationPreference?
@@ -113,6 +114,7 @@ model Task {
   subtasks    Subtask[]
   reminders   Reminder[]
   timeEntries TimeEntry[]
+  comments    TaskComment[]
 
   @@map("tasks")
 }
@@ -124,6 +126,21 @@ enum TaskStatus {
   IN_REVIEW
   COMPLETED
   ARCHIVED
+}
+
+// ─── Task Comment ────────────────────────────────────────────────────────────
+
+model TaskComment {
+  id        String   @id @default(cuid())
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  taskId    String
+  author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  authorId  String
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("task_comments")
 }
 
 // ─── Subtask ─────────────────────────────────────────────────────────────────
