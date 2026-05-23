@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { useState, useEffect, useTransition } from "react"
+import { useState, useEffect, useTransition, useRef, KeyboardEvent } from "react"
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -14,9 +14,13 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { getTaskComments, addTaskComment, deleteTaskComment, sendTaskCollaborationInvite } from "@/lib/actions/task-invite-actions"
 import { updateTask } from "@/lib/actions/project-actions"
-import { Calendar, Tag, Flag, Brain, UserPlus, Send, Trash2, MessageSquare, Sparkles, Loader2 } from "lucide-react"
+import { UserPlus, Send, Trash2, MessageSquare, Sparkles, Loader2, X, Copy, Check, Link2, Mail } from "lucide-react"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
+
+function isValidEmail(email: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+}
 
 interface Task {
   id: string
@@ -89,10 +93,49 @@ export function TaskDetailSheet({
   const router = useRouter()
   const [comments, setComments] = useState<Comment[]>([])
   const [newComment, setNewComment] = useState("")
-  const [inviteEmails, setInviteEmails] = useState("")
+  const [inviteChips, setInviteChips] = useState<string[]>([])
+  const [inviteInput, setInviteInput] = useState("")
   const [isSendingInvite, setIsSendingInvite] = useState(false)
+  const [isCopied, setIsCopied] = useState(false)
   const [isPending, startTransition] = useTransition()
   const [isCommentsLoading, setIsCommentsLoading] = useState(false)
+  const inviteInputRef = useRef<HTMLInputElement>(null)
+
+  const inviteLink = typeof window !== "undefined" ? `${window.location.origin}/login` : "/login"
+
+  const addInviteChip = (email: string) => {
+    const trimmed = email.trim().toLowerCase()
+    if (!trimmed) return
+    if (!isValidEmail(trimmed)) { toast.error(`"${trimmed}" is not a valid email.`); return }
+    if (inviteChips.includes(trimmed)) { toast.error("Already added."); return }
+    setInviteChips((prev) => [...prev, trimmed])
+    setInviteInput("")
+  }
+
+  const removeInviteChip = (email: string) =>
+    setInviteChips((prev) => prev.filter((c) => c !== email))
+
+  const handleInviteKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter" || e.key === "," || e.key === " ") {
+      e.preventDefault(); addInviteChip(inviteInput)
+    } else if (e.key === "Backspace" && !inviteInput && inviteChips.length > 0) {
+      setInviteChips((prev) => prev.slice(0, -1))
+    }
+  }
+
+  const handleInvitePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    e.preventDefault()
+    e.clipboardData.getData("text").split(/[\s,;]+/).filter(Boolean).forEach(addInviteChip)
+  }
+
+  const handleCopyInviteLink = async () => {
+    try {
+      await navigator.clipboard.writeText(inviteLink)
+      setIsCopied(true)
+      toast.success("Invite link copied!")
+      setTimeout(() => setIsCopied(false), 2500)
+    } catch { toast.error("Could not copy link.") }
+  }
 
   // Local copy of task form for editing
   const [title, setTitle] = useState("")
@@ -229,20 +272,26 @@ export function TaskDetailSheet({
 
   const handleSendInvite = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!inviteEmails.trim()) return
+    // commit any typed-but-not-chipped email
+    if (inviteInput.trim()) addInviteChip(inviteInput)
+    const allEmails = [
+      ...inviteChips,
+      ...(inviteInput.trim() ? [inviteInput.trim()] : []),
+    ]
+    if (allEmails.length === 0) {
+      toast.error("Add at least one email address.")
+      inviteInputRef.current?.focus()
+      return
+    }
 
     setIsSendingInvite(true)
-    const emails = inviteEmails.split(",").map((email) => email.trim()).filter(Boolean)
-    
-    const res = await sendTaskCollaborationInvite({
-      taskId: task.id,
-      emails,
-    })
-
+    const res = await sendTaskCollaborationInvite({ taskId: task.id, emails: allEmails })
     setIsSendingInvite(false)
+
     if (res.success) {
-      toast.success(res.message ?? "Invitations sent successfully!")
-      setInviteEmails("")
+      toast.success(res.message ?? "Invitations sent!")
+      setInviteChips([])
+      setInviteInput("")
     } else {
       toast.error(res.error ?? "Failed to send invitations.")
     }
@@ -493,37 +542,78 @@ export function TaskDetailSheet({
               <Separator className="bg-primary/10" />
 
               {/* Share / Invitation Box */}
-              <div className="space-y-3 p-4 rounded-xl border border-primary/10 bg-primary/5">
-                <div className="flex items-center gap-1.5 text-xs font-semibold text-primary">
-                  <UserPlus className="w-3.5 h-3.5" />
-                  <span>Invite Collaborators</span>
+              <div className="space-y-3 p-3.5 rounded-xl border border-primary/15 bg-primary/5">
+                <div className="flex items-center gap-1.5">
+                  <div className="h-6 w-6 rounded-lg bg-primary/15 border border-primary/25 flex items-center justify-center shrink-0">
+                    <UserPlus className="w-3 h-3 text-primary" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-foreground leading-none">Invite Collaborators</p>
+                    <p className="text-[9px] text-muted-foreground mt-0.5">Add teammates via email</p>
+                  </div>
                 </div>
-                
-                <p className="text-[10px] text-muted-foreground leading-relaxed">
-                  Send email invitations directly to add developers, stakeholders, or clients to collaborate on this task.
-                </p>
 
-                <form onSubmit={handleSendInvite} className="space-y-2">
-                  <Input
-                    placeholder="email@example.com, user@domain.com"
-                    value={inviteEmails}
-                    onChange={(e) => setInviteEmails(e.target.value)}
-                    className="glass border-primary/15 h-8 text-xs placeholder:text-[10px]"
-                    required
-                  />
+                <form onSubmit={handleSendInvite} className="space-y-2.5">
+                  {/* Chip Input */}
+                  <div
+                    onClick={() => inviteInputRef.current?.focus()}
+                    className="min-h-[40px] glass border border-primary/20 rounded-lg px-2.5 py-1.5 flex flex-wrap gap-1.5 items-center cursor-text focus-within:border-primary/50 transition-colors"
+                  >
+                    {inviteChips.map((email) => (
+                      <div
+                        key={email}
+                        className="flex items-center gap-1 bg-primary/15 border border-primary/25 text-primary text-[10px] rounded-md px-2 py-0.5 font-medium"
+                      >
+                        <span className="max-w-[110px] truncate">{email}</span>
+                        <button
+                          type="button"
+                          onClick={() => removeInviteChip(email)}
+                          className="text-primary/60 hover:text-primary transition-colors"
+                        >
+                          <X className="h-2.5 w-2.5" />
+                        </button>
+                      </div>
+                    ))}
+                    <input
+                      ref={inviteInputRef}
+                      type="email"
+                      value={inviteInput}
+                      onChange={(e) => setInviteInput(e.target.value)}
+                      onKeyDown={handleInviteKeyDown}
+                      onBlur={() => inviteInput.trim() && addInviteChip(inviteInput)}
+                      onPaste={handleInvitePaste}
+                      placeholder={inviteChips.length === 0 ? "email@example.com..." : "Add more..."}
+                      className="flex-1 min-w-[100px] bg-transparent text-xs text-foreground placeholder:text-muted-foreground/50 outline-none border-none focus:ring-0 py-0.5"
+                      disabled={isSendingInvite}
+                    />
+                  </div>
+
+                  {/* Copy Link Row */}
+                  <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg border border-primary/10 bg-black/20">
+                    <Link2 className="h-3 w-3 text-primary/60 shrink-0" />
+                    <span className="flex-1 text-[9px] text-muted-foreground truncate">{inviteLink}</span>
+                    <button
+                      type="button"
+                      onClick={handleCopyInviteLink}
+                      className={`flex items-center gap-1 text-[9px] font-semibold transition-colors shrink-0 ${
+                        isCopied ? "text-emerald-400" : "text-primary/70 hover:text-primary"
+                      }`}
+                    >
+                      {isCopied ? <Check className="h-2.5 w-2.5" /> : <Copy className="h-2.5 w-2.5" />}
+                      {isCopied ? "Copied!" : "Copy link"}
+                    </button>
+                  </div>
+
                   <Button
                     type="submit"
                     size="sm"
-                    className="w-full text-xs h-8 bg-gradient-to-r from-primary to-primary/80 text-primary-foreground font-semibold hover:from-primary hover:to-primary/95 transition-all shadow-md shadow-primary/10"
-                    disabled={isSendingInvite || !inviteEmails.trim()}
+                    className="w-full text-xs h-8 bg-gradient-to-r from-primary to-primary/80 text-primary-foreground font-semibold hover:from-primary/90 hover:to-primary/70 transition-all shadow-md shadow-primary/10 gap-1.5"
+                    disabled={isSendingInvite || (inviteChips.length === 0 && !inviteInput.trim())}
                   >
                     {isSendingInvite ? (
-                      <>
-                        <Loader2 className="w-3 h-3 mr-1 animate-spin" />
-                        Inviting...
-                      </>
+                      <><Loader2 className="w-3 h-3 animate-spin" /> Inviting...</>
                     ) : (
-                      "Send Invitation Link"
+                      <><Send className="w-3 h-3" /> Send {inviteChips.length > 0 ? `${inviteChips.length} Invite${inviteChips.length !== 1 ? "s" : ""}` : "Invite"}</>
                     )}
                   </Button>
                 </form>
