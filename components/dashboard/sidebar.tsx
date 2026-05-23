@@ -17,15 +17,13 @@ import {
   NotebookPen,
   Zap,
   GitBranch,
-  Rocket,
   ClipboardList,
   ChevronRight,
-  Circle,
   Bot,
   PenLine,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { hasPermission, type AppRole } from "@/lib/rbac"
@@ -68,12 +66,7 @@ const systemItems: NavItem[] = [
   { icon: LogOut, label: "Sign Out", href: "/logout" },
 ]
 
-// Sample recent projects for sidebar quick-access
-const recentProjects = [
-  { name: "E-Commerce API", color: "#00d4ff", status: "active" },
-  { name: "DevFlow Platform", color: "#a855f7", status: "active" },
-  { name: "Mobile App v2", color: "#10b981", status: "paused" },
-]
+
 
 
 function NavSection({ title, items }: { title: string; items: NavItem[] }) {
@@ -124,8 +117,6 @@ function NavSection({ title, items }: { title: string; items: NavItem[] }) {
 }
 
 export function Sidebar({ role }: { role: AppRole }) {
-  const [dynamicRecent, setDynamicRecent] = useState<{ name: string; color: string; status: string }[]>([]);
-  const [activeSprintInfo, setActiveSprintInfo] = useState<{ id: string; name: string; status: string; project: { id: string; name: string; color: string }; stats?: { total: number; done: number } } | null>(null);
   const pathname = usePathname()
 
   const visibleWorkspaceItems = workspaceItems.filter((item) => {
@@ -142,30 +133,6 @@ export function Sidebar({ role }: { role: AppRole }) {
     if (item.href === "/emails") return hasPermission(role, "use_email")
     return true
   })
-
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const pr = await fetch('/api/recent-projects')
-        if (pr.ok) {
-          const data = await pr.json()
-          if (Array.isArray(data)) setDynamicRecent(data)
-        }
-        const spr = await fetch('/api/active-sprint')
-        if (spr.ok) {
-          const data = await spr.json()
-          if (data?.sprint) setActiveSprintInfo(data.sprint)
-        }
-      } catch { /* ignore */ }
-    }
-    fetchData()
-  }, [])
-
-  const recentList = (dynamicRecent.length > 0 ? dynamicRecent : [
-    { name: "E-Commerce API", color: "#00d4ff", status: "active" },
-    { name: "DevFlow Platform", color: "#a855f7", status: "active" },
-    { name: "Mobile App v2", color: "#10b981", status: "paused" },
-  ]).slice(0, 3)
 
   const visibleSystemItems = systemItems.filter((item) => {
     if (item.href === "/admin/users") return hasPermission(role, "manage_users")
@@ -204,40 +171,7 @@ export function Sidebar({ role }: { role: AppRole }) {
         <NavSection title="Team" items={teamItems} />
         <NavSection title="Communication" items={visibleCommsItems} />
 
-        {/* ── Recent Projects ──────────────────────────── */}
-        <div>
-          <p className="text-[9px] font-bold text-primary/60 mb-2 uppercase tracking-[0.15em] flex items-center gap-2 px-1">
-            <span className="w-4 h-px bg-gradient-to-r from-primary/40 to-transparent" />
-            Recent Projects
-          </p>
-          <nav className="space-y-0.5">
-            {recentList.map((proj) => (
-              <Link
-                key={proj.name}
-                href="/projects"
-                className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:text-foreground hover:bg-white/5 border border-transparent transition-all duration-200 group"
-              >
-                <div
-                  className="w-2 h-2 rounded-full flex-shrink-0"
-                  style={{ backgroundColor: proj.color, boxShadow: `0 0 6px ${proj.color}60` }}
-                />
-                <span className="flex-1 text-xs truncate">{proj.name}</span>
-                <Circle
-                  className={cn(
-                    "w-1.5 h-1.5 fill-current flex-shrink-0",
-                    proj.status === "active" ? "text-emerald-400" : "text-amber-400"
-                  )}
-                />
-              </Link>
-            ))}
-            <Link
-              href="/projects?filter=recent"
-              className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs text-primary/60 hover:text-primary transition-colors"
-            >
-              + View all projects
-            </Link>
-          </nav>
-        </div>
+
 
         {/* ── System ──────────────────────────────────── */}
         <div>
@@ -284,50 +218,7 @@ export function Sidebar({ role }: { role: AppRole }) {
         </div>
       </div>
 
-      {/* ── Live Status Footer ─────────────────────────── */}
-      <div className="px-3 pb-4 border-t border-white/5 pt-3">
-        <div className="glass rounded-xl p-3 border border-primary/15">
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-[9px] font-bold text-primary/70 uppercase tracking-widest">Sprint Status</p>
-            <span className="flex items-center gap-1 text-[9px] text-emerald-400 font-bold">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              LIVE
-            </span>
-          </div>
-          <div className="space-y-1.5">
-            {activeSprintInfo ? (
-              <>
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] text-muted-foreground">Active Sprint</span>
-                  <span className="text-[10px] font-mono text-primary max-w-[120px] truncate">{activeSprintInfo.name}</span>
-                </div>
-                <div className="w-full h-1.5 bg-secondary rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-gradient-to-r from-primary to-primary/60 rounded-full transition-all"
-                    style={{
-                      width: activeSprintInfo.stats && activeSprintInfo.stats.total > 0
-                        ? `${(activeSprintInfo.stats.done / activeSprintInfo.stats.total) * 100}%`
-                        : "0%"
-                    }}
-                  />
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] text-muted-foreground">Tasks Done</span>
-                  <span className="text-[10px] font-mono text-foreground">
-                    {activeSprintInfo.stats ? `${activeSprintInfo.stats.done} / ${activeSprintInfo.stats.total}` : "—"}
-                  </span>
-                </div>
-              </>
-            ) : (
-              <p className="text-[10px] text-muted-foreground">No active sprint</p>
-            )}
-          </div>
-          <div className="mt-2 pt-2 border-t border-white/5 flex items-center gap-1.5">
-            <Rocket className="w-3 h-3 text-primary" />
-            <span className="text-[9px] text-muted-foreground">Last deploy: <span className="text-primary">2h ago</span></span>
-          </div>
-        </div>
-      </div>
+
     </aside>
   )
 }
