@@ -47,12 +47,12 @@ type Message = {
 // ─── Quick Action Chips ───────────────────────────────────────────────────────
 
 const QUICK_ACTIONS = [
-  { icon: CheckSquare, label: "Create a task for tomorrow", color: "text-blue-400" },
-  { icon: Calendar, label: "Add meeting reminder on calendar", color: "text-orange-400" },
+  { icon: CheckSquare, label: "Prioritize my tasks", color: "text-blue-400" },
+  { icon: Calendar, label: "Build my daily plan", color: "text-orange-400" },
   { icon: NotebookPen, label: "Summarize my notes", color: "text-purple-400" },
   { icon: LayoutDashboard, label: "Create a Kanban board", color: "text-blue-400" },
-  { icon: Zap, label: "Plan my week", color: "text-pink-400" },
-  { icon: BarChart3, label: "Generate a habit tracker template", color: "text-teal-400" },
+  { icon: Zap, label: "Show predictive reminders", color: "text-pink-400" },
+  { icon: BarChart3, label: "Explain my productivity patterns", color: "text-teal-400" },
 ]
 
 // ─── Tool Display Names ────────────────────────────────────────────────────────

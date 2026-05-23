@@ -37,6 +37,8 @@ import {
   PolarRadiusAxis,
 } from "recharts"
 import type { AnalyticsData } from "@/lib/actions/analytics-actions"
+import type { ProductivityIntelligence } from "@/lib/ai/productivity-engine"
+import { ProductivityCommandPanel } from "@/components/ai/productivity-command-panel"
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -96,9 +98,10 @@ function ChartTooltip({
 
 interface AnalyticsContentProps {
   data: AnalyticsData
+  intelligence: ProductivityIntelligence
 }
 
-export function AnalyticsContent({ data }: AnalyticsContentProps) {
+export function AnalyticsContent({ data, intelligence }: AnalyticsContentProps) {
   const [hoveredCard, setHoveredCard] = useState<number | null>(null)
 
   const completedChange = formatChange(data.completedTasks, data.completedTasksLastMonth)
@@ -260,6 +263,8 @@ export function AnalyticsContent({ data }: AnalyticsContentProps) {
           </div>
         ))}
       </div>
+
+      <ProductivityCommandPanel intelligence={intelligence} compact />
 
       {/* ── Row 2: Area trend chart (full-width) ────────────────────────── */}
       <div className="glass-card rounded-xl p-6 relative overflow-hidden border border-primary/20">

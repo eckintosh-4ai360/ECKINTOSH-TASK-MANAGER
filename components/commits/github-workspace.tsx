@@ -21,8 +21,14 @@ import {
   ShieldCheck,
   Globe,
   Plus,
+  Bot,
+  Bug,
+  AlertTriangle,
+  CheckCircle2,
+  Loader2,
 } from "lucide-react"
 import { getGitHubWorkspaceData, getRepositoryDirectoryAction, getRepositoryFileAction, saveRepositoryFileAction, createRepositoryPullRequestAction, mergeRepositoryPullRequestAction, createRepositoryBranchAction } from "@/lib/actions/github-actions"
+import { reviewRepositoryFileAction, type CodeReviewResult } from "@/lib/actions/code-review-actions"
 import type { DirectoryEntryItem, FileEditorState, GitHubWorkspaceData } from "@/lib/github-workspace"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -101,6 +107,18 @@ function sortDirectoryEntries(entries: DirectoryEntryItem[]) {
   })
 }
 
+function reviewRiskClass(risk: CodeReviewResult["risk"]) {
+  if (risk === "high") return "border-destructive/25 bg-destructive/10 text-destructive"
+  if (risk === "medium") return "border-amber-400/25 bg-amber-400/10 text-amber-300"
+  return "border-emerald-400/25 bg-emerald-400/10 text-emerald-300"
+}
+
+function reviewSeverityClass(severity: CodeReviewResult["findings"][number]["severity"]) {
+  if (severity === "high") return "bg-destructive/15 text-destructive border-destructive/25"
+  if (severity === "medium") return "bg-amber-400/15 text-amber-300 border-amber-400/25"
+  return "bg-primary/10 text-primary border-primary/25"
+}
+
 export function GitHubWorkspace({ initialData, canMergePullRequests }: GitHubWorkspaceProps) {
   const router = useRouter()
   const [workspace, setWorkspace] = useState(initialData)
@@ -114,12 +132,14 @@ export function GitHubWorkspace({ initialData, canMergePullRequests }: GitHubWor
   const [newBranchName, setNewBranchName] = useState("")
   const [pullRequestTitle, setPullRequestTitle] = useState("")
   const [pullRequestBody, setPullRequestBody] = useState("")
+  const [codeReview, setCodeReview] = useState<CodeReviewResult | null>(null)
   const [isLoadingWorkspace, startWorkspaceTransition] = useTransition()
   const [isLoadingDirectory, startDirectoryTransition] = useTransition()
   const [isLoadingFile, startFileTransition] = useTransition()
   const [isSavingFile, startSaveTransition] = useTransition()
   const [isBranchPending, startBranchTransition] = useTransition()
   const [isPullRequestPending, startPullRequestTransition] = useTransition()
+  const [isReviewPending, startReviewTransition] = useTransition()
 
   useEffect(() => {
     setWorkspace(initialData)
@@ -133,6 +153,7 @@ export function GitHubWorkspace({ initialData, canMergePullRequests }: GitHubWor
     setNewBranchName("")
     setPullRequestTitle("")
     setPullRequestBody("")
+    setCodeReview(null)
   }, [initialData])
 
   const selectedRepository = workspace.selectedRepository
@@ -156,6 +177,7 @@ export function GitHubWorkspace({ initialData, canMergePullRequests }: GitHubWor
           setEditorValue("")
           setCommitMessage("")
           setNewBranchName("")
+          setCodeReview(null)
 
           if (data.selectedProjectId) {
             const query = new URLSearchParams({ projectId: data.selectedProjectId })
@@ -225,6 +247,7 @@ export function GitHubWorkspace({ initialData, canMergePullRequests }: GitHubWor
           setOpenedFile(result.file)
           setEditorValue(result.file.content)
           setCommitMessage(`Update ${result.file.path}`)
+          setCodeReview(null)
         })
         .catch(() => {
           toast.error("Could not open that file.")
@@ -267,6 +290,34 @@ export function GitHubWorkspace({ initialData, canMergePullRequests }: GitHubWor
         })
         .catch(() => {
           toast.error("GitHub rejected the file update.")
+        })
+    })
+  }
+
+  function reviewOpenFile() {
+    if (!selectedProjectId || !openedFile) return
+
+    startReviewTransition(() => {
+      void reviewRepositoryFileAction({
+        projectId: selectedProjectId,
+        path: openedFile.path,
+        branch: selectedBranch,
+        content: editorValue,
+      })
+        .then((result) => {
+          if (!result.success) {
+            toast.error(result.error)
+            return
+          }
+
+          setCodeReview(result.review)
+          if (!commitMessage.trim() || commitMessage === `Update ${openedFile.path}`) {
+            setCommitMessage(result.review.commitMessage)
+          }
+          toast.success("AI code review complete.")
+        })
+        .catch(() => {
+          toast.error("AI code review could not be completed.")
         })
     })
   }
@@ -798,6 +849,17 @@ export function GitHubWorkspace({ initialData, canMergePullRequests }: GitHubWor
                           <p className="text-xs text-muted-foreground">Branch: {selectedBranch} · SHA: {openedFile.sha.slice(0, 12)}</p>
                         </div>
                         <div className="flex flex-wrap items-center gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={reviewOpenFile}
+                            disabled={isReviewPending || !openedFile}
+                            className="glass border-primary/20 hover:border-primary/40 hover:bg-primary/5"
+                          >
+                            {isReviewPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Bot className="w-4 h-4" />}
+                            AI Review
+                          </Button>
                           {openedFile.htmlUrl && (
                             <Link href={openedFile.htmlUrl} target="_blank" className="inline-flex">
                               <Button type="button" variant="outline" size="sm" className="glass border-primary/20 hover:border-primary/40 hover:bg-primary/5">
@@ -817,13 +879,73 @@ export function GitHubWorkspace({ initialData, canMergePullRequests }: GitHubWor
                         </div>
                       )}
 
+                      {codeReview && (
+                        <div className="rounded-2xl border border-primary/15 bg-background/30 p-4">
+                          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                            <div>
+                              <div className="flex items-center gap-2 text-xs uppercase tracking-[0.14em] text-primary/80">
+                                <Bug className="h-4 w-4" />
+                                AI Code Review
+                              </div>
+                              <h4 className="mt-1 text-base font-semibold text-foreground">{codeReview.summary}</h4>
+                            </div>
+                            <Badge className={cn("border capitalize", reviewRiskClass(codeReview.risk))}>
+                              {codeReview.risk} risk
+                            </Badge>
+                          </div>
+
+                          <div className="mt-4 grid gap-3">
+                            {codeReview.findings.map((finding, index) => (
+                              <div key={`${finding.title}-${index}`} className="rounded-xl border border-border/40 bg-background/35 p-3">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <Badge className={cn("border capitalize", reviewSeverityClass(finding.severity))}>
+                                    {finding.severity}
+                                  </Badge>
+                                  {finding.line && (
+                                    <span className="font-mono text-xs text-primary">line {finding.line}</span>
+                                  )}
+                                  <p className="text-sm font-semibold text-foreground">{finding.title}</p>
+                                </div>
+                                <p className="mt-2 text-sm text-muted-foreground">{finding.detail}</p>
+                                <div className="mt-2 rounded-lg border border-primary/15 bg-primary/5 p-3 text-xs text-primary/90">
+                                  <span className="font-semibold text-primary">Suggested fix: </span>
+                                  {finding.suggestedFix}
+                                </div>
+                              </div>
+                            ))}
+
+                            {codeReview.findings.length === 0 && (
+                              <div className="rounded-xl border border-emerald-400/20 bg-emerald-400/10 p-3 text-sm text-emerald-300">
+                                <CheckCircle2 className="mr-2 inline h-4 w-4" />
+                                No obvious bug findings. Use the suggested tests before merging.
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="mt-4 rounded-xl border border-border/40 bg-background/35 p-3">
+                            <div className="mb-2 flex items-center gap-2">
+                              <AlertTriangle className="h-4 w-4 text-primary" />
+                              <p className="text-sm font-semibold text-foreground">Verification suggestions</p>
+                            </div>
+                            <ul className="grid gap-1 text-xs text-muted-foreground">
+                              {codeReview.testSuggestions.map((suggestion) => (
+                                <li key={suggestion}>- {suggestion}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        </div>
+                      )}
+
                       <div className="min-h-[520px] flex-1 overflow-hidden rounded-xl border border-border/40">
                         <MonacoEditor
                           height="100%"
                           language={getEditorLanguage(openedFile.path)}
                           theme="vs-dark"
                           value={editorValue}
-                          onChange={(value) => setEditorValue(value ?? "")}
+                          onChange={(value) => {
+                            setEditorValue(value ?? "")
+                            setCodeReview(null)
+                          }}
                           options={{
                             minimap: { enabled: false },
                             fontSize: 14,

@@ -5,11 +5,15 @@ import { ExportReportModal } from "@/components/modals/export-report-modal"
 import { requirePermission } from "@/lib/auth"
 import { hasPermission } from "@/lib/rbac"
 import { getAnalyticsData } from "@/lib/actions/analytics-actions"
+import { getAIProductivityIntelligence } from "@/lib/actions/ai-actions"
 
 export default async function AnalyticsPage() {
   const session = await requirePermission("view_analytics")
   const canExportReports = hasPermission(session.role, "export_reports")
-  const analytics = await getAnalyticsData()
+  const [analytics, intelligence] = await Promise.all([
+    getAnalyticsData(),
+    getAIProductivityIntelligence(),
+  ])
 
   return (
     <>
@@ -34,7 +38,7 @@ export default async function AnalyticsPage() {
             <p className="text-destructive font-mono text-sm">{analytics.error}</p>
           </div>
         ) : (
-          <AnalyticsContent data={analytics} />
+          <AnalyticsContent data={analytics} intelligence={intelligence} />
         )}
       </div>
     </>

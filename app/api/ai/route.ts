@@ -1,10 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
-import Groq from "groq-sdk"
-import { getAIWorkspaceContext } from "@/lib/actions/ai-actions"
-
-const groq = new Groq({
-  apiKey: process.env.GROQ_API_KEY,
-})
+import type Groq from "groq-sdk"
+import { getAIProductivityIntelligence, getAIWorkspaceContext } from "@/lib/actions/ai-actions"
+import { getGroqClient } from "@/lib/ai/groq"
 
 // ─── Tool Definitions ────────────────────────────────────────────────────────
 
@@ -134,11 +131,70 @@ const tools: Groq.Chat.ChatCompletionTool[] = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "prioritize_tasks",
+      description: "Rank the user's active tasks with AI priority scores, urgency, delay risk, and reasons.",
+      parameters: {
+        type: "object",
+        properties: {
+          focus: { type: "string", description: "Optional focus area, project, or time horizon." },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "plan_day",
+      description: "Build a smart daily planner from active tasks, deadlines, calendar events, and risk signals.",
+      parameters: {
+        type: "object",
+        properties: {
+          day: { type: "string", description: "Date in YYYY-MM-DD format. Defaults to today." },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "productivity_insights",
+      description: "Explain behavioral productivity patterns, workload risks, focus windows, and improvement suggestions.",
+      parameters: {
+        type: "object",
+        properties: {
+          focus: { type: "string", description: "Optional productivity theme to inspect." },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "predictive_reminders",
+      description: "Find tasks that should receive reminders because of deadline, stale work, or delay risk.",
+      parameters: {
+        type: "object",
+        properties: {
+          threshold: { type: "number", description: "Optional minimum risk score from 0 to 100." },
+        },
+        required: [],
+      },
+    },
+  },
 ]
 
 // ─── System Prompt Builder ───────────────────────────────────────────────────
 
-function buildSystemPrompt(context: Awaited<ReturnType<typeof getAIWorkspaceContext>>) {
+function buildSystemPrompt(
+  context: Awaited<ReturnType<typeof getAIWorkspaceContext>>,
+  intelligence?: Awaited<ReturnType<typeof getAIProductivityIntelligence>> | null,
+) {
   const today = new Date().toISOString().split("T")[0]
 
   if (!context) {
@@ -168,6 +224,22 @@ function buildSystemPrompt(context: Awaited<ReturnType<typeof getAIWorkspaceCont
   const teamList = context.teamMembers.map(m =>
     `  - [${m.id}] ${m.name} (${m.role})`
   ).join("\n") || "  (no team members)"
+
+  const aiPriorityList = intelligence?.topPriorities.slice(0, 6).map((task, index) =>
+    `  ${index + 1}. [${task.id}] "${task.title}" | AI score: ${task.ai.score} | delay risk: ${task.ai.delayRisk} | reasons: ${task.ai.reasons.join(", ") || "none"}`
+  ).join("\n") || "  (not enough active tasks for priority ranking)"
+
+  const aiInsightsList = intelligence?.insights.map((insight) =>
+    `  - ${insight.title}: ${insight.detail}`
+  ).join("\n") || "  (no computed insights)"
+
+  const aiMemory = intelligence
+    ? `Preferred focus window: ${intelligence.memory.preferredFocusWindow}
+Strongest project pattern: ${intelligence.memory.strongestProjectPattern}
+Recurring task themes: ${intelligence.memory.recurringTaskThemes.join(", ") || "not enough data"}
+Procrastination signals: ${intelligence.memory.procrastinationSignals.join("; ") || "none detected"}
+Workload mode: ${intelligence.memory.workloadMode}`
+    : "No memory profile available yet."
 
   return `You are the Eckintosh AI Assistant — the most powerful and intelligent workspace AI for the Eckintosh Task Manager platform, built for an elite software development team.
 
@@ -207,12 +279,28 @@ ${notesList}
 ### Team Members
 ${teamList}
 
+### AI Priority Engine
+${aiPriorityList}
+
+### AI Productivity Insights
+${aiInsightsList}
+
+### AI Memory Layer
+${aiMemory}
+
 ## Your Capabilities
 You can take ACTIONS on the workspace using tools. When a user asks you to create, schedule, or manage anything:
 1. Understand their intent from natural language
 2. Call the appropriate tool with the right parameters
 3. Present a clear confirmation preview before saving
 4. Always be helpful and proactive
+
+You also have a built-in productivity intelligence layer:
+- Rank tasks by urgency, importance, deadline pressure, stale-work risk, status, and effort.
+- Detect procrastination patterns from overdue and stale tasks.
+- Suggest reminders when delay risk is high.
+- Generate daily plans from tasks and calendar events.
+- Use the memory layer to personalize recommendations without inventing facts.
 
 ## Behavior Rules
 - Be warm, friendly, and professional. Support standard greetings and polite conversation (e.g., if the user says "hi" or "hello", greet them back by name, e.g., "Hello, ${context.user.name}!") alongside your task-oriented workspace actions.
@@ -271,8 +359,19 @@ export async function POST(req: NextRequest) {
     }
 
     // Normal chat — fetch context and call Groq
-    const context = await getAIWorkspaceContext()
-    const systemPrompt = buildSystemPrompt(context)
+    const [context, intelligence] = await Promise.all([
+      getAIWorkspaceContext(),
+      getAIProductivityIntelligence().catch(() => null),
+    ])
+    const systemPrompt = buildSystemPrompt(context, intelligence)
+    const groq = getGroqClient()
+
+    if (!groq) {
+      return NextResponse.json({
+        type: "text",
+        content: "GROQ_API_KEY is not configured, but the workspace intelligence layer is ready once the key is added.",
+      })
+    }
 
     const response = await groq.chat.completions.create({
       model: "llama-3.3-70b-versatile",
@@ -296,7 +395,14 @@ export async function POST(req: NextRequest) {
       const toolArgs = JSON.parse(toolCall.function.arguments)
 
       // For read-only tools, execute immediately
-      if (toolName === "summarize_notes" || toolName === "plan_week") {
+      if (
+        toolName === "summarize_notes"
+        || toolName === "plan_week"
+        || toolName === "prioritize_tasks"
+        || toolName === "plan_day"
+        || toolName === "productivity_insights"
+        || toolName === "predictive_reminders"
+      ) {
         // Generate a text response about this
         const followUp = await groq.chat.completions.create({
           model: "llama-3.3-70b-versatile",
@@ -316,6 +422,7 @@ export async function POST(req: NextRequest) {
                 notes: context?.notes ?? [],
                 tasks: context?.tasks ?? [],
                 events: context?.calendarEvents ?? [],
+                intelligence,
               }),
             },
           ],

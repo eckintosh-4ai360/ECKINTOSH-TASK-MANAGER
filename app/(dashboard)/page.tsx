@@ -5,10 +5,12 @@ import { SprintOverview } from "@/components/dashboard/sprint-overview"
 import { StandupFeed } from "@/components/dashboard/standup-feed"
 import { DeploymentFeed } from "@/components/dashboard/deployment-feed"
 import { TeamActivity } from "@/components/dashboard/team-activity"
+import { ProductivityCommandPanel } from "@/components/ai/productivity-command-panel"
 import { Button } from "@/components/ui/button"
 import { AddProjectModal } from "@/components/modals/add-project-modal"
 
 import { getDashboardStats, getProjects, getWorkspaceUsers, getDeployments } from "@/lib/actions/project-actions"
+import { getAIProductivityIntelligence } from "@/lib/actions/ai-actions"
 import { getSprints } from "@/lib/actions/sprint-actions"
 import { getStandups } from "@/lib/actions/standup-actions"
 import { getTeamActivityData } from "@/lib/actions/team-actions"
@@ -19,7 +21,7 @@ export default async function DashboardPage() {
   const session = await requireSession()
   const canManageProjects = hasPermission(session.role, "manage_projects")
   
-  const [projects, stats, workspaceUsers, sprints, deployments, standups, teamActivities] = await Promise.all([
+  const [projects, stats, workspaceUsers, sprints, deployments, standups, teamActivities, intelligence] = await Promise.all([
     getProjects(),
     getDashboardStats(),
     canManageProjects ? getWorkspaceUsers() : Promise.resolve([]),
@@ -27,6 +29,7 @@ export default async function DashboardPage() {
     getDeployments(),
     getStandups(),
     getTeamActivityData(),
+    getAIProductivityIntelligence(),
   ])
 
   // Get active/recent sprints (up to 3) for the overview
@@ -63,7 +66,10 @@ export default async function DashboardPage() {
         {/* Row 1: KPI Stats */}
         <StatsCards stats={stats} />
 
-        {/* Row 2: Sprint Overview + Deployment Feed */}
+        {/* Row 2: AI Productivity Command */}
+        <ProductivityCommandPanel intelligence={intelligence} />
+
+        {/* Row 3: Sprint Overview + Deployment Feed */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <div className="lg:col-span-2">
             <SprintOverview sprints={overviewSprints} />
@@ -73,7 +79,7 @@ export default async function DashboardPage() {
           </div>
         </div>
 
-        {/* Row 3: Project Matrix + Standup Feed */}
+        {/* Row 4: Project Matrix + Standup Feed */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <div className="lg:col-span-2">
             <ProjectMatrix projects={projects} />
@@ -83,7 +89,7 @@ export default async function DashboardPage() {
           </div>
         </div>
 
-        {/* Row 4: Team Activity */}
+        {/* Row 5: Team Activity */}
         <TeamActivity currentUserId={session.id} initialActivities={teamActivities} />
       </div>
     </>
