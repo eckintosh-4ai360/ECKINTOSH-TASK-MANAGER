@@ -21,20 +21,15 @@
 
 ## 📸 Screenshots
 
-> _Screenshots coming soon — drop yours into this section!_
-
-<!--
-  Replace the placeholders below with your actual screenshot paths:
-  ![Dashboard](./screenshots/home.JPG)
-  ![Tasks Board](./screenshots/task.JPG)
-  ![Ai Assistant](./screenshots/chat1.JPG)
-  ![Ai Assistant](./screenshots/chat2.JPG)
-  ![Project](./screenshots/projects.JPG)
-  ![Analytics](./screenshots/analytics.JPG)
-  ![CodeOps](./screenshots/codeOps.JPG)
-  ![Schedule](./screenshots/schedule.JPG)
-
--->
+Replace the placeholders below with your actual screenshot paths:
+![Dashboard](./screenshots/home.JPG)
+![Tasks Board](./screenshots/task.JPG)
+![Ai Assistant](./screenshots/chat1.JPG)
+![Ai Assistant](./screenshots/chat2.JPG)
+![Project](./screenshots/projects.JPG)
+![Analytics](./screenshots/analytics.JPG)
+![CodeOps](./screenshots/codeOps.JPG)
+![Schedule](./screenshots/schedule.JPG)
 
 ---
 
