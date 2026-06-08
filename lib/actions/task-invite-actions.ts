@@ -189,7 +189,7 @@ function buildInviteEmailHtml({
   return `
     <div style="font-family:Arial,sans-serif;background:#09111f;color:#f8fafc;padding:24px;">
       <div style="max-width:600px;margin:0 auto;background:#121e37;border:1px solid rgba(0,212,255,0.2);border-radius:16px;padding:28px;">
-        <p style="margin:0 0 6px;font-size:11px;letter-spacing:0.1em;color:#00d4ff;text-transform:uppercase;">Eckintosh Task Collaboration</p>
+        <p style="margin:0 0 6px;font-size:11px;letter-spacing:0.1em;color:#00d4ff;text-transform:uppercase;">Spagad Task Collaboration</p>
         <h1 style="margin:0 0 8px;font-size:22px;color:#f8fafc;">You've been invited to collaborate</h1>
         <p style="margin:0 0 20px;font-size:13px;color:#94a3b8;">${esc(inviterName)} wants your input on a task.</p>
         <div style="background:#1e2d4a;border:1px solid rgba(0,212,255,0.15);border-radius:12px;padding:20px;margin-bottom:24px;">

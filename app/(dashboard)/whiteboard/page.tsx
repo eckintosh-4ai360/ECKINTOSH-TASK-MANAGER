@@ -5,7 +5,7 @@ import { requireSession } from "@/lib/auth"
 export const dynamic = "force-dynamic"
 
 export const metadata = {
-  title: "Whiteboard — Eckintosh",
+  title: "Whiteboard — Spagad SRAD",
   description: "Sketch, plan, and design on an infinite canvas — powered by Excalidraw.",
 }
 

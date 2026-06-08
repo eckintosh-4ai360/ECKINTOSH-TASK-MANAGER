@@ -27,7 +27,7 @@ function getDownloadFilename(response: Response, format: ExportConfig["format"])
   if (match?.[1]) return match[1]
 
   const extension = format === "xlsx" ? "xls" : format || "txt"
-  return `eckintosh-report.${extension}`
+  return `spagad-report.${extension}`
 }
 
 function downloadBlob(blob: Blob, filename: string) {

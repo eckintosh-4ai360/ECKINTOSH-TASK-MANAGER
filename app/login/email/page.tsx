@@ -44,8 +44,8 @@ export default function EmailLoginPage() {
             <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center shadow-lg shadow-primary/30 mb-4">
               <GitBranch className="w-6 h-6 text-primary-foreground" />
             </div>
-            <h1 className="text-xl font-bold text-foreground tracking-tight">Eckintosh</h1>
-            <p className="text-xs text-muted-foreground mt-0.5">Engineering Digital Solutions</p>
+            <h1 className="text-xl font-bold text-foreground tracking-tight">Spagad</h1>
+            <p className="text-xs text-muted-foreground mt-0.5">SRAD – Rapid Application Development</p>
           </div>
 
           <h2 className="text-sm font-semibold text-foreground mb-5">Sign in with email</h2>
@@ -55,7 +55,7 @@ export default function EmailLoginPage() {
               <Label htmlFor="email" className="text-xs text-muted-foreground flex items-center gap-2">
                 <Mail className="w-3.5 h-3.5 text-primary" /> Email Address
               </Label>
-              <Input id="email" name="email" type="email" placeholder="admin@eckintosh.dev" autoComplete="email" required className="glass border-border/50 focus:border-primary/50 h-11" />
+              <Input id="email" name="email" type="email" placeholder="admin@spagad.dev" autoComplete="email" required className="glass border-border/50 focus:border-primary/50 h-11" />
             </div>
 
             <div className="space-y-2">
@@ -83,7 +83,7 @@ export default function EmailLoginPage() {
         </div>
 
         <p className="text-center text-[10px] text-muted-foreground/50 mt-4">
-          © {new Date().getFullYear()} Eckintosh · Engineering Digital Solutions
+          © {new Date().getFullYear()} Spagad · SRAD – Rapid Application Development
         </p>
       </div>
     </div>

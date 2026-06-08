@@ -1,6 +1,6 @@
 <h1 align="center">
   <br />
-  Eckintosh Task Manager
+  Spagad SRAD Task Manager
   <br />
 </h1>
 
@@ -152,8 +152,8 @@ Replace the placeholders below with your actual screenshot paths:
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/your-username/eckintosh-task-manager.git
-cd eckintosh-task-manager
+git clone https://github.com/your-username/spagad-srad-task-manager.git
+cd spagad-srad-task-manager
 ```
 
 ---

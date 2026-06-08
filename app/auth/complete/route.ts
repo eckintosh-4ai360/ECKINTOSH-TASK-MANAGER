@@ -23,7 +23,7 @@ function getSafeReturnTo(request: Request) {
  *
  * Bridge route handler that fires after GitHub OAuth finishes.
  * It reads the NextAuth session, looks up the DB user, mints a
- * custom JWT cookie (`eckintosh_session`), then redirects to /.
+ * custom JWT cookie (`spagad_session`), then redirects to /.
  *
  * Why a Route Handler instead of a page.tsx?
  * Next.js App Router forbids setting cookies from Server Components.

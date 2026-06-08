@@ -629,7 +629,7 @@ export function ChatInterface({ currentUserId, currentUserName }: ChatInterfaceP
             <MessageSquare className="w-12 h-12 text-primary/30" />
           </div>
           <div className="text-center">
-            <p className="text-lg font-semibold text-foreground mb-1">Eckintosh Chats</p>
+            <p className="text-lg font-semibold text-foreground mb-1">Spagad Chats</p>
             <p className="text-sm text-muted-foreground">Select a contact to start a real-time conversation</p>
           </div>
         </div>

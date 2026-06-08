@@ -228,7 +228,7 @@ async function getReportData(config: ExportConfig, user: { id: string; email: st
 
   return {
     metadata: {
-      title: "Eckintosh Workspace Report",
+      title: "Spagad SRAD Workspace Report",
       generatedAt: new Date().toISOString(),
       generatedBy: {
         id: user.id,
@@ -580,7 +580,7 @@ export async function POST(request: NextRequest) {
       email: session.email,
     })
     const generatedDate = new Date().toISOString().slice(0, 10)
-    const baseName = `eckintosh-${slugify(config.dateRange)}-report-${generatedDate}`
+    const baseName = `spagad-${slugify(config.dateRange)}-report-${generatedDate}`
     const filename = `${baseName}.${FORMAT_EXTENSIONS[config.format]}`
 
     if (config.format === "json") {

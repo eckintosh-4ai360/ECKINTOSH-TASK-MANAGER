@@ -27,7 +27,7 @@ function buildInternalEmailHtml({
   return `
     <div style="font-family:Arial,sans-serif;background:#09111f;color:#f8fafc;padding:24px;">
       <div style="max-width:640px;margin:0 auto;background:#121e37;border:1px solid rgba(0,212,255,0.2);border-radius:16px;padding:24px;">
-        <p style="margin:0 0 8px;font-size:12px;letter-spacing:0.08em;color:#00d4ff;text-transform:uppercase;">Eckintosh Email</p>
+        <p style="margin:0 0 8px;font-size:12px;letter-spacing:0.08em;color:#00d4ff;text-transform:uppercase;">Spagad Email</p>
         <h1 style="margin:0 0 12px;font-size:22px;color:#f8fafc;">${escapeHtml(subject)}</h1>
         <p style="margin:0 0 16px;font-size:13px;color:#94a3b8;">From ${escapeHtml(senderName)}</p>
         <div style="font-size:14px;line-height:1.7;color:#cbd5e1;white-space:pre-wrap;">${escapeHtml(body)}</div>

@@ -44,8 +44,8 @@ function LoginForm() {
           <GitBranch className="w-5 h-5 text-primary-foreground" />
         </div>
         <div>
-          <p className="text-lg font-extrabold neon-text tracking-wider">Eckintosh</p>
-          <p className="text-[10px] text-muted-foreground">Engineering Digital Solutions</p>
+          <p className="text-lg font-extrabold neon-text tracking-wider">Spagad</p>
+          <p className="text-[10px] text-muted-foreground">SRAD – Rapid Application Development</p>
         </div>
       </div>
 
@@ -101,7 +101,7 @@ function LoginForm() {
       <div className="mt-6 p-3 rounded-xl bg-primary/5 border border-primary/10">
         <p className="text-[11px] text-muted-foreground leading-relaxed">
           <span className="text-primary font-semibold">First time?</span> Your account will be created automatically using your GitHub profile. Contact{" "}
-          <span className="text-primary">admin@eckintosh.dev</span> to be granted admin access.
+          <span className="text-primary">admin@spagad.dev</span> to be granted admin access.
         </p>
       </div>
 
@@ -134,8 +134,8 @@ export default function LoginPage() {
               <GitBranch className="w-7 h-7 text-primary-foreground" />
             </div>
             <div>
-              <h1 className="text-3xl font-extrabold neon-text tracking-wider">Eckintosh</h1>
-              <p className="text-sm text-muted-foreground font-medium tracking-wide">Engineering Digital Solutions</p>
+              <h1 className="text-3xl font-extrabold neon-text tracking-wider">Spagad</h1>
+              <p className="text-sm text-muted-foreground font-medium tracking-wide">SRAD – Rapid Application Development</p>
             </div>
           </div>
 
@@ -183,7 +183,7 @@ export default function LoginPage() {
 
       {/* Footer */}
       <p className="absolute bottom-4 left-1/2 -translate-x-1/2 text-[10px] text-muted-foreground/50 text-center">
-        © {new Date().getFullYear()} Eckintosh · Engineering Digital Solutions
+        © {new Date().getFullYear()} Spagad · SRAD – Rapid Application Development
       </p>
     </div>
   )

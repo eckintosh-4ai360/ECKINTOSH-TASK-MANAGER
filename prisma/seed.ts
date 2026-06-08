@@ -40,8 +40,8 @@ async function main() {
 
   const admin = await prisma.user.create({
     data: {
-      email: "admin@eckintosh.dev",
-      name: "Eckintosh",
+      email: "admin@spagad.dev",
+      name: "Spagad",
       password: adminPassword,
       role: "ADMIN",
       title: "Lead Dev / Full Stack",
@@ -52,7 +52,7 @@ async function main() {
 
   const jay = await prisma.user.create({
     data: {
-      email: "jay@eckintosh.dev",
+      email: "jay@spagad.dev",
       name: "Jay",
       password: devPassword,
       role: "USER",
@@ -63,7 +63,7 @@ async function main() {
 
   const kemi = await prisma.user.create({
     data: {
-      email: "kemi@eckintosh.dev",
+      email: "kemi@spagad.dev",
       name: "Kemi",
       password: devPassword,
       role: "USER",
@@ -74,7 +74,7 @@ async function main() {
 
   const tunde = await prisma.user.create({
     data: {
-      email: "tunde@eckintosh.dev",
+      email: "tunde@spagad.dev",
       name: "Tunde",
       password: devPassword,
       role: "USER",
@@ -260,7 +260,7 @@ async function main() {
       {
         userId: admin.id,
         title: "New scheduled event",
-        message: "Eckintosh scheduled Sprint review sync.",
+        message: "Spagad scheduled Sprint review sync.",
         type: "info",
         link: "/calendar",
       },
@@ -281,7 +281,7 @@ async function main() {
       {
         userId: jay.id,
         title: "Task assigned or updated",
-        message: "Eckintosh updated Paystack webhook integration and it is assigned to you.",
+        message: "Spagad updated Paystack webhook integration and it is assigned to you.",
         type: "info",
         link: "/tasks",
       },
@@ -290,8 +290,8 @@ async function main() {
 
   console.log("\nDevFlow database seeded successfully!")
   console.log("-----------------------------------------")
-  console.log("Admin login: admin@eckintosh.dev / Admin@2026")
-  console.log("Dev login:   jay@eckintosh.dev / Dev@2026")
+  console.log("Admin login: admin@spagad.dev / Admin@2026")
+  console.log("Dev login:   jay@spagad.dev / Dev@2026")
   console.log("-----------------------------------------")
 
   await prisma.$disconnect()

@@ -18,7 +18,7 @@ export type TeamMemberActivity = {
 }
 
 const PREDEFINED_COLORS: Record<string, string> = {
-  Eckintosh: "#00d4ff",
+  Spagad: "#00d4ff",
   Jay: "#a855f7",
   Kemi: "#10b981",
   Tunde: "#f59e0b",
@@ -66,7 +66,7 @@ async function getTodaysCommitAuthors(startOfToday: Date): Promise<string[]> {
             return date ? new Date(date) >= startOfToday : false
           })
           .map((c) =>
-            // Prefer the GitHub login (e.g. "eckintosh"), fall back to git author name
+            // Prefer the GitHub login (e.g. "spagad"), fall back to git author name
             (c.author?.login ?? c.commit.author?.name ?? "").toLowerCase().trim()
           )
           .filter(Boolean)

@@ -32,7 +32,7 @@ function getEmailDeliveryMode(): DeliveryMode {
 
 function getFromAddress() {
   const email = process.env.NOTIFICATION_FROM_EMAIL
-  const name = process.env.NOTIFICATION_FROM_NAME ?? "Eckintosh Notifications"
+  const name = process.env.NOTIFICATION_FROM_NAME ?? "Spagad Notifications"
 
   if (!email) return null
 

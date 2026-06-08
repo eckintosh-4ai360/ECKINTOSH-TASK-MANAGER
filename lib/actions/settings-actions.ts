@@ -454,7 +454,7 @@ export async function createTestReminderAction() {
       html: `
         <div style="font-family:Arial,sans-serif;background:#09111f;color:#f8fafc;padding:24px;">
           <div style="max-width:640px;margin:0 auto;background:#121e37;border:1px solid rgba(0,212,255,0.2);border-radius:16px;padding:24px;">
-            <p style="margin:0 0 8px;font-size:12px;letter-spacing:0.08em;color:#00d4ff;text-transform:uppercase;">Eckintosh Reminder Test</p>
+            <p style="margin:0 0 8px;font-size:12px;letter-spacing:0.08em;color:#00d4ff;text-transform:uppercase;">Spagad Reminder Test</p>
             <h1 style="margin:0 0 12px;font-size:22px;color:#f8fafc;">Task reminder pipeline is live</h1>
             <p style="margin:0;font-size:14px;line-height:1.6;color:#cbd5e1;">Reminder pipeline checked with ${preferences.reminderLeadTime} lead time.</p>
           </div>
@@ -471,7 +471,7 @@ export async function createTestReminderAction() {
 
   if (preferences.push) {
     pushResult = await sendPushNotificationToUserSubscriptions(session.id, {
-      title: "Eckintosh task reminder",
+      title: "Spagad task reminder",
       body: "Reminder flow is live. Your deadlines will not sneak past the perimeter.",
       url: "/settings",
       tag: "settings-test-reminder",

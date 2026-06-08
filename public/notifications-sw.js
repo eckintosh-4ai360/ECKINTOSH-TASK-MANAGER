@@ -1,6 +1,6 @@
 self.addEventListener("push", (event) => {
   let payload = {
-    title: "Eckintosh",
+    title: "Spagad",
     body: "A new workspace alert is ready.",
     url: "/settings",
     tag: "workspace-alert",

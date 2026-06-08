@@ -10,7 +10,7 @@ const tools: Groq.Chat.ChatCompletionTool[] = [
     type: "function",
     function: {
       name: "create_project",
-      description: "Create a new project in the Eckintosh workspace. Use when the user wants to create a project, Kanban board, or development initiative.",
+      description: "Create a new project in the Spagad SRAD workspace. Use when the user wants to create a project, Kanban board, or development initiative.",
       parameters: {
         type: "object",
         properties: {
@@ -198,7 +198,7 @@ function buildSystemPrompt(
   const today = new Date().toISOString().split("T")[0]
 
   if (!context) {
-    return `You are the Eckintosh AI Assistant — a powerful workspace intelligence for the Eckintosh Task Manager platform. Today is ${today}. You help developers plan, organize, and act on their projects and tasks. Be concise, practical, and friendly.`
+    return `You are the Spagad SRAD AI Assistant — a powerful workspace intelligence for the Spagad SRAD Task Manager platform. Today is ${today}. You help developers plan, organize, and act on their projects and tasks. Be concise, practical, and friendly.`
   }
 
   const projectsList = context.projects.map(p =>
@@ -241,13 +241,13 @@ Procrastination signals: ${intelligence.memory.procrastinationSignals.join("; ")
 Workload mode: ${intelligence.memory.workloadMode}`
     : "No memory profile available yet."
 
-  return `You are the Eckintosh AI Assistant — the most powerful and intelligent workspace AI for the Eckintosh Task Manager platform, built for an elite software development team.
+  return `You are the Spagad SRAD AI Assistant — the most powerful and intelligent workspace AI for the Spagad SRAD Task Manager platform, built for an elite software development team.
 
 Today's date: ${today}
 Current user: ${context.user.name} (${context.user.role})
 
 ## Platform Overview
-Eckintosh Task Manager is a full-featured developer workspace with:
+Spagad SRAD Task Manager is a full-featured developer workspace with:
 - **Projects** — Development initiatives with team leaders, priorities, status tracking
 - **Tasks** — Work items with statuses: TODO, IN_PROGRESS, IN_REVIEW, COMPLETED, BACKLOG
 - **Sprints** — Agile sprints with statuses: PLANNING, ACTIVE, COMPLETED, CANCELLED
@@ -442,7 +442,7 @@ export async function POST(req: NextRequest) {
         messages: [
           {
             role: "system",
-            content: `You are the Eckintosh AI Assistant. The user has requested a workspace action. 
+            content: `You are the Spagad SRAD AI Assistant. The user has requested a workspace action. 
 Write ONE brief sentence (max 20 words) asking for confirmation about what you're about to create/save. 
 Be specific about what you will create.`,
           },

@@ -174,7 +174,7 @@ function showLocalTestNotification() {
     return false
   }
 
-  new window.Notification("Eckintosh task reminder", {
+  new window.Notification("Spagad task reminder", {
     body: "Reminder flow is live. Your deadlines will not sneak past the perimeter.",
   })
   return true
@@ -185,7 +185,7 @@ function ProfileMeta({ profile }: { profile: SettingsProfile }) {
     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
       {[
         { label: "Role", value: profile.role, icon: Shield },
-        { label: "Workspace", value: "Eckintosh", icon: Briefcase },
+        { label: "Workspace", value: "Spagad", icon: Briefcase },
         { label: "Joined", value: profile.joinedAt ? new Date(profile.joinedAt).toLocaleDateString() : "Active", icon: CalendarClock },
       ].map((item) => (
         <div key={item.label} className="glass rounded-xl p-3 border border-border/40">

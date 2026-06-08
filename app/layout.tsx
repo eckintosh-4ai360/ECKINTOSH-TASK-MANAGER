@@ -9,9 +9,9 @@ const _geist = Geist({ subsets: ["latin"] })
 const _geistMono = Geist_Mono({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "Eckintosh – Engineering Digital Solutions",
-  description: "Developer team operations hub: sprints, standups, deployments and projects — powered by Eckintosh.",
-  generator: "Eckintosh",
+  title: "Spagad – SRAD (Spagad Rapid Application Development)",
+  description: "Developer team operations hub: sprints, standups, deployments and projects — powered by Spagad SRAD.",
+  generator: "Spagad SRAD",
   icons: {
     icon: [
       {
@@ -39,7 +39,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="bg-background" suppressHydrationWarning>
       <body className={`font-sans antialiased bg-background futuristic-grid`}>
-        <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false} storageKey="eckintosh-theme">
+        <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false} storageKey="spagad-theme">
           {children}
         </ThemeProvider>
         <Analytics />

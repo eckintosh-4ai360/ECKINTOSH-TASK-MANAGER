@@ -1,11 +1,11 @@
 import { SignJWT, jwtVerify } from "jose"
 import type { AppRole } from "@/lib/rbac"
 
-const FALLBACK_SESSION_SECRET = "eckintosh-secret-key-2026-change-in-production"
+const FALLBACK_SESSION_SECRET = "spagad-secret-key-2026-change-in-production"
 
 let warnedAboutFallbackSecret = false
 
-export const SESSION_COOKIE_NAME = "eckintosh_session"
+export const SESSION_COOKIE_NAME = "spagad_session"
 
 export interface SessionUser {
   id: string

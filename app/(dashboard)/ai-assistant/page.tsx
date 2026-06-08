@@ -5,8 +5,8 @@ import prisma from "@/lib/prisma"
 export const dynamic = "force-dynamic"
 
 export const metadata = {
-  title: "AI Assistant — Eckintosh",
-  description: "Chat, plan, and act across your Eckintosh workspace with AI.",
+  title: "AI Assistant — Spagad SRAD",
+  description: "Chat, plan, and act across your Spagad workspace with AI.",
 }
 
 async function getStats() {

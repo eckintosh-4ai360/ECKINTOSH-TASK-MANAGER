@@ -31,8 +31,8 @@ export async function sendWorkspaceInvites({
       validEmails.map((email) =>
         sendExternalEmail({
           to: email,
-          subject: `${session.name ?? session.email} invited you to join Eckintosh`,
-          text: `You've been invited to join the Eckintosh workspace as a ${role}.\n\n${message ? `Message: ${message}\n\n` : ""}Get started here: ${signupLink}`,
+          subject: `${session.name ?? session.email} invited you to join Spagad SRAD`,
+          text: `You've been invited to join the Spagad SRAD workspace as a ${role}.\n\n${message ? `Message: ${message}\n\n` : ""}Get started here: ${signupLink}`,
           html: buildWorkspaceInviteHtml({
             inviterName: session.name ?? session.email,
             role,
@@ -93,7 +93,7 @@ function buildWorkspaceInviteHtml({
     <!-- Logo/Brand -->
     <div style="text-align:center;margin-bottom:32px;">
       <div style="display:inline-block;background:linear-gradient(135deg,#00d4ff20,#00d4ff10);border:1px solid rgba(0,212,255,0.3);border-radius:16px;padding:12px 24px;">
-        <span style="font-size:18px;font-weight:800;color:#00d4ff;letter-spacing:0.05em;">ECKINTOSH</span>
+        <span style="font-size:18px;font-weight:800;color:#00d4ff;letter-spacing:0.05em;">SPAGAD</span>
       </div>
     </div>
 
@@ -107,7 +107,7 @@ function buildWorkspaceInviteHtml({
           You're invited to join<br>the workspace 🚀
         </h1>
         <p style="margin:0;font-size:14px;color:#94a3b8;line-height:1.6;">
-          <strong style="color:#cbd5e1;">${esc(inviterName)}</strong> has invited you to collaborate on Eckintosh as a <strong style="color:#00d4ff;">${esc(roleLabel)}</strong>.
+          <strong style="color:#cbd5e1;">${esc(inviterName)}</strong> has invited you to collaborate on Spagad SRAD as a <strong style="color:#00d4ff;">${esc(roleLabel)}</strong>.
         </p>
       </div>
 
@@ -156,7 +156,7 @@ function buildWorkspaceInviteHtml({
       <!-- Footer -->
       <div style="padding:20px 32px;background:#0d1829;border-top:1px solid rgba(0,212,255,0.1);">
         <p style="margin:0;font-size:11px;color:#334155;text-align:center;">
-          This invitation was sent by ${esc(inviterName)} via Eckintosh Task Manager.
+          This invitation was sent by ${esc(inviterName)} via Spagad SRAD Task Manager.
           If you weren't expecting this, you can safely ignore this email.
         </p>
       </div>

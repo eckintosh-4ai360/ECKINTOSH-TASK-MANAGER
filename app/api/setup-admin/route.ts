@@ -11,14 +11,14 @@ export async function GET(request: Request) {
   const token = searchParams.get("token")
 
   // Simple protection — require token param
-  const SETUP_TOKEN = process.env.SETUP_TOKEN ?? "eckintosh-setup-2026"
+  const SETUP_TOKEN = process.env.SETUP_TOKEN ?? "spagad-setup-2026"
   if (token !== SETUP_TOKEN) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  const adminEmail = searchParams.get("email") ?? "admin@eckintosh.dev"
-  const adminPassword = searchParams.get("password") ?? "Eckintosh2026!"
-  const adminName = searchParams.get("name") ?? "Eckintosh Admin"
+  const adminEmail = searchParams.get("email") ?? "admin@spagad.dev"
+  const adminPassword = searchParams.get("password") ?? "Spagad2026!"
+  const adminName = searchParams.get("name") ?? "Spagad Admin"
 
   try {
     const hashed = await bcrypt.hash(adminPassword, 10)

@@ -502,7 +502,7 @@ export function AIAssistantContent({
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Ask Eckintosh AI to plan, summarize, or prepare an action..."
+              placeholder="Ask Spagad AI to plan, summarize, or prepare an action..."
               rows={2}
               className="resize-none border-0 bg-transparent p-0 focus-visible:ring-0 focus-visible:ring-offset-0 text-sm placeholder:text-muted-foreground/50"
             />
@@ -565,7 +565,7 @@ export function AIAssistantContent({
                       start()
                       toast({
                         title: "Voice Input Active",
-                        description: "Speak your request. Eckintosh AI is listening...",
+                        description: "Speak your request. Spagad AI is listening...",
                       })
                     }
                   }}

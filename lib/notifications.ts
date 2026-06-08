@@ -59,7 +59,7 @@ function buildNotificationEmailHtml({
   return `
     <div style="font-family:Arial,sans-serif;background:#09111f;color:#f8fafc;padding:24px;">
       <div style="max-width:640px;margin:0 auto;background:#121e37;border:1px solid rgba(0,212,255,0.2);border-radius:16px;padding:24px;">
-        <p style="margin:0 0 8px;font-size:12px;letter-spacing:0.08em;color:#00d4ff;text-transform:uppercase;">Eckintosh Notification</p>
+        <p style="margin:0 0 8px;font-size:12px;letter-spacing:0.08em;color:#00d4ff;text-transform:uppercase;">Spagad Notification</p>
         <h1 style="margin:0 0 12px;font-size:22px;color:#f8fafc;">${escapeHtml(title)}</h1>
         <p style="margin:0 0 20px;font-size:14px;line-height:1.6;color:#cbd5e1;">${escapeHtml(message)}</p>
         ${href ? `<a href="${escapeHtml(href)}" style="display:inline-block;background:#00d4ff;color:#04111f;text-decoration:none;padding:12px 18px;border-radius:999px;font-weight:700;">Open workspace</a>` : ""}
@@ -123,14 +123,28 @@ export async function createNotificationsForUsers({
   if (email) {
     const emailRecipientIds = await filterRecipientsByPreference(eligibleUserIds, "emailEnabled")
     if (emailRecipientIds.length > 0) {
-      await prisma.internalEmail.createMany({
-        data: emailRecipientIds.map((userId) => ({
-          fromId: email.senderId,
-          toId: userId,
-          subject: email.subject ?? title,
-          body: email.body ?? message,
-        })),
-      })
+      try {
+        // Verify the sender still exists before creating internal emails
+        const senderExists = await prisma.user.findUnique({
+          where: { id: email.senderId },
+          select: { id: true },
+        })
+
+        if (senderExists) {
+          await prisma.internalEmail.createMany({
+            data: emailRecipientIds.map((userId) => ({
+              fromId: email.senderId,
+              toId: userId,
+              subject: email.subject ?? title,
+              body: email.body ?? message,
+            })),
+          })
+        } else {
+          console.warn("[notifications] Sender ID not found in DB — skipping internal emails:", email.senderId)
+        }
+      } catch (err) {
+        console.error("[notifications] Failed to create internal emails:", err)
+      }
 
       const recipients = await prisma.user.findMany({
         where: { id: { in: emailRecipientIds } },
