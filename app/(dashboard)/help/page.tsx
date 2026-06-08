@@ -4,7 +4,7 @@ import { HelpContent } from "@/components/help/help-content"
 export default async function HelpPage() {
   return (
     <>
-      <Header title="Support Center" description="Get help with using Tasko and find answers to common questions." />
+      <Header title="Help Center" description="Documentation, tutorials, and support — everything you need to get the most out of Spagad." />
 
       <div className="mt-6">
         <HelpContent />
