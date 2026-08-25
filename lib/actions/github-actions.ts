@@ -19,6 +19,7 @@ import {
   parseGitHubRepositoryUrl,
   updateGitHubFile,
 } from "@/lib/github"
+import { hasConnectedGitHub, resolveWriteToken } from "@/lib/github-identity"
 import type {
   BranchItem,
   CommitStreamItem,
@@ -345,11 +346,18 @@ export async function getGitHubWorkspaceData(
     }
   }
 
+  // Writing requires the caller's own GitHub connection, not just a configured
+  // deployment — surface that to the UI so write controls are disabled rather
+  // than failing at submit time.
+  const canWrite =
+    hasPermission(session.role, "use_repository_workspace")
+    && ((await hasConnectedGitHub(session.id)) || canWriteToGitHub())
+
   const repositories = await getTrackedRepositories()
   if (repositories.length === 0) {
     return {
       configured: isGitHubConfigured(),
-      writeEnabled: canWriteToGitHub() && hasPermission(session.role, "use_repository_workspace"),
+      writeEnabled: canWrite,
       repositories: [],
       selectedProjectId: null,
       selectedBranch: null,
@@ -371,7 +379,7 @@ export async function getGitHubWorkspaceData(
 
     return {
       configured: isGitHubConfigured(),
-      writeEnabled: canWriteToGitHub() && hasPermission(session.role, "use_repository_workspace"),
+      writeEnabled: canWrite,
       repositories,
       selectedProjectId: selected.projectId,
       selectedBranch,
@@ -382,7 +390,7 @@ export async function getGitHubWorkspaceData(
   } catch (error) {
     return {
       configured: isGitHubConfigured(),
-      writeEnabled: canWriteToGitHub() && hasPermission(session.role, "use_repository_workspace"),
+      writeEnabled: canWrite,
       repositories,
       selectedProjectId: selected.projectId,
       selectedBranch: branch || selected.defaultBranch,
@@ -468,13 +476,16 @@ export async function saveRepositoryFileAction(input: {
     return { success: false, error: getPermissionError("use_repository_workspace") }
   }
 
-  if (!canWriteToGitHub()) {
-    return { success: false, error: "GitHub write access is not configured yet." }
+  // Resolve the caller's OWN credentials — writes must be attributable.
+  const actor = await resolveWriteToken(session.id)
+  if (!actor.ok) {
+    return { success: false, error: actor.error }
   }
 
   try {
     const { parsed } = await resolveTrackedRepository(input.projectId)
     const response = await updateGitHubFile({
+      token: actor.token,
       owner: parsed.owner,
       repo: parsed.repo,
       path: input.path,
@@ -511,8 +522,10 @@ export async function createRepositoryBranchAction(input: {
     return { success: false, error: getPermissionError("use_repository_workspace") }
   }
 
-  if (!canWriteToGitHub()) {
-    return { success: false, error: "GitHub write access is not configured yet." }
+  // Resolve the caller's OWN credentials — writes must be attributable.
+  const actor = await resolveWriteToken(session.id)
+  if (!actor.ok) {
+    return { success: false, error: actor.error }
   }
 
   const branchName = validateBranchName(input.branchName)
@@ -535,6 +548,7 @@ export async function createRepositoryBranchAction(input: {
     }
 
     await createGitHubBranch({
+      token: actor.token,
       owner: parsed.owner,
       repo: parsed.repo,
       branch: branchName.name,
@@ -571,13 +585,16 @@ export async function createRepositoryPullRequestAction(input: {
     return { success: false, error: getPermissionError("use_repository_workspace") }
   }
 
-  if (!canWriteToGitHub()) {
-    return { success: false, error: "GitHub write access is not configured yet." }
+  // Resolve the caller's OWN credentials — writes must be attributable.
+  const actor = await resolveWriteToken(session.id)
+  if (!actor.ok) {
+    return { success: false, error: actor.error }
   }
 
   try {
     const { parsed } = await resolveTrackedRepository(input.projectId)
     const pullRequest = await createGitHubPullRequest({
+      token: actor.token,
       owner: parsed.owner,
       repo: parsed.repo,
       title: input.title.trim(),
@@ -608,13 +625,16 @@ export async function mergeRepositoryPullRequestAction(input: {
     return { success: false, error: getPermissionError("merge_pull_requests") }
   }
 
-  if (!canWriteToGitHub()) {
-    return { success: false, error: "GitHub write access is not configured yet." }
+  // Resolve the caller's OWN credentials — writes must be attributable.
+  const actor = await resolveWriteToken(session.id)
+  if (!actor.ok) {
+    return { success: false, error: actor.error }
   }
 
   try {
     const { parsed } = await resolveTrackedRepository(input.projectId)
     const mergeResult = await mergeGitHubPullRequest({
+      token: actor.token,
       owner: parsed.owner,
       repo: parsed.repo,
       pullNumber: input.pullNumber,

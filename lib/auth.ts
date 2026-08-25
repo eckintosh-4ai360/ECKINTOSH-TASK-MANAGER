@@ -22,25 +22,41 @@ export async function createSession(user: SessionUser) {
   cookieStore.set(SESSION_COOKIE_NAME, token, getSessionCookieOptions())
 }
 
+/**
+ * Resolves the caller's identity, then re-reads the authoritative record.
+ *
+ * The JWT carries the role, but a cookie minted a week ago must not keep
+ * granting access the admin has since revoked. Re-reading means a demotion or
+ * deletion takes effect on the very next request. React.cache() collapses this
+ * to one query per request, so the cost is a single indexed lookup.
+ */
 export const getSession = cache(async (): Promise<SessionUser | null> => {
   try {
+    let identity: { id?: string; email: string } | null = null
+
     const cookieStore = await cookies()
     const token = cookieStore.get(SESSION_COOKIE_NAME)?.value
 
     if (token) {
-      const session = await verifySessionToken(token)
-      if (session) return session
+      const claimed = await verifySessionToken(token)
+      if (claimed) identity = { id: claimed.id, email: claimed.email }
     }
 
-    const authSession = await auth()
-    const email = authSession?.user?.email
-    if (!email) return null
+    if (!identity) {
+      const authSession = await auth()
+      const email = authSession?.user?.email
+      if (email) identity = { email }
+    }
+
+    if (!identity) return null
 
     const dbUser = await prisma.user.findUnique({
-      where: { email },
+      // Match on id when we have it so an email change doesn't orphan a session.
+      where: identity.id ? { id: identity.id } : { email: identity.email },
       select: { id: true, email: true, name: true, role: true },
     })
 
+    // Deleted user — the signed cookie is still valid, the account is not.
     if (!dbUser) return null
 
     return {

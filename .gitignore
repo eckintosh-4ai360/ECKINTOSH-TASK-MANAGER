@@ -26,5 +26,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
-# user uploaded media
+# user uploaded media (now stored privately, outside public/)
 /public/uploads/
+/storage/

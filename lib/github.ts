@@ -89,26 +89,33 @@ export type GitHubFileContent = {
   encoding: string
 }
 
+import { getSharedGitHubToken, sharedWriteTokenEnabled } from "@/lib/github-identity"
+
 type GitHubRequestInit = RequestInit & {
   tokenRequired?: boolean
+  /**
+   * Credentials for this specific call. Write operations must always pass the
+   * acting user's token so commits, branches, and merges are attributed to the
+   * person who made them (see lib/github-identity.ts).
+   */
+  token?: string | null
 }
 
 function getGitHubToken() {
-  return (
-    process.env.GITHUB_ACCESS_TOKEN
-    ?? process.env.GITHUB_TOKEN
-    ?? process.env.AUTH_GITHUB_TOKEN
-    ?? process.env.GITHUB_PERSONAL_ACCESS_TOKEN
-    ?? null
-  )
+  return getSharedGitHubToken()
 }
 
 export function isGitHubConfigured() {
-  return Boolean(getGitHubToken())
+  return Boolean(getSharedGitHubToken())
 }
 
+/**
+ * Whether the shared machine-account token may be used as a write fallback.
+ * Off unless GITHUB_ALLOW_SHARED_WRITE_TOKEN=true — otherwise writes require
+ * the acting user's own connection. Mirrors resolveWriteToken()'s fallback.
+ */
 export function canWriteToGitHub() {
-  return Boolean(getGitHubToken())
+  return sharedWriteTokenEnabled() && Boolean(getSharedGitHubToken())
 }
 
 export function parseGitHubRepositoryUrl(url: string): ParsedGitHubRepository | null {
@@ -127,11 +134,14 @@ function buildGitHubHeaders(init?: GitHubRequestInit) {
   headers.set("Accept", "application/vnd.github+json")
   headers.set("X-GitHub-Api-Version", "2022-11-28")
 
-  const token = getGitHubToken()
+  // An explicitly supplied token always wins; the shared token is only a
+  // fallback for reads.
+  const token = init?.token ?? (init?.tokenRequired ? null : getGitHubToken())
+
   if (token) {
     headers.set("Authorization", `Bearer ${token}`)
   } else if (init?.tokenRequired) {
-    throw new Error("GitHub access token is not configured.")
+    throw new Error("No GitHub credentials were supplied for this write operation.")
   }
 
   return headers
@@ -256,6 +266,8 @@ export async function updateGitHubFile(params: {
     name: string
     email: string
   }
+  /** The acting user's OAuth token. */
+  token: string
 }) {
   const safePath = params.path
     .split("/")
@@ -279,6 +291,7 @@ export async function updateGitHubFile(params: {
     {
       method: "PUT",
       tokenRequired: true,
+      token: params.token,
       headers: {
         "Content-Type": "application/json",
       },
@@ -298,6 +311,8 @@ export async function createGitHubBranch(params: {
   repo: string
   branch: string
   sha: string
+  /** The acting user's OAuth token. */
+  token: string
 }) {
   return githubRequest<{
     ref: string
@@ -311,6 +326,7 @@ export async function createGitHubBranch(params: {
     {
       method: "POST",
       tokenRequired: true,
+      token: params.token,
       headers: {
         "Content-Type": "application/json",
       },
@@ -329,12 +345,15 @@ export async function createGitHubPullRequest(params: {
   head: string
   base: string
   body?: string
+  /** The acting user's OAuth token. */
+  token: string
 }) {
   return githubRequest<GitHubPullRequest>(
     `/repos/${encodeURIComponent(params.owner)}/${encodeURIComponent(params.repo)}/pulls`,
     {
       method: "POST",
       tokenRequired: true,
+      token: params.token,
       headers: {
         "Content-Type": "application/json",
       },
@@ -355,6 +374,8 @@ export async function mergeGitHubPullRequest(params: {
   commitTitle?: string
   commitMessage?: string
   mergeMethod?: "merge" | "squash" | "rebase"
+  /** The acting user's OAuth token. */
+  token: string
 }) {
   return githubRequest<{
     sha: string
@@ -365,6 +386,7 @@ export async function mergeGitHubPullRequest(params: {
     {
       method: "PUT",
       tokenRequired: true,
+      token: params.token,
       headers: {
         "Content-Type": "application/json",
       },

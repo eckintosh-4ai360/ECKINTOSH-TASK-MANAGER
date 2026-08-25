@@ -18,6 +18,7 @@ import {
   Edit2,
   Columns,
 } from "lucide-react"
+import { sanitizeNoteHtml } from "@/lib/sanitize-html"
 import { RichTextEditor } from "./rich-text-editor"
 import {
   createNote,
@@ -342,7 +343,7 @@ export function JotItContent({ initialNotes }: { initialNotes: JotNote[] }) {
             <div
               className="min-h-[360px] p-5 rounded-xl glass border-primary/10 overflow-y-auto max-h-[calc(100vh-320px)] border-l-4"
               style={{ borderLeftColor: draft.color }}
-              dangerouslySetInnerHTML={{ __html: draft.content || "<p class=\"text-muted-foreground italic\">Nothing to preview yet.</p>" }}
+              dangerouslySetInnerHTML={{ __html: safeDraftHtml || "<p class=\"text-muted-foreground italic\">Nothing to preview yet.</p>" }}
             />
           )}
 
@@ -357,7 +358,7 @@ export function JotItContent({ initialNotes }: { initialNotes: JotNote[] }) {
               <div
                 className="rich-preview min-h-[360px] p-5 rounded-xl glass border-primary/10 overflow-y-auto max-h-[calc(100vh-320px)] border-l-4 text-sm leading-7"
                 style={{ borderLeftColor: draft.color }}
-                dangerouslySetInnerHTML={{ __html: draft.content || "<p class=\"text-muted-foreground italic\">Start writing on the left...</p>" }}
+                dangerouslySetInnerHTML={{ __html: safeDraftHtml || "<p class=\"text-muted-foreground italic\">Start writing on the left...</p>" }}
               />
             </div>
           )}

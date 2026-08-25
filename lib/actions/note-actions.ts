@@ -2,6 +2,7 @@
 
 import prisma from "@/lib/prisma"
 import { requireSession } from "@/lib/auth"
+import { sanitizeNoteHtml } from "@/lib/sanitize-html"
 import { getPermissionError, hasPermission } from "@/lib/rbac"
 import { revalidatePath } from "next/cache"
 
@@ -54,7 +55,8 @@ export async function createNote(input: NoteInput) {
   if (!hasPermission(session.role, "manage_own_notes")) {
     return { success: false, error: getPermissionError("manage_own_notes") }
   }
-  const content = input.content?.trim() ?? ""
+  // Note bodies are rendered as HTML, so scrub them before they are stored.
+  const content = sanitizeNoteHtml(input.content?.trim() ?? "")
 
   const note = await prisma.note.create({
     data: {
@@ -74,7 +76,7 @@ export async function updateNote(noteId: string, input: NoteInput) {
   if (!hasPermission(session.role, "manage_own_notes")) {
     return { success: false, error: getPermissionError("manage_own_notes") }
   }
-  const content = input.content ?? ""
+  const content = sanitizeNoteHtml(input.content ?? "")
 
   const updated = await prisma.note.updateMany({
     where: { id: noteId, ownerId: session.id },

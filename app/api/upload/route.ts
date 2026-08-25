@@ -3,40 +3,12 @@ import { writeFile, mkdir } from "fs/promises"
 import path from "path"
 import { getSession } from "@/lib/auth"
 import { hasPermission } from "@/lib/rbac"
+import { MEDIA_ROOT, MEDIA_TYPES, keyToMediaUrl } from "@/lib/media-storage"
+
+export const runtime = "nodejs"
 
 // 50MB max
 const MAX_SIZE = 50 * 1024 * 1024
-
-const MEDIA_TYPES: Record<string, string> = {
-  // Images
-  "image/jpeg": "image",
-  "image/jpg": "image",
-  "image/png": "image",
-  "image/gif": "image",
-  "image/webp": "image",
-  "image/svg+xml": "image",
-  // Video
-  "video/mp4": "video",
-  "video/webm": "video",
-  "video/ogg": "video",
-  "video/quicktime": "video",
-  // Audio
-  "audio/mpeg": "audio",
-  "audio/mp3": "audio",
-  "audio/wav": "audio",
-  "audio/ogg": "audio",
-  "audio/aac": "audio",
-  "audio/webm": "audio",
-  // Documents
-  "application/pdf": "document",
-  "application/msword": "document",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "document",
-  "application/vnd.ms-excel": "document",
-  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "document",
-  "text/plain": "document",
-  "application/zip": "document",
-  "application/x-zip-compressed": "document",
-}
 
 export async function POST(request: NextRequest) {
   try {
@@ -52,25 +24,24 @@ export async function POST(request: NextRequest) {
     if (!file) return NextResponse.json({ error: "No file provided" }, { status: 400 })
     if (file.size > MAX_SIZE) return NextResponse.json({ error: "File too large (max 50MB)" }, { status: 413 })
 
-    const mediaType = MEDIA_TYPES[file.type]
-    if (!mediaType) return NextResponse.json({ error: `Unsupported file type: ${file.type}` }, { status: 415 })
+    const entry = MEDIA_TYPES[file.type]
+    if (!entry) {
+      return NextResponse.json({ error: `Unsupported file type: ${file.type}` }, { status: 415 })
+    }
 
-    // Save to public/uploads/chat/<userId>/
-    const uploadDir = path.join(process.cwd(), "public", "uploads", "chat", session.id)
+    // Store under a private root, never public/. The extension comes from our
+    // own allowlist rather than the client-supplied filename, so a
+    // "report.pdf.html" upload cannot pick its own content type on the way out.
+    const key = `chat/${session.id}`
+    const uploadDir = path.join(MEDIA_ROOT, key)
     await mkdir(uploadDir, { recursive: true })
 
-    const ext = file.name.split(".").pop() ?? "bin"
-    const filename = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
-    const fullPath = path.join(uploadDir, filename)
-
-    const buffer = Buffer.from(await file.arrayBuffer())
-    await writeFile(fullPath, buffer)
-
-    const url = `/uploads/chat/${session.id}/${filename}`
+    const filename = `${Date.now()}-${Math.random().toString(36).slice(2)}.${entry.ext}`
+    await writeFile(path.join(uploadDir, filename), Buffer.from(await file.arrayBuffer()))
 
     return NextResponse.json({
-      url,
-      mediaType,
+      url: keyToMediaUrl(`${key}/${filename}`),
+      mediaType: entry.kind,
       mediaName: file.name,
       mediaSize: file.size,
     })

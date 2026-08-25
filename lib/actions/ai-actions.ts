@@ -2,6 +2,7 @@
 
 import prisma from "@/lib/prisma"
 import { requireSession } from "@/lib/auth"
+import { sanitizeNoteHtml } from "@/lib/sanitize-html"
 import { createProject, createTask } from "@/lib/actions/project-actions"
 import { createCalendarEvent } from "@/lib/actions/calendar-actions"
 import { createSprint } from "@/lib/actions/sprint-actions"
@@ -438,7 +439,9 @@ export async function aiCreateNote(args: {
   content: string
   color?: string
 }) {
-  const htmlContent = await marked.parse(args.content)
+  // marked does not sanitize, and this is model output heading straight for
+  // dangerouslySetInnerHTML.
+  const htmlContent = sanitizeNoteHtml(await marked.parse(args.content))
   return createNote({
     title: args.title,
     content: htmlContent,

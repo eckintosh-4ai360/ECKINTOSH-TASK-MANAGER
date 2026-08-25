@@ -2,7 +2,7 @@ import "dotenv/config"
 import { createServer } from "http"
 import { parse } from "url"
 import next from "next"
-import { WebSocketServer, WebSocket } from "ws"
+import WebSocket, { WebSocketServer } from "ws"
 import { PrismaClient } from "@prisma/client"
 import { PrismaPg } from "@prisma/adapter-pg"
 import pg from "pg"
@@ -24,8 +24,13 @@ const pool = new Pool({
 const adapter = new PrismaPg(pool)
 const prisma = new PrismaClient({ adapter })
 
-// ─── Connected clients: userId → WebSocket ─────────────────────────────────────
-const clients = new Map<string, WebSocket>()
+// ─── Connected clients: userId → Set<WebSocket> (multi-tab support) ───────────
+type ExtendedWebSocket = WebSocket & {
+  isAlive?: boolean
+  messageTimestamps?: number[]
+}
+
+const clients = new Map<string, Set<ExtendedWebSocket>>()
 ;(global as any).onlineUsersSet = clients
 
 function getCookieValue(cookieHeader: string | undefined, name: string) {
@@ -48,6 +53,21 @@ async function getSocketSession(req: { headers: { cookie?: string } }) {
   return verifySessionToken(token)
 }
 
+// ─── Rate limiting helper (max 20 messages per 5 seconds per socket) ───────────
+const RATE_LIMIT_WINDOW_MS = 5000
+const RATE_LIMIT_MAX_MESSAGES = 20
+
+function checkRateLimit(ws: ExtendedWebSocket): boolean {
+  const now = Date.now()
+  if (!ws.messageTimestamps) ws.messageTimestamps = []
+  ws.messageTimestamps = ws.messageTimestamps.filter((t) => now - t < RATE_LIMIT_WINDOW_MS)
+  if (ws.messageTimestamps.length >= RATE_LIMIT_MAX_MESSAGES) {
+    return false
+  }
+  ws.messageTimestamps.push(now)
+  return true
+}
+
 // ─── Next.js app ───────────────────────────────────────────────────────────────
 const app = next({ dev, hostname, port })
 const handle = app.getRequestHandler()
@@ -58,10 +78,36 @@ app.prepare().then(() => {
     handle(req, res, parsedUrl)
   })
 
-  // ─── WebSocket Server ──────────────────────────────────────────────────────
-  const wss = new WebSocketServer({ server: httpServer, path: "/ws" })
+  // ─── WebSocket Server (with 64KB max payload) ───────────────────────────────
+  const wss = new WebSocketServer({
+    server: httpServer,
+    path: "/ws",
+    maxPayload: 64 * 1024, // 64 KB max payload to prevent DoS
+  })
 
-  wss.on("connection", (ws, req) => {
+  // ─── Heartbeat Keep-Alive (detect dead/zombie sockets every 30s) ─────────────
+  const pingInterval = setInterval(() => {
+    wss.clients.forEach((client) => {
+      const extWs = client as ExtendedWebSocket
+      if (extWs.isAlive === false) {
+        return extWs.terminate()
+      }
+      extWs.isAlive = false
+      extWs.ping()
+    })
+  }, 30_000)
+
+  wss.on("close", () => {
+    clearInterval(pingInterval)
+  })
+
+  wss.on("connection", (rawWs, req) => {
+    const ws = rawWs as ExtendedWebSocket
+    ws.isAlive = true
+    ws.on("pong", () => {
+      ws.isAlive = true
+    })
+
     void (async () => {
       const url = new URL(req.url!, `http://${hostname}`)
       const userId = url.searchParams.get("userId")
@@ -72,133 +118,149 @@ app.prepare().then(() => {
         return
       }
 
-      // Register client
-      clients.set(userId, ws)
-      console.log(`[WS] Connected: ${userId} (${clients.size} online)`)
+      // Register client in Set to allow multiple tabs/windows
+      let userSockets = clients.get(userId)
+      const isFirstConnection = !userSockets || userSockets.size === 0
+      if (!userSockets) {
+        userSockets = new Set<ExtendedWebSocket>()
+        clients.set(userId, userSockets)
+      }
+      userSockets.add(ws)
+      console.log(`[WS] Connected: ${userId} (${clients.size} distinct users online, ${userSockets.size} tabs for this user)`)
 
-      // Broadcast online presence
-      broadcast({ type: "presence", userId, online: true }, userId)
+      // Broadcast online presence if first tab connected
+      if (isFirstConnection) {
+        broadcast({ type: "presence", userId, online: true }, userId)
+      }
 
       ws.on("message", async (raw) => {
-      try {
-        const data = JSON.parse(raw.toString())
-
-        if (data.type === "chat") {
-          const { to, content, replyToId, mediaUrl, mediaType, mediaName, mediaSize } = data as {
-            to: string
-            content?: string
-            replyToId?: string
-            mediaUrl?: string
-            mediaType?: string
-            mediaName?: string
-            mediaSize?: number
+        try {
+          if (!checkRateLimit(ws)) {
+            ws.send(JSON.stringify({ type: "error", message: "Rate limit exceeded. Please slow down." }))
+            return
           }
 
-          if (!to || (!content?.trim() && !mediaUrl)) return
+          const data = JSON.parse(raw.toString())
 
-          // Persist to DB
-          const saved = await prisma.message.create({
-            data: {
-              senderId: userId,
-              receiverId: to,
-              content: content?.trim() ?? null,
-              ...(replyToId ? { replyToId } : {}),
-              ...(mediaUrl ? { mediaUrl, mediaType, mediaName, mediaSize } : {}),
-            },
-            include: {
-              sender: { select: { name: true, email: true } },
-              replyTo: {
-                select: {
-                  id: true,
-                  content: true,
-                  sender: { select: { name: true, email: true } },
+          if (data.type === "chat") {
+            const { to, content, replyToId, mediaUrl, mediaType, mediaName, mediaSize } = data as {
+              to: string
+              content?: string
+              replyToId?: string
+              mediaUrl?: string
+              mediaType?: string
+              mediaName?: string
+              mediaSize?: number
+            }
+
+            if (!to || (!content?.trim() && !mediaUrl)) return
+
+            // Persist to DB
+            const saved = await prisma.message.create({
+              data: {
+                senderId: userId,
+                receiverId: to,
+                content: content?.trim() ?? null,
+                ...(replyToId ? { replyToId } : {}),
+                ...(mediaUrl ? { mediaUrl, mediaType, mediaName, mediaSize } : {}),
+              },
+              include: {
+                sender: { select: { name: true, email: true } },
+                replyTo: {
+                  select: {
+                    id: true,
+                    content: true,
+                    sender: { select: { name: true, email: true } },
+                  },
                 },
               },
-            },
-          })
+            })
 
-          const payload = JSON.stringify({
-            type: "chat",
-            id: saved.id,
-            from: userId,
-            to,
-            content: saved.content,
-            senderName: saved.sender.name ?? saved.sender.email,
-            replyToId: saved.replyToId ?? null,
-            replyTo: saved.replyTo
-              ? {
-                  id: saved.replyTo.id,
-                  content: saved.replyTo.content,
-                  senderName: saved.replyTo.sender.name ?? saved.replyTo.sender.email,
-                }
-              : null,
-            mediaUrl: saved.mediaUrl ?? null,
-            mediaType: saved.mediaType ?? null,
-            mediaName: saved.mediaName ?? null,
-            mediaSize: saved.mediaSize ?? null,
-            createdAt: saved.createdAt,
-          })
+            const payload = JSON.stringify({
+              type: "chat",
+              id: saved.id,
+              from: userId,
+              to,
+              content: saved.content,
+              senderName: saved.sender.name ?? saved.sender.email,
+              replyToId: saved.replyToId ?? null,
+              replyTo: saved.replyTo
+                ? {
+                    id: saved.replyTo.id,
+                    content: saved.replyTo.content,
+                    senderName: saved.replyTo.sender.name ?? saved.replyTo.sender.email,
+                  }
+                : null,
+              mediaUrl: saved.mediaUrl ?? null,
+              mediaType: saved.mediaType ?? null,
+              mediaName: saved.mediaName ?? null,
+              mediaSize: saved.mediaSize ?? null,
+              createdAt: saved.createdAt,
+            })
 
-          // Deliver to recipient if online
-          const recipientWs = clients.get(to)
-          if (recipientWs?.readyState === WebSocket.OPEN) {
-            recipientWs.send(payload)
+            // Deliver to recipient's active tabs
+            sendToUser(to, payload)
+
+            // Echo back to all sender's tabs
+            sendToUser(userId, payload)
           }
 
-          // Echo back to sender
-          ws.send(payload)
+          // ── Delete message ─────────────────────────────────────────────────────
+          if (data.type === "delete_message") {
+            const { id } = data as { id: string }
+            if (!id) return
+
+            // Verify ownership
+            const msg = await prisma.message.findUnique({ where: { id }, select: { senderId: true, receiverId: true } })
+            if (!msg || msg.senderId !== userId) return
+
+            await prisma.message.delete({ where: { id } })
+
+            // Notify both sides across all tabs
+            const deletePayload = JSON.stringify({ type: "delete_message", id })
+            sendToUser(userId, deletePayload)
+            sendToUser(msg.receiverId, deletePayload)
+            console.log(`[WS] Message deleted: ${id}`)
+          }
+
+          // ── Edit message ───────────────────────────────────────────────────────
+          if (data.type === "edit_message") {
+            const { id, content } = data as { id: string; content: string }
+            if (!id || !content?.trim()) return
+
+            // Verify ownership
+            const msg = await prisma.message.findUnique({ where: { id }, select: { senderId: true, receiverId: true } })
+            if (!msg || msg.senderId !== userId) return
+
+            const updated = await prisma.message.update({
+              where: { id },
+              data: { content: content.trim(), edited: true },
+            })
+
+            // Notify both sides across all tabs
+            const editPayload = JSON.stringify({ type: "edit_message", id, content: updated.content, edited: true })
+            sendToUser(userId, editPayload)
+            sendToUser(msg.receiverId, editPayload)
+            console.log(`[WS] Message edited: ${id}`)
+          }
+
+        } catch (err) {
+          console.error("[WS] message error:", err)
         }
-
-        // ── Delete message ─────────────────────────────────────────────────────
-        if (data.type === "delete_message") {
-          const { id } = data as { id: string }
-          if (!id) return
-
-          // Verify ownership
-          const msg = await prisma.message.findUnique({ where: { id }, select: { senderId: true, receiverId: true } })
-          if (!msg || msg.senderId !== userId) return
-
-          await prisma.message.delete({ where: { id } })
-
-          // Notify both sides
-          const deletePayload = JSON.stringify({ type: "delete_message", id })
-          ws.send(deletePayload)
-          const otherWs = clients.get(msg.receiverId)
-          if (otherWs?.readyState === WebSocket.OPEN) otherWs.send(deletePayload)
-          console.log(`[WS] Message deleted: ${id}`)
-        }
-
-        // ── Edit message ───────────────────────────────────────────────────────
-        if (data.type === "edit_message") {
-          const { id, content } = data as { id: string; content: string }
-          if (!id || !content?.trim()) return
-
-          // Verify ownership
-          const msg = await prisma.message.findUnique({ where: { id }, select: { senderId: true, receiverId: true } })
-          if (!msg || msg.senderId !== userId) return
-
-          const updated = await prisma.message.update({
-            where: { id },
-            data: { content: content.trim(), edited: true },
-          })
-
-          // Notify both sides
-          const editPayload = JSON.stringify({ type: "edit_message", id, content: updated.content, edited: true })
-          ws.send(editPayload)
-          const otherWs = clients.get(msg.receiverId)
-          if (otherWs?.readyState === WebSocket.OPEN) otherWs.send(editPayload)
-          console.log(`[WS] Message edited: ${id}`)
-        }
-
-      } catch (err) {
-        console.error("[WS] message error:", err)
-      }
-    })
+      })
 
       ws.on("close", () => {
-        clients.delete(userId)
-        console.log(`[WS] Disconnected: ${userId} (${clients.size} online)`)
-        broadcast({ type: "presence", userId, online: false }, userId)
+        const sockets = clients.get(userId)
+        if (sockets) {
+          sockets.delete(ws)
+          if (sockets.size === 0) {
+            clients.delete(userId)
+            console.log(`[WS] User fully disconnected: ${userId} (${clients.size} users online)`)
+            broadcast({ type: "presence", userId, online: false }, userId)
+          } else {
+            console.log(`[WS] Tab closed for user: ${userId} (${sockets.size} tab(s) remaining)`)
+          }
+        }
       })
 
       ws.on("error", (err) => {
@@ -207,11 +269,25 @@ app.prepare().then(() => {
     })()
   })
 
+  function sendToUser(targetUserId: string, message: string) {
+    const userSockets = clients.get(targetUserId)
+    if (!userSockets) return
+    for (const socket of userSockets) {
+      if (socket.readyState === WebSocket.OPEN) {
+        socket.send(message)
+      }
+    }
+  }
+
   function broadcast(payload: object, excludeUserId?: string) {
     const msg = JSON.stringify(payload)
-    clients.forEach((client, id) => {
-      if (id !== excludeUserId && client.readyState === WebSocket.OPEN) {
-        client.send(msg)
+    clients.forEach((userSockets, id) => {
+      if (id !== excludeUserId) {
+        for (const socket of userSockets) {
+          if (socket.readyState === WebSocket.OPEN) {
+            socket.send(msg)
+          }
+        }
       }
     })
   }

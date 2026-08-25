@@ -1,6 +1,8 @@
 import NextAuth from "next-auth"
 import GitHub from "next-auth/providers/github"
 import prisma from "@/lib/prisma"
+import { decideRegistration } from "@/lib/registration-policy"
+import { encryptSecret } from "@/lib/secure-store"
 
 const githubClientId =
   process.env.AUTH_GITHUB_ID
@@ -27,13 +29,21 @@ if (!githubClientId || !githubClientSecret) {
   )
 }
 
+/**
+ * `repo` is requested so that repository writes made in the workspace are
+ * attributed to the person who made them, using their own token, instead of
+ * everyone sharing one machine account. Set GITHUB_OAUTH_SCOPES to override —
+ * e.g. "read:user user:email" for a deployment that never writes to GitHub.
+ */
+const githubScopes = process.env.GITHUB_OAUTH_SCOPES ?? "read:user user:email repo"
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
   secret: authSecret,
   providers: githubClientId && githubClientSecret ? [
     GitHub({
       clientId: githubClientId,
       clientSecret: githubClientSecret,
-      authorization: { params: { scope: "read:user user:email" } },
+      authorization: { params: { scope: githubScopes } },
     }),
   ] : [],
   session: {
@@ -41,7 +51,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   },
   trustHost: true,
   callbacks: {
-    async signIn({ user, profile }) {
+    async signIn({ user, profile, account }) {
       // GitHub may not send email if it's set to private;
       // fall back to the profile email or a generated noreply address.
       const ghLogin = (profile as any)?.login as string | undefined
@@ -62,23 +72,48 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       try {
         const existing = await prisma.user.findUnique({ where: { email } })
 
+        // Anyone with a GitHub account could otherwise provision themselves a
+        // USER role here, which carries messaging, email, and repository
+        // workspace access. Gate it.
+        const workspaceEmpty = existing ? false : (await prisma.user.count()) === 0
+        const decision = decideRegistration(email, Boolean(existing), workspaceEmpty)
+
+        if (!decision.allowed) {
+          console.warn("[auth] signIn denied:", decision.reason)
+          return "/login?error=not_a_member"
+        }
+
+        // Store the caller's own OAuth token so repository writes act as them.
+        const githubIdentity = account?.access_token
+          ? {
+              githubLogin: ghLogin ?? null,
+              githubTokenCipher: encryptSecret(account.access_token),
+              githubScopes: (account.scope as string | undefined) ?? githubScopes,
+              githubConnectedAt: new Date(),
+            }
+          : {}
+
         if (!existing) {
           await prisma.user.create({
             data: {
               email,
-              name: user.name ?? (profile as any)?.login ?? "Developer",
+              name: user.name ?? ghLogin ?? "Developer",
               avatar: user.image ?? null,
-              role: "USER",
+              // The very first account bootstraps the workspace owner.
+              role: decision.reason === "bootstrap" ? "ADMIN" : "USER",
               title: "Developer",
+              ...githubIdentity,
             },
           })
-          console.log("[auth] New user provisioned:", email)
+          console.log(`[auth] New user provisioned (${decision.reason}):`, email)
         } else {
           await prisma.user.update({
             where: { email },
             data: {
               avatar: user.image ?? existing.avatar,
               name: user.name ?? existing.name,
+              lastLoginAt: new Date(),
+              ...githubIdentity,
             },
           })
           console.log("[auth] Existing user updated:", email)

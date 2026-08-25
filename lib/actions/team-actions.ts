@@ -132,7 +132,8 @@ export async function getTeamActivityData(): Promise<TeamMemberActivity[]> {
       const activeProjectName = latestTask?.project.name ?? "DevFlow Platform"
 
       // Real-time online status via WebSocket presence
-      const online = clientsMap ? clientsMap.has(user.id) : false
+      const userSockets = clientsMap?.get(user.id)
+      const online = userSockets ? (userSockets instanceof Set ? userSockets.size > 0 : true) : false
 
       const initials = getInitials(user.name, user.email)
       const roleTitle = user.title ?? (user.role === "ADMIN" ? "Lead Developer" : "Software Engineer")
