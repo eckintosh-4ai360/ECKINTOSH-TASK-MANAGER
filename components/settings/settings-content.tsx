@@ -49,6 +49,7 @@ import {
   Users,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { EmailDeliverySettings } from "@/components/settings/email-delivery-settings"
 import {
   type SettingsNotification,
   type SettingsNotificationPreferences,
@@ -229,6 +230,7 @@ export function SettingsContent({ settings }: SettingsContentProps) {
   const activeTheme = mounted ? resolvedTheme ?? theme : "dark"
   const isDarkMode = activeTheme === "dark"
   const initials = getInitials(form.name || profile.name, form.email || profile.email)
+  const isAdmin = profile.role === "ADMIN"
 
   useEffect(() => {
     setMounted(true)
@@ -446,7 +448,7 @@ export function SettingsContent({ settings }: SettingsContentProps) {
             ? emailDelivered
               ? " Real inbox email sent too."
               : result.emailResult?.skipped
-                ? " Add Resend or SMTP env vars to send real inbox emails."
+                ? " Configure SMTP credentials under Email Delivery to send real inbox emails."
                 : result.emailResult?.error
                   ? ` Email delivery failed: ${result.emailResult.error}`
                   : ""
@@ -772,8 +774,10 @@ export function SettingsContent({ settings }: SettingsContentProps) {
                 description: "Account activity, security updates, and delivery summaries.",
                 detail: preferences.email
                   ? settings.externalEmailConfigured
-                    ? "Real inbox delivery is active through Resend or SMTP."
-                    : "Saved. Add Resend or SMTP env vars to deliver real inbox email."
+                    ? "Real inbox delivery is active."
+                    : isAdmin
+                      ? "Saved. Add SMTP credentials under Email Delivery below to reach real inboxes."
+                      : "Saved. An admin still needs to configure email delivery for the workspace."
                   : "Muted for in-app email copies and real inbox delivery.",
                 icon: Mail,
                 checked: preferences.email,
@@ -1094,6 +1098,14 @@ export function SettingsContent({ settings }: SettingsContentProps) {
           </div>
         </div>
       </div>
+
+      {isAdmin && (
+        <EmailDeliverySettings
+          settings={settings.emailSettings}
+          configuredFromEnvironment={settings.emailConfigFromEnvironment}
+          adminEmail={profile.email}
+        />
+      )}
 
       <div className="glass-card rounded-2xl p-6">
         <div className="flex items-center gap-3 mb-6">

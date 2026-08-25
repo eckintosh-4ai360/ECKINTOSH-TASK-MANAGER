@@ -89,7 +89,7 @@ export async function sendEmail(formData: FormData) {
 
     if (!deliveryResult.success) {
       externalWarning = deliveryResult.skipped
-        ? "Internal email saved. Configure Resend or SMTP to send it to the recipient's real inbox too."
+        ? "Internal email saved. An admin can configure SMTP under Settings → Email Delivery to also reach the recipient's real inbox."
         : `Internal email saved, but external delivery failed: ${deliveryResult.error}`
     }
   }

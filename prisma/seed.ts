@@ -3,6 +3,7 @@ import { PrismaClient } from "@prisma/client"
 import { PrismaPg } from "@prisma/adapter-pg"
 import bcrypt from "bcryptjs"
 import pg from "pg"
+import { getDatabaseSslOptions, normalizeDatabaseUrl } from "../lib/db-ssl"
 
 const { Pool } = pg
 
@@ -12,14 +13,9 @@ async function main() {
 
   console.log("Connecting to:", `${url.substring(0, 40)}...`)
 
-  const cleanUrl = url
-    .replace(/[?&]sslmode=[^&]*/g, "")
-    .replace(/[?&]channel_binding=[^&]*/g, "")
-    .replace(/\?&/, "?")
-
   const pool = new Pool({
-    connectionString: cleanUrl,
-    ssl: { rejectUnauthorized: false },
+    connectionString: normalizeDatabaseUrl(url),
+    ssl: getDatabaseSslOptions(),
   })
   const adapter = new PrismaPg(pool)
   const prisma = new PrismaClient({ adapter })

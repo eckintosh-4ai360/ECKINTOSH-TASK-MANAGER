@@ -61,6 +61,28 @@ export type SettingsReminderSummary = {
   overdue: number
 }
 
+export type SettingsEmailProvider = "gmail" | "smtp"
+
+/** Admin-facing view of the stored SMTP settings. Never carries the password. */
+export type EmailSettingsView = {
+  provider: SettingsEmailProvider
+  host: string
+  port: number
+  secure: boolean
+  username: string
+  fromEmail: string
+  fromName: string
+  enabled: boolean
+  hasPassword: boolean
+  /** False when the encryption key changed and the password must be re-entered. */
+  passwordReadable: boolean
+  lastTestedAt: string | null
+  lastTestStatus: string | null
+  lastTestError: string | null
+  updatedByEmail: string | null
+  updatedAt: string
+}
+
 export type SettingsPageData = {
   profile: SettingsProfile
   preferences: SettingsNotificationPreferences
@@ -69,6 +91,9 @@ export type SettingsPageData = {
   reminderTasks: SettingsReminderTask[]
   reminderSummary: SettingsReminderSummary
   externalEmailConfigured: boolean
+  /** True when delivery comes from SMTP_* env vars rather than the settings page. */
+  emailConfigFromEnvironment: boolean
+  emailSettings: EmailSettingsView | null
   pushDeliveryConfigured: boolean
   vapidPublicKey: string | null
 }

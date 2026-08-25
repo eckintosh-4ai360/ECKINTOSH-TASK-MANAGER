@@ -8,6 +8,7 @@ import { PrismaPg } from "@prisma/adapter-pg"
 import pg from "pg"
 import { hasPermission } from "@/lib/rbac"
 import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/session"
+import { getDatabaseSslOptions, normalizeDatabaseUrl } from "@/lib/db-ssl"
 
 const { Pool } = pg
 const dev = process.env.NODE_ENV !== "production"
@@ -16,11 +17,10 @@ const port = parseInt(process.env.PORT ?? "3000", 10)
 
 // ─── Prisma (for persisting messages) ─────────────────────────────────────────
 const rawUrl = process.env.DATABASE_URL!
-const cleanUrl = rawUrl
-  .replace(/[?&]sslmode=[^&]*/g, "")
-  .replace(/[?&]channel_binding=[^&]*/g, "")
-  .replace(/\?&/, "?")
-const pool = new Pool({ connectionString: cleanUrl, ssl: { rejectUnauthorized: false } })
+const pool = new Pool({
+  connectionString: normalizeDatabaseUrl(rawUrl),
+  ssl: getDatabaseSslOptions(),
+})
 const adapter = new PrismaPg(pool)
 const prisma = new PrismaClient({ adapter })
 

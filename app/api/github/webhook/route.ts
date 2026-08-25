@@ -42,15 +42,32 @@ type GitHubPullRequestEvent = {
   }
 }
 
-function verifySignature(body: string, signatureHeader: string | null) {
+type SignatureResult = { ok: true } | { ok: false; reason: string; status: number }
+
+// Fails CLOSED. An unsigned webhook fans notifications and email out to every
+// user in the workspace, so an unconfigured secret must reject the request
+// rather than wave it through.
+function verifySignature(body: string, signatureHeader: string | null): SignatureResult {
   const secret = process.env.GITHUB_WEBHOOK_SECRET
-  if (!secret) return true
-  if (!signatureHeader) return false
+
+  if (!secret) {
+    console.error("[github-webhook] Rejected: GITHUB_WEBHOOK_SECRET is not configured.")
+    return { ok: false, reason: "Webhook delivery is not configured.", status: 503 }
+  }
+
+  if (!signatureHeader) {
+    return { ok: false, reason: "Missing x-hub-signature-256 header.", status: 401 }
+  }
 
   const digest = `sha256=${crypto.createHmac("sha256", secret).update(body).digest("hex")}`
   const expected = Buffer.from(digest)
   const actual = Buffer.from(signatureHeader)
-  return expected.length === actual.length && crypto.timingSafeEqual(expected, actual)
+
+  if (expected.length !== actual.length || !crypto.timingSafeEqual(expected, actual)) {
+    return { ok: false, reason: "Invalid webhook signature.", status: 401 }
+  }
+
+  return { ok: true }
 }
 
 function normalizeRepositoryUrl(url: string | undefined) {
@@ -85,8 +102,9 @@ export async function POST(request: Request) {
   const signature = request.headers.get("x-hub-signature-256")
   const event = request.headers.get("x-github-event")
 
-  if (!verifySignature(body, signature)) {
-    return NextResponse.json({ error: "Invalid webhook signature." }, { status: 401 })
+  const signatureResult = verifySignature(body, signature)
+  if (!signatureResult.ok) {
+    return NextResponse.json({ error: signatureResult.reason }, { status: signatureResult.status })
   }
 
   try {

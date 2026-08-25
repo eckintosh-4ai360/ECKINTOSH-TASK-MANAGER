@@ -452,3 +452,29 @@ model InternalEmail {
 
   @@map("internal_emails")
 }
+
+// ─── Outbound Email Configuration ────────────────────────────────────────────
+
+/// Single-row table (id is always "singleton") holding the SMTP credentials an
+/// admin enters under Settings → Email Delivery. The password is never stored
+/// in plaintext — see lib/secure-store.ts.
+model EmailSetting {
+  id             String    @id @default("singleton")
+  provider       String    @default("gmail") // gmail | smtp
+  host           String    @default("smtp.gmail.com")
+  port           Int       @default(465)
+  secure         Boolean   @default(true)
+  username       String
+  passwordCipher String
+  fromEmail      String
+  fromName       String    @default("Spagad Notifications")
+  enabled        Boolean   @default(true)
+  lastTestedAt   DateTime?
+  lastTestStatus String? // success | failed
+  lastTestError  String?
+  updatedByEmail String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@map("email_settings")
+}

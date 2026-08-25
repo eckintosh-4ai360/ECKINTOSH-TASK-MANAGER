@@ -1,6 +1,7 @@
 import { PrismaClient } from "@prisma/client"
 import { PrismaPg } from "@prisma/adapter-pg"
 import pg from "pg"
+import { getDatabaseSslOptions, normalizeDatabaseUrl } from "@/lib/db-ssl"
 
 const { Pool } = pg
 
@@ -12,13 +13,10 @@ export function getDb(): PrismaClient {
   const url = process.env.DATABASE_URL
   if (!url) throw new Error("DATABASE_URL is not defined. Check your .env or .env.local file.")
 
-  // Strip SSL params that confuse the pg driver, pass ssl explicitly
-  const cleanUrl = url
-    .replace(/[?&]sslmode=[^&]*/g, "")
-    .replace(/[?&]channel_binding=[^&]*/g, "")
-    .replace(/\?&/, "?")
-
-  const pool = new Pool({ connectionString: cleanUrl, ssl: { rejectUnauthorized: false } })
+  const pool = new Pool({
+    connectionString: normalizeDatabaseUrl(url),
+    ssl: getDatabaseSslOptions(),
+  })
   const adapter = new PrismaPg(pool)
   _client = new PrismaClient({ adapter })
   return _client

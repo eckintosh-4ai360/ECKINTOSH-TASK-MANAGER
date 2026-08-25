@@ -2,7 +2,8 @@
 
 import { cookies } from "next/headers"
 import { revalidatePath } from "next/cache"
-import { hasExternalEmailDeliveryConfig, sendExternalEmail } from "@/lib/email-delivery"
+import { getEmailDeliveryConfig, sendExternalEmail } from "@/lib/email-delivery"
+import { readEmailSettings } from "@/lib/email-settings"
 import prisma from "@/lib/prisma"
 import { createNotificationForUser } from "@/lib/notifications"
 import {
@@ -24,6 +25,7 @@ import {
   upsertPushSubscription,
 } from "@/lib/push"
 import { createSession, requireSession } from "@/lib/auth"
+import { hasPermission } from "@/lib/rbac"
 import { SESSION_COOKIE_NAME } from "@/lib/session"
 
 const ACTIVE_TASK_STATUSES = ["BACKLOG", "TODO", "IN_PROGRESS", "IN_REVIEW"] as const
@@ -245,6 +247,12 @@ export async function getSettingsPageData(): Promise<SettingsPageData> {
         }),
       ])
 
+    const emailConfig = await getEmailDeliveryConfig()
+
+    // The stored SMTP settings are admin-only; everyone else just sees whether
+    // delivery is on.
+    const emailSettings = hasPermission(session.role, "manage_users") ? await readEmailSettings() : null
+
     return {
       profile: user ? normalizeProfile(user) : fallbackProfile,
       preferences: preferencesFromRecord(preferences),
@@ -262,7 +270,9 @@ export async function getSettingsPageData(): Promise<SettingsPageData> {
         dueSoon,
         overdue,
       },
-      externalEmailConfigured: hasExternalEmailDeliveryConfig(),
+      externalEmailConfigured: emailConfig !== null,
+      emailConfigFromEnvironment: emailConfig?.source === "environment",
+      emailSettings,
       pushDeliveryConfigured: hasWebPushConfig(),
       vapidPublicKey: getPublicVapidKey(),
     }
@@ -279,7 +289,9 @@ export async function getSettingsPageData(): Promise<SettingsPageData> {
         dueSoon: 0,
         overdue: 0,
       },
-      externalEmailConfigured: hasExternalEmailDeliveryConfig(),
+      externalEmailConfigured: false,
+      emailConfigFromEnvironment: false,
+      emailSettings: null,
       pushDeliveryConfigured: hasWebPushConfig(),
       vapidPublicKey: getPublicVapidKey(),
     }

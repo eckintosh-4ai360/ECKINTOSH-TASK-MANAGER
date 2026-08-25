@@ -1,16 +1,36 @@
 import { NextRequest, NextResponse } from "next/server"
-import Groq from "groq-sdk"
+import { getSession } from "@/lib/auth"
+import { getGroqClient } from "@/lib/ai/groq"
 
-const groq = new Groq({
-  apiKey: process.env.GROQ_API_KEY,
-})
+const MAX_PROMPT_LENGTH = 2000
 
 export async function POST(req: NextRequest) {
   try {
+    // Model calls cost money — never serve them to anonymous callers.
+    const session = await getSession()
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    const groq = getGroqClient()
+    if (!groq) {
+      return NextResponse.json(
+        { error: "AI diagram generation is unavailable — GROQ_API_KEY is not configured." },
+        { status: 503 },
+      )
+    }
+
     const { prompt } = await req.json()
 
-    if (!prompt || !prompt.trim()) {
+    if (typeof prompt !== "string" || !prompt.trim()) {
       return NextResponse.json({ error: "Prompt is required" }, { status: 400 })
+    }
+
+    if (prompt.length > MAX_PROMPT_LENGTH) {
+      return NextResponse.json(
+        { error: `Prompt is too long (max ${MAX_PROMPT_LENGTH} characters).` },
+        { status: 413 },
+      )
     }
 
     const systemPrompt = `You are a system architect and diagram designer. 
@@ -83,9 +103,6 @@ Example Response:
     return NextResponse.json(data)
   } catch (error) {
     console.error("AI Diagram generation error:", error)
-    return NextResponse.json(
-      { error: "Failed to generate diagram. Ensure GROQ_API_KEY is set in your .env file." },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: "Failed to generate diagram." }, { status: 500 })
   }
 }

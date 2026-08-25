@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import type Groq from "groq-sdk"
 import { getAIProductivityIntelligence, getAIWorkspaceContext } from "@/lib/actions/ai-actions"
 import { getGroqClient } from "@/lib/ai/groq"
+import { getSession } from "@/lib/auth"
 
 // ─── Tool Definitions ────────────────────────────────────────────────────────
 
@@ -318,6 +319,13 @@ You also have a built-in productivity intelligence layer:
 
 export async function POST(req: NextRequest) {
   try {
+    // Explicit gate. The downstream actions call requireSession(), but that
+    // redirects rather than returning a status, so guard here for a clean 401.
+    const session = await getSession()
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
     const { messages, executeAction } = await req.json()
 
     // If this is an action execution request (confirmed by user)

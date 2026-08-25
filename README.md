@@ -86,7 +86,8 @@ Replace the placeholders below with your actual screenshot paths:
 
 ### 🔔 Notifications
 
-- **Push notifications** (Web Push / VAPID) and **email notifications** (Resend or SMTP)
+- **Push notifications** (Web Push / VAPID) and **email notifications** via Gmail or any SMTP server
+- Admins configure outbound email in-app under **Settings → Email Delivery** — credentials are verified on save and stored encrypted
 - Granular preference controls: task reminders, team updates, daily digest, overdue escalation, quiet hours
 
 ### 👥 Team Management
@@ -130,7 +131,7 @@ Replace the placeholders below with your actual screenshot paths:
 | **Whiteboard**         | [Excalidraw](https://excalidraw.com/)                              |
 | **Charts**             | [Recharts](https://recharts.org/)                                  |
 | **AI**                 | [Groq SDK](https://groq.com/)                                      |
-| **Email**              | [Resend](https://resend.com/) / Nodemailer (SMTP fallback)         |
+| **Email**              | Nodemailer (Gmail / SMTP, configured in-app)                        |
 | **Push Notifications** | Web Push (VAPID)                                                   |
 | **Drag & Drop**        | [@hello-pangea/dnd](https://github.com/hello-pangea/dnd)           |
 | **Forms**              | React Hook Form + Zod                                              |
@@ -145,7 +146,7 @@ Replace the placeholders below with your actual screenshot paths:
 - **Node.js** 18+ and **npm** 10+
 - A **PostgreSQL** database (recommended: [Neon](https://neon.tech/) for serverless)
 - A **GitHub OAuth App** ([create one here](https://github.com/settings/developers))
-- Optional: [Resend](https://resend.com/) account for email notifications
+- Optional: a Gmail account with an [App Password](https://myaccount.google.com/apppasswords), or any SMTP server, for outbound email
 
 ---
 
@@ -197,17 +198,16 @@ NEXT_PUBLIC_VAPID_PUBLIC_KEY=""
 VAPID_PRIVATE_KEY=""
 VAPID_SUBJECT="mailto:you@example.com"
 
-# ─── Email (Resend) ───────────────────────────────────────────────────────────
-RESEND_API_KEY=""
-NOTIFICATION_FROM_EMAIL="notifications@yourdomain.com"
-NOTIFICATION_FROM_NAME="Your App Notifications"
-
-# ─── SMTP fallback (if not using Resend) ─────────────────────────────────────
+# ─── Outbound Email (optional fallback) ──────────────────────────────────────
+# Preferred: configure Gmail/SMTP in-app under Settings → Email Delivery.
+# Anything saved there overrides these variables.
 SMTP_HOST=""
 SMTP_PORT="587"
 SMTP_SECURE="false"
 SMTP_USER=""
 SMTP_PASSWORD=""
+NOTIFICATION_FROM_EMAIL="notifications@yourdomain.com"
+NOTIFICATION_FROM_NAME="Your App Notifications"
 
 # ─── GitHub Workspace Integration ─────────────────────────────────────────────
 GITHUB_ACCESS_TOKEN=""
