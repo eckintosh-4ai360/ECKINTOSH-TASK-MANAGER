@@ -180,13 +180,17 @@ export async function updateUserRoleAction(userId: string, role: string) {
 }
 
 // ─── Admin: Unlock a locked-out account ───────────────────────────────────────
-export async function unlockUserAction(userId: string) {
+export async function unlockUserAction(userId: string): Promise<{ success: true } | { error: string }> {
   await requireAdmin()
 
-  await prisma.user.update({
-    where: { id: userId },
-    data: { failedLoginAttempts: 0, lockedUntil: null },
-  })
+  try {
+    await prisma.user.update({
+      where: { id: userId },
+      data: { failedLoginAttempts: 0, lockedUntil: null },
+    })
+  } catch {
+    return { error: "That user no longer exists." }
+  }
 
   revalidatePath("/admin/users")
   return { success: true }

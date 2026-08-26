@@ -33,6 +33,8 @@ model User {
   githubScopes      String?
   githubConnectedAt DateTime?
 
+  sentInvitations Invitation[]
+
   projects         Project[]
   projectMembers   ProjectMember[]
   tasks            Task[]
@@ -464,6 +466,29 @@ model InternalEmail {
   to   User @relation("EmailTo", fields: [toId], references: [id], onDelete: Cascade)
 
   @@map("internal_emails")
+}
+
+// ─── Workspace Invitations ────────────────────────────────────────────────────
+
+/// A pending or resolved invite to join the workspace. Created by
+/// sendWorkspaceInvites, consumed either by GitHub OAuth sign-in (auth.ts) or
+/// by setting a password on the /invite/[token] page. Only tokenHash is
+/// stored — the raw token exists only in the emailed link.
+model Invitation {
+  id          String    @id @default(cuid())
+  email       String
+  role        UserRole  @default(USER)
+  tokenHash   String    @unique
+  message     String?
+  invitedById String
+  acceptedAt  DateTime?
+  expiresAt   DateTime
+  createdAt   DateTime  @default(now())
+
+  invitedBy User @relation(fields: [invitedById], references: [id], onDelete: Cascade)
+
+  @@index([email])
+  @@map("invitations")
 }
 
 // ─── Outbound Email Configuration ────────────────────────────────────────────

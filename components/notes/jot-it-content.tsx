@@ -61,6 +61,10 @@ export function JotItContent({ initialNotes }: { initialNotes: JotNote[] }) {
   const [isPending, startTransition] = useTransition()
   const [mode, setMode] = useState<"edit" | "preview" | "split">("edit")
 
+  // Defence in depth: content is sanitized on save, but rows written before
+  // that existed still have to be safe to render.
+  const safeDraftHtml = useMemo(() => sanitizeNoteHtml(draft.content), [draft.content])
+
   const filteredNotes = useMemo(() => {
     const value = query.trim().toLowerCase()
     if (!value) return notes

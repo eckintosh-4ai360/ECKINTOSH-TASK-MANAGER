@@ -1,7 +1,12 @@
 "use client"
 
 import { useState, useTransition } from "react"
-import { createUserAction, deleteUserAction } from "@/lib/actions/auth-actions"
+import {
+  createUserAction,
+  deleteUserAction,
+  unlockUserAction,
+  updateUserRoleAction,
+} from "@/lib/actions/auth-actions"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -13,7 +18,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import { Plus, Trash2, Shield, User, Eye, Mail, AlertCircle, CheckCircle2, Loader2 } from "lucide-react"
+import { Plus, Trash2, Shield, User, Eye, Mail, AlertCircle, CheckCircle2, Loader2, Lock, LockOpen, Github } from "lucide-react"
 import { toast } from "sonner"
 
 interface UserRow {
@@ -22,10 +27,17 @@ interface UserRow {
   email: string
   role: string
   createdAt: Date
+  lockedUntil?: Date | null
+  lastLoginAt?: Date | null
+  githubLogin?: string | null
 }
 
 interface UserManagementProps {
   users: UserRow[]
+}
+
+function isLocked(lockedUntil: Date | null | undefined) {
+  return Boolean(lockedUntil && new Date(lockedUntil).getTime() > Date.now())
 }
 
 export function UserManagement({ users }: UserManagementProps) {
@@ -52,6 +64,22 @@ export function UserManagement({ users }: UserManagementProps) {
     })
   }
 
+  function handleRoleChange(userId: string, email: string, nextRole: string) {
+    startTransition(async () => {
+      const result = await updateUserRoleAction(userId, nextRole)
+      if (result?.error) toast.error(result.error)
+      else toast.success(`${email} is now ${nextRole}. It applies on their next request.`)
+    })
+  }
+
+  function handleUnlock(userId: string, email: string) {
+    startTransition(async () => {
+      const result = await unlockUserAction(userId)
+      if ("error" in result) toast.error(result.error)
+      else toast.success(`${email} unlocked.`)
+    })
+  }
+
   function handleDelete(userId: string, email: string) {
     if (!confirm(`Delete user "${email}"? This cannot be undone.`)) return
 
@@ -62,28 +90,6 @@ export function UserManagement({ users }: UserManagementProps) {
     })
   }
 
-  const getRoleBadge = (role: string) => {
-    switch (role) {
-      case "ADMIN":
-        return (
-          <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded border font-mono uppercase bg-primary/20 text-primary border-primary/30">
-            <Shield className="w-2.5 h-2.5" /> Admin
-          </span>
-        )
-      case "USER":
-        return (
-          <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded border font-mono uppercase bg-chart-4/20 text-chart-4 border-chart-4/30">
-            <User className="w-2.5 h-2.5" /> User
-          </span>
-        )
-      default:
-        return (
-          <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded border font-mono uppercase bg-muted text-muted-foreground border-border">
-            <Eye className="w-2.5 h-2.5" /> Guest
-          </span>
-        )
-    }
-  }
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -174,10 +180,51 @@ export function UserManagement({ users }: UserManagementProps) {
                 <p className="text-xs text-muted-foreground font-mono truncate">{user.email}</p>
               </div>
               <div className="flex items-center gap-3">
-                {getRoleBadge(user.role)}
-                <span className="text-[10px] text-muted-foreground font-mono hidden sm:block">
-                  {new Date(user.createdAt).toLocaleDateString()}
-                </span>
+                {user.githubLogin && (
+                  <span
+                    title={`GitHub connected as @${user.githubLogin}`}
+                    className="hidden sm:flex items-center gap-1 text-[10px] text-muted-foreground font-mono"
+                  >
+                    <Github className="w-3 h-3" />
+                    {user.githubLogin}
+                  </span>
+                )}
+
+                {isLocked(user.lockedUntil) ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 gap-1 text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 text-[11px]"
+                    onClick={() => handleUnlock(user.id, user.email)}
+                    disabled={isPending}
+                    title="Locked after too many failed sign-in attempts"
+                  >
+                    <Lock className="w-3 h-3" />
+                    Locked
+                  </Button>
+                ) : (
+                  <span className="hidden lg:flex items-center gap-1 text-[10px] text-muted-foreground font-mono">
+                    <LockOpen className="w-3 h-3 opacity-40" />
+                    {user.lastLoginAt ? new Date(user.lastLoginAt).toLocaleDateString() : "never"}
+                  </span>
+                )}
+
+                <Select value={user.role} onValueChange={(next) => handleRoleChange(user.id, user.email, next)}>
+                  <SelectTrigger className="glass border-border/40 h-8 w-[110px] text-xs" disabled={isPending}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="glass-card border-primary/20">
+                    <SelectItem value="ADMIN">
+                      <span className="flex items-center gap-1.5"><Shield className="w-3 h-3 text-primary" /> Admin</span>
+                    </SelectItem>
+                    <SelectItem value="USER">
+                      <span className="flex items-center gap-1.5"><User className="w-3 h-3 text-chart-4" /> User</span>
+                    </SelectItem>
+                    <SelectItem value="GUEST">
+                      <span className="flex items-center gap-1.5"><Eye className="w-3 h-3 text-muted-foreground" /> Guest</span>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
                 <Button
                   variant="ghost"
                   size="icon"

@@ -29,12 +29,25 @@ export function validatePassword(password: string, context: { email?: string; na
     return "That password is too common. Choose something less predictable."
   }
 
-  // Reject passwords built out of the account's own identifiers.
-  const localPart = context.email?.split("@")[0]?.toLowerCase()
+  // Reject passwords built out of the account's own identifiers. The full
+  // address is checked unconditionally; the local part only when it is long
+  // enough that a match is not a coincidence.
+  const email = context.email?.toLowerCase()
+  const localPart = email?.split("@")[0]
+
+  if (email && lowered.includes(email)) {
+    return "Password must not contain your email address."
+  }
   if (localPart && localPart.length >= 4 && lowered.includes(localPart)) {
     return "Password must not contain your email address."
   }
-  if (context.name && context.name.length >= 4 && lowered.includes(context.name.toLowerCase())) {
+  // Check the whole name and each individual part, so "Lovelace2026!" is
+  // rejected for Ada Lovelace and not just the full string.
+  const nameParts = context.name
+    ? [context.name, ...context.name.split(/\s+/)].map((part) => part.toLowerCase()).filter((part) => part.length >= 4)
+    : []
+
+  if (nameParts.some((part) => lowered.includes(part))) {
     return "Password must not contain your name."
   }
 

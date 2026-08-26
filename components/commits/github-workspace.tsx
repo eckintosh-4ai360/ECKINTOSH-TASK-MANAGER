@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic"
 import Link from "next/link"
+import { signIn } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import { useEffect, useMemo, useState, useTransition } from "react"
 import { toast } from "sonner"
@@ -140,6 +141,20 @@ export function GitHubWorkspace({ initialData, canMergePullRequests }: GitHubWor
   const [isBranchPending, startBranchTransition] = useTransition()
   const [isPullRequestPending, startPullRequestTransition] = useTransition()
   const [isReviewPending, startReviewTransition] = useTransition()
+  const [isConnectingGitHub, setIsConnectingGitHub] = useState(false)
+
+  async function handleConnectGitHub() {
+    setIsConnectingGitHub(true)
+    try {
+      // Re-runs GitHub OAuth so auth.ts's signIn callback stores this user's
+      // own token — after which their writes are attributed to them, not to
+      // a shared machine account.
+      await signIn("github", { redirectTo: "/auth/complete?returnTo=/commits" })
+    } catch {
+      toast.error("Could not start GitHub sign-in. Please try again.")
+      setIsConnectingGitHub(false)
+    }
+  }
 
   useEffect(() => {
     setWorkspace(initialData)
@@ -487,8 +502,26 @@ export function GitHubWorkspace({ initialData, canMergePullRequests }: GitHubWor
             <p className="mt-1">
               {workspace.writeEnabled
                 ? "File edits and PR actions can be sent to GitHub from here."
-                : "Connect a write-enabled GitHub token to push code or manage pull requests."}
+                : workspace.needsGitHubConnection
+                  ? "Connect your own GitHub account so commits, branches, and pull requests you make here are attributed to you."
+                  : "Connect a write-enabled GitHub token to push code or manage pull requests."}
             </p>
+            {workspace.needsGitHubConnection && (
+              <Button
+                type="button"
+                size="sm"
+                onClick={handleConnectGitHub}
+                disabled={isConnectingGitHub}
+                className="mt-3 h-8 gap-2 bg-primary text-primary-foreground hover:bg-primary/90"
+              >
+                {isConnectingGitHub ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Github className="w-3.5 h-3.5" />
+                )}
+                Connect GitHub
+              </Button>
+            )}
           </div>
         </div>
 

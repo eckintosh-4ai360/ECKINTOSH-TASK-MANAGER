@@ -337,6 +337,7 @@ export async function getGitHubWorkspaceData(
     return {
       configured: isGitHubConfigured(),
       writeEnabled: false,
+      needsGitHubConnection: false,
       repositories: [],
       selectedProjectId: null,
       selectedBranch: null,
@@ -349,15 +350,18 @@ export async function getGitHubWorkspaceData(
   // Writing requires the caller's own GitHub connection, not just a configured
   // deployment — surface that to the UI so write controls are disabled rather
   // than failing at submit time.
-  const canWrite =
-    hasPermission(session.role, "use_repository_workspace")
-    && ((await hasConnectedGitHub(session.id)) || canWriteToGitHub())
+  const ownConnection = await hasConnectedGitHub(session.id)
+  const canWrite = hasPermission(session.role, "use_repository_workspace") && (ownConnection || canWriteToGitHub())
+  // Distinguishes "reconnect GitHub and this works" from "writes are off for
+  // everyone" (no shared fallback token configured either).
+  const needsGitHubConnection = !ownConnection && !canWriteToGitHub()
 
   const repositories = await getTrackedRepositories()
   if (repositories.length === 0) {
     return {
       configured: isGitHubConfigured(),
       writeEnabled: canWrite,
+      needsGitHubConnection,
       repositories: [],
       selectedProjectId: null,
       selectedBranch: null,
@@ -380,6 +384,7 @@ export async function getGitHubWorkspaceData(
     return {
       configured: isGitHubConfigured(),
       writeEnabled: canWrite,
+      needsGitHubConnection,
       repositories,
       selectedProjectId: selected.projectId,
       selectedBranch,
@@ -391,6 +396,7 @@ export async function getGitHubWorkspaceData(
     return {
       configured: isGitHubConfigured(),
       writeEnabled: canWrite,
+      needsGitHubConnection,
       repositories,
       selectedProjectId: selected.projectId,
       selectedBranch: branch || selected.defaultBranch,

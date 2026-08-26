@@ -2,6 +2,7 @@ import NextAuth from "next-auth"
 import GitHub from "next-auth/providers/github"
 import prisma from "@/lib/prisma"
 import { decideRegistration } from "@/lib/registration-policy"
+import { findPendingInvitationByEmail, markInvitationAccepted } from "@/lib/invitations"
 import { encryptSecret } from "@/lib/secure-store"
 
 const githubClientId =
@@ -72,11 +73,17 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       try {
         const existing = await prisma.user.findUnique({ where: { email } })
 
+        // A pending invitation is as good as an admin-created record — it was
+        // an admin who created the invitation, just ahead of the account.
+        const invitation = existing ? null : await findPendingInvitationByEmail(email)
+
         // Anyone with a GitHub account could otherwise provision themselves a
         // USER role here, which carries messaging, email, and repository
         // workspace access. Gate it.
         const workspaceEmpty = existing ? false : (await prisma.user.count()) === 0
-        const decision = decideRegistration(email, Boolean(existing), workspaceEmpty)
+        const decision = invitation
+          ? ({ allowed: true, reason: "invited" } as const)
+          : decideRegistration(email, Boolean(existing), workspaceEmpty)
 
         if (!decision.allowed) {
           console.warn("[auth] signIn denied:", decision.reason)
@@ -99,12 +106,16 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
               email,
               name: user.name ?? ghLogin ?? "Developer",
               avatar: user.image ?? null,
-              // The very first account bootstraps the workspace owner.
-              role: decision.reason === "bootstrap" ? "ADMIN" : "USER",
+              // The very first account bootstraps the workspace owner; an
+              // invited signup gets the role the inviter chose.
+              role: decision.reason === "bootstrap" ? "ADMIN" : invitation?.role ?? "USER",
               title: "Developer",
               ...githubIdentity,
             },
           })
+
+          if (invitation) await markInvitationAccepted(invitation.id)
+
           console.log(`[auth] New user provisioned (${decision.reason}):`, email)
         } else {
           await prisma.user.update({

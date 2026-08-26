@@ -1,7 +1,22 @@
 "use server"
 
+import prisma from "@/lib/prisma"
 import { requireSession } from "@/lib/auth"
+import { hasPermission } from "@/lib/rbac"
+import type { AppRole } from "@/lib/rbac"
 import { sendExternalEmail } from "@/lib/email-delivery"
+import { createInvitation } from "@/lib/invitations"
+
+const MAX_INVITES_PER_CALL = 25
+
+// UI role labels map onto the app's actual roles. Only USER and GUEST are
+// available to a regular inviter; ADMIN requires the inviter to already be
+// one, so this can't be used to self-escalate.
+const ROLE_MAP: Record<string, AppRole> = {
+  member: "USER",
+  viewer: "GUEST",
+  admin: "ADMIN",
+}
 
 export async function sendWorkspaceInvites({
   emails,
@@ -15,45 +30,76 @@ export async function sendWorkspaceInvites({
   try {
     const session = await requireSession()
 
-    const validEmails = emails.map((e) => e.trim().toLowerCase()).filter((e) => e.includes("@"))
+    const requestedRole = ROLE_MAP[role] ?? "USER"
+    if (requestedRole === "ADMIN" && !hasPermission(session.role, "manage_users")) {
+      return { success: false, error: "Only admins can invite someone as an admin." }
+    }
+
+    const validEmails = Array.from(
+      new Set(emails.map((e) => e.trim().toLowerCase()).filter((e) => e.includes("@"))),
+    )
     if (validEmails.length === 0) {
       return { success: false, error: "Provide at least one valid email address." }
     }
+    if (validEmails.length > MAX_INVITES_PER_CALL) {
+      return { success: false, error: `Send at most ${MAX_INVITES_PER_CALL} invitations at a time.` }
+    }
+
+    const existingUsers = await prisma.user.findMany({
+      where: { email: { in: validEmails } },
+      select: { email: true },
+    })
+    const alreadyMembers = new Set(existingUsers.map((u) => u.email))
+    const toInvite = validEmails.filter((email) => !alreadyMembers.has(email))
 
     const appUrl =
+      process.env.AUTH_URL ??
       process.env.NEXTAUTH_URL ??
       process.env.NEXT_PUBLIC_APP_URL ??
       "http://localhost:3000"
 
-    const signupLink = `${appUrl}/login`
-
     const results = await Promise.allSettled(
-      validEmails.map((email) =>
-        sendExternalEmail({
+      toInvite.map(async (email) => {
+        // A fresh, single-use token per recipient — createInvitation replaces
+        // any earlier pending invite for the same address.
+        const token = await createInvitation({
+          email,
+          role: requestedRole,
+          message,
+          invitedById: session.id,
+        })
+
+        const acceptLink = `${appUrl}/invite/${token}`
+
+        return sendExternalEmail({
           to: email,
           subject: `${session.name ?? session.email} invited you to join Spagad SRAD`,
-          text: `You've been invited to join the Spagad SRAD workspace as a ${role}.\n\n${message ? `Message: ${message}\n\n` : ""}Get started here: ${signupLink}`,
+          text: `You've been invited to join the Spagad SRAD workspace as a ${role}.\n\n${message ? `Message: ${message}\n\n` : ""}Accept your invitation here: ${acceptLink}\n\nThis link expires in 7 days.`,
           html: buildWorkspaceInviteHtml({
             inviterName: session.name ?? session.email,
             role,
             personalMessage: message ?? "",
-            signupLink,
+            signupLink: acceptLink,
           }),
         })
-      )
+      }),
     )
 
-    const sent = results.filter((r) => r.status === "fulfilled").length
-    const failed = results.length - sent
+    const sent = results.filter((r) => r.status === "fulfilled" && r.value.success).length
+    const failed = toInvite.length - sent
+    const skipped = validEmails.length - toInvite.length
+
+    const parts: string[] = []
+    if (sent > 0) parts.push(`Sent to ${sent} recipient${sent !== 1 ? "s" : ""}`)
+    if (skipped > 0) parts.push(`${skipped} already ${skipped === 1 ? "has" : "have"} an account`)
+    if (failed > 0) parts.push(`${failed} failed to send (email delivery may not be configured)`)
 
     return {
-      success: true,
+      success: sent > 0 || skipped > 0,
       sent,
       failed,
-      message:
-        failed > 0
-          ? `Sent to ${sent} recipient${sent !== 1 ? "s" : ""}. ${failed} failed (email provider may not be configured).`
-          : `Invitation sent to ${sent} recipient${sent !== 1 ? "s" : ""}!`,
+      skipped,
+      message: parts.length ? `${parts.join(". ")}.` : "No invitations were sent.",
     }
   } catch (err) {
     console.error("Workspace invite error:", err)

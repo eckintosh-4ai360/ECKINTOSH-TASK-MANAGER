@@ -77,6 +77,13 @@ export type RepositoryWorkspaceState = {
 export type GitHubWorkspaceData = {
   configured: boolean
   writeEnabled: boolean
+  /**
+   * True when writes are blocked specifically because THIS user hasn't
+   * connected their own GitHub account — as opposed to the role lacking
+   * permission, or no repositories being tracked yet. Lets the UI offer a
+   * "Connect GitHub" action instead of a dead-end error.
+   */
+  needsGitHubConnection: boolean
   repositories: TrackedRepository[]
   selectedProjectId: string | null
   selectedBranch: string | null
