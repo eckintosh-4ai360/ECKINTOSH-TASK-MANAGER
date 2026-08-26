@@ -14,7 +14,26 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { getTaskComments, addTaskComment, deleteTaskComment, sendTaskCollaborationInvite } from "@/lib/actions/task-invite-actions"
 import { updateTask } from "@/lib/actions/project-actions"
-import { UserPlus, Send, Trash2, MessageSquare, Sparkles, Loader2, X, Copy, Check, Link2, Mail } from "lucide-react"
+import { getSubtasks, addSubtask, toggleSubtask, deleteSubtask } from "@/lib/actions/subtask-actions"
+import { getActiveTimeEntry, getTaskTimeEntries, startTimeEntry, stopTimeEntry } from "@/lib/actions/time-entry-actions"
+import {
+  UserPlus,
+  Send,
+  Trash2,
+  MessageSquare,
+  Sparkles,
+  Loader2,
+  X,
+  Copy,
+  Check,
+  Link2,
+  Mail,
+  ListChecks,
+  Plus,
+  Play,
+  Square,
+  Timer,
+} from "lucide-react"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
 
@@ -79,6 +98,36 @@ interface Comment {
   }
 }
 
+interface SubtaskItem {
+  id: string
+  title: string
+  completed: boolean
+}
+
+interface TimeEntryItem {
+  id: string
+  startTime: Date | string
+  endTime: Date | string | null
+  duration: number | null
+  notes: string | null
+  user: { id: string; name: string | null; email: string }
+}
+
+function formatDuration(minutes: number) {
+  const hours = Math.floor(minutes / 60)
+  const mins = minutes % 60
+  if (hours === 0) return `${mins}m`
+  return `${hours}h ${mins}m`
+}
+
+function formatElapsed(startedAt: Date, now: Date) {
+  const totalSeconds = Math.max(0, Math.floor((now.getTime() - startedAt.getTime()) / 1000))
+  const hours = Math.floor(totalSeconds / 3600)
+  const minutes = Math.floor((totalSeconds % 3600) / 60)
+  const seconds = totalSeconds % 60
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`
+}
+
 export function TaskDetailSheet({
   task,
   isOpen,
@@ -99,6 +148,17 @@ export function TaskDetailSheet({
   const [isCopied, setIsCopied] = useState(false)
   const [isPending, startTransition] = useTransition()
   const [isCommentsLoading, setIsCommentsLoading] = useState(false)
+
+  // Subtasks
+  const [subtasks, setSubtasks] = useState<SubtaskItem[]>([])
+  const [newSubtaskTitle, setNewSubtaskTitle] = useState("")
+  const [isAddingSubtask, startSubtaskTransition] = useTransition()
+
+  // Time tracking
+  const [timeEntries, setTimeEntries] = useState<TimeEntryItem[]>([])
+  const [activeEntry, setActiveEntry] = useState<{ id: string; startTime: string; taskId: string } | null>(null)
+  const [isTimerBusy, startTimerTransition] = useTransition()
+  const [elapsedNow, setElapsedNow] = useState<Date | null>(null)
   const inviteInputRef = useRef<HTMLInputElement>(null)
 
   const inviteLink = typeof window !== "undefined" ? `${window.location.origin}/login` : "/login"
@@ -176,7 +236,26 @@ export function TaskDetailSheet({
         setComments(mapped)
       })
       .finally(() => setIsCommentsLoading(false))
+
+    // Load subtasks
+    getSubtasks(task.id).then(setSubtasks)
+
+    // Load this task's time entries and whichever timer (on any task) is
+    // currently running for this user.
+    getTaskTimeEntries(task.id).then(setTimeEntries)
+    getActiveTimeEntry().then((entry) =>
+      setActiveEntry(entry ? { id: entry.id, startTime: new Date(entry.startTime).toISOString(), taskId: entry.taskId } : null),
+    )
   }, [task, isOpen])
+
+  // Tick the running timer's elapsed display once a second.
+  useEffect(() => {
+    if (!activeEntry || activeEntry.taskId !== task?.id) return
+
+    setElapsedNow(new Date())
+    const interval = setInterval(() => setElapsedNow(new Date()), 1000)
+    return () => clearInterval(interval)
+  }, [activeEntry, task?.id])
 
   if (!task) return null
 
@@ -270,6 +349,70 @@ export function TaskDetailSheet({
     }
   }
 
+  const canEditThisTask = canManageTasks || task.assigneeId === currentUserId
+
+  const handleAddSubtask = (e: React.FormEvent) => {
+    e.preventDefault()
+    const title = newSubtaskTitle.trim()
+    if (!title) return
+
+    startSubtaskTransition(async () => {
+      const res = await addSubtask(task.id, title)
+      if (res.success && res.subtask) {
+        setSubtasks((prev) => [...prev, res.subtask as SubtaskItem])
+        setNewSubtaskTitle("")
+      } else {
+        toast.error(res.error ?? "Failed to add subtask.")
+      }
+    })
+  }
+
+  const handleToggleSubtask = (id: string, completed: boolean) => {
+    setSubtasks((prev) => prev.map((s) => (s.id === id ? { ...s, completed } : s)))
+
+    toggleSubtask(id, completed).then((res) => {
+      if (!res.success) {
+        setSubtasks((prev) => prev.map((s) => (s.id === id ? { ...s, completed: !completed } : s)))
+        toast.error(res.error ?? "Failed to update subtask.")
+      }
+    })
+  }
+
+  const handleDeleteSubtask = (id: string) => {
+    const original = subtasks
+    setSubtasks((prev) => prev.filter((s) => s.id !== id))
+
+    deleteSubtask(id).then((res) => {
+      if (!res.success) {
+        setSubtasks(original)
+        toast.error(res.error ?? "Failed to delete subtask.")
+      }
+    })
+  }
+
+  const handleStartTimer = () => {
+    startTimerTransition(async () => {
+      const res = await startTimeEntry(task.id)
+      if (res.success && res.entry) {
+        setActiveEntry({ id: res.entry.id, startTime: res.entry.startTime.toString(), taskId: task.id })
+      } else {
+        toast.error(res.error ?? "Failed to start timer.")
+      }
+    })
+  }
+
+  const handleStopTimer = () => {
+    startTimerTransition(async () => {
+      const res = await stopTimeEntry()
+      if (res.success) {
+        setActiveEntry(null)
+        getTaskTimeEntries(task.id).then(setTimeEntries)
+      } else {
+        toast.error(res.error ?? "Failed to stop timer.")
+      }
+    })
+  }
+
   const handleSendInvite = async (e: React.FormEvent) => {
     e.preventDefault()
     // commit any typed-but-not-chipped email
@@ -354,6 +497,79 @@ export function TaskDetailSheet({
 
               <Separator className="bg-primary/10" />
 
+              {/* Subtasks */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between text-sm font-semibold">
+                  <div className="flex items-center gap-2">
+                    <ListChecks className="w-4 h-4 text-primary" />
+                    <span>
+                      Subtasks
+                      {subtasks.length > 0 && (
+                        <span className="ml-1.5 text-xs font-mono text-muted-foreground font-normal">
+                          {subtasks.filter((s) => s.completed).length}/{subtasks.length}
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                </div>
+
+                {subtasks.length > 0 && (
+                  <div className="space-y-1.5">
+                    {subtasks.map((subtask) => (
+                      <div
+                        key={subtask.id}
+                        className="flex items-center gap-2.5 group rounded-lg px-2 py-1.5 hover:bg-primary/5 transition-colors"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={subtask.completed}
+                          onChange={(e) => handleToggleSubtask(subtask.id, e.target.checked)}
+                          disabled={!canEditThisTask}
+                          className="h-3.5 w-3.5 rounded border-primary/30 accent-primary shrink-0"
+                        />
+                        <span
+                          className={`flex-1 text-sm ${subtask.completed ? "text-muted-foreground line-through" : "text-foreground"}`}
+                        >
+                          {subtask.title}
+                        </span>
+                        {canEditThisTask && (
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteSubtask(subtask.id)}
+                            className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all shrink-0"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {canEditThisTask && (
+                  <form onSubmit={handleAddSubtask} className="flex gap-2">
+                    <Input
+                      value={newSubtaskTitle}
+                      onChange={(e) => setNewSubtaskTitle(e.target.value)}
+                      placeholder="Add a subtask..."
+                      className="glass border-primary/15 h-8 text-xs"
+                      disabled={isAddingSubtask}
+                    />
+                    <Button
+                      type="submit"
+                      size="sm"
+                      variant="outline"
+                      disabled={isAddingSubtask || !newSubtaskTitle.trim()}
+                      className="h-8 px-2.5 border-primary/20"
+                    >
+                      {isAddingSubtask ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+                    </Button>
+                  </form>
+                )}
+              </div>
+
+              <Separator className="bg-primary/10" />
+
               {/* Comments Thread */}
               <div className="space-y-4">
                 <div className="flex items-center gap-2 text-sm font-semibold">
@@ -422,7 +638,66 @@ export function TaskDetailSheet({
 
             {/* Right Column: Metadata Panel & Share Collaboration */}
             <div className="p-6 space-y-6 bg-primary/5">
-              
+
+              {/* Time Tracking */}
+              <div className="space-y-3 p-3.5 rounded-xl border border-primary/15 bg-background/40">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-muted-foreground uppercase font-mono tracking-wider">
+                    <Timer className="w-3.5 h-3.5 text-primary" />
+                    Time Tracked
+                  </div>
+                  <span className="text-xs font-mono text-foreground">
+                    {formatDuration(timeEntries.reduce((sum, e) => sum + (e.duration ?? 0), 0))}
+                  </span>
+                </div>
+
+                {activeEntry?.taskId === task.id ? (
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-mono text-lg text-primary tabular-nums">
+                      {formatElapsed(new Date(activeEntry.startTime), elapsedNow ?? new Date())}
+                    </span>
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={handleStopTimer}
+                      disabled={isTimerBusy}
+                      className="h-8 gap-1.5 bg-destructive/90 text-destructive-foreground hover:bg-destructive"
+                    >
+                      {isTimerBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Square className="w-3.5 h-3.5" />}
+                      Stop
+                    </Button>
+                  </div>
+                ) : activeEntry ? (
+                  <p className="text-[11px] text-muted-foreground">
+                    A timer is running on <span className="text-foreground">{"another task"}</span> — stop it there first.
+                  </p>
+                ) : (
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={handleStartTimer}
+                    disabled={isTimerBusy || !canEditThisTask}
+                    className="w-full h-8 gap-1.5 bg-gradient-to-r from-primary to-primary/80 text-primary-foreground"
+                  >
+                    {isTimerBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
+                    Start timer
+                  </Button>
+                )}
+
+                {timeEntries.length > 0 && (
+                  <div className="space-y-1 pt-1 max-h-24 overflow-y-auto">
+                    {timeEntries.slice(0, 5).map((entry) => (
+                      <div key={entry.id} className="flex items-center justify-between text-[10px] text-muted-foreground">
+                        <span className="truncate">{entry.user.name ?? entry.user.email}</span>
+                        <span className="font-mono shrink-0 ml-2">
+                          {entry.duration != null ? formatDuration(entry.duration) : "running…"}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               {/* Properties Section */}
               <div className="space-y-4">
                 <h4 className="text-xs font-bold text-muted-foreground uppercase font-mono tracking-wider">Properties</h4>

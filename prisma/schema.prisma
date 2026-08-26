@@ -9,16 +9,17 @@ generator client {
 // ─── User ────────────────────────────────────────────────────────────────────
 
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String?
-  password  String?
-  avatar    String?
-  role      UserRole @default(USER)
-  title     String? // e.g. "Senior Backend Engineer"
-  timezone  String?  @default("UTC")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  password      String?
+  emailVerified DateTime?
+  avatar        String?
+  role          UserRole  @default(USER)
+  title         String? // e.g. "Senior Backend Engineer"
+  timezone      String?   @default("UTC")
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   // Credential login hardening
   failedLoginAttempts Int       @default(0)
@@ -33,25 +34,27 @@ model User {
   githubScopes      String?
   githubConnectedAt DateTime?
 
-  sentInvitations Invitation[]
+  sentInvitations   Invitation[]
+  supportTickets    SupportTicket[]
+  emailVerification EmailVerification?
 
-  projects         Project[]
-  projectMembers   ProjectMember[]
-  tasks            Task[]
-  taskComments     TaskComment[]
-  teamMembers      TeamMember[]
-  notifications    Notification[]
+  projects               Project[]
+  projectMembers         ProjectMember[]
+  tasks                  Task[]
+  taskComments           TaskComment[]
+  teamMembers            TeamMember[]
+  notifications          Notification[]
   notificationPreference NotificationPreference?
-  pushSubscriptions PushSubscription[]
-  timeEntries      TimeEntry[]
-  sentMessages     Message[]       @relation("MessageSender")
-  receivedMessages Message[]       @relation("MessageReceiver")
-  sentEmails       InternalEmail[] @relation("EmailFrom")
-  receivedEmails   InternalEmail[] @relation("EmailTo")
-  standups         Standup[]
-  deployments      Deployment[]    @relation("DeployedBy")
-  notes            Note[]
-  whiteboards      Whiteboard[]
+  pushSubscriptions      PushSubscription[]
+  timeEntries            TimeEntry[]
+  sentMessages           Message[]               @relation("MessageSender")
+  receivedMessages       Message[]               @relation("MessageReceiver")
+  sentEmails             InternalEmail[]         @relation("EmailFrom")
+  receivedEmails         InternalEmail[]         @relation("EmailTo")
+  standups               Standup[]
+  deployments            Deployment[]            @relation("DeployedBy")
+  notes                  Note[]
+  whiteboards            Whiteboard[]
 
   @@map("users")
 }
@@ -317,8 +320,8 @@ model Note {
 model Whiteboard {
   id        String   @id @default(cuid())
   title     String   @default("Untitled whiteboard")
-  data      Json     @default("{}")   // Excalidraw elements + appState JSON
-  thumbnail String?                   // base64 PNG thumbnail preview
+  data      Json     @default("{}") // Excalidraw elements + appState JSON
+  thumbnail String? // base64 PNG thumbnail preview
   owner     User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   ownerId   String
   createdAt DateTime @default(now())
@@ -329,34 +332,42 @@ model Whiteboard {
 
 // ─── Time Tracking ───────────────────────────────────────────────────────────
 
+/// endTime/duration are null while the timer is running — set together when
+/// it's stopped. At most one running entry per user is enforced in code
+/// (lib/actions/time-entry-actions.ts), not at the schema level.
 model TimeEntry {
-  id        String   @id @default(cuid())
-  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  id        String    @id @default(cuid())
+  task      Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
   taskId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId    String
-  duration  Int // minutes
+  duration  Int? // minutes; null while running
   notes     String?
   startTime DateTime
-  endTime   DateTime
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  endTime   DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 
+  @@index([userId, endTime])
   @@map("time_entries")
 }
 
 // ─── Reminder ────────────────────────────────────────────────────────────────
 
+/// One row per (task, kind) — the scheduler's dedupe record so a "due soon"
+/// or "overdue" reminder fires once, not on every cron tick.
 model Reminder {
   id        String   @id @default(cuid())
   task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
   taskId    String
+  kind      String   @default("due_soon") // due_soon | overdue
   message   String
   dueTime   DateTime
   sent      Boolean  @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@unique([taskId, kind])
   @@map("reminders")
 }
 
@@ -378,33 +389,36 @@ model Notification {
 }
 
 model NotificationPreference {
-  id                       String   @id @default(cuid())
-  user                     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId                   String   @unique
-  emailEnabled             Boolean  @default(true)
-  pushEnabled              Boolean  @default(false)
-  taskRemindersEnabled     Boolean  @default(true)
-  teamUpdatesEnabled       Boolean  @default(true)
-  dailyDigestEnabled       Boolean  @default(true)
-  overdueEscalationEnabled Boolean  @default(true)
-  quietHoursEnabled        Boolean  @default(false)
-  reminderLeadTime         String   @default("1d")
-  createdAt                DateTime @default(now())
-  updatedAt                DateTime @updatedAt
+  id                       String    @id @default(cuid())
+  user                     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId                   String    @unique
+  emailEnabled             Boolean   @default(true)
+  pushEnabled              Boolean   @default(false)
+  taskRemindersEnabled     Boolean   @default(true)
+  teamUpdatesEnabled       Boolean   @default(true)
+  dailyDigestEnabled       Boolean   @default(true)
+  overdueEscalationEnabled Boolean   @default(true)
+  quietHoursEnabled        Boolean   @default(false)
+  quietHoursStart          String    @default("22:00") // HH:mm, local to the user's timezone
+  quietHoursEnd            String    @default("08:00")
+  reminderLeadTime         String    @default("1d")
+  lastDigestSentAt         DateTime?
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
 
   @@map("notification_preferences")
 }
 
 model PushSubscription {
-  id             String   @id @default(cuid())
-  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id             String    @id @default(cuid())
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId         String
-  endpoint       String   @unique
+  endpoint       String    @unique
   p256dh         String
   auth           String
   expirationTime DateTime?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   @@index([userId])
   @@map("push_subscriptions")
@@ -515,4 +529,39 @@ model EmailSetting {
   updatedAt      DateTime  @updatedAt
 
   @@map("email_settings")
+}
+
+// ─── Support Tickets ──────────────────────────────────────────────────────────
+
+model SupportTicket {
+  id        String   @id @default(cuid())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  category  String // bug | feature | question | security | billing | performance
+  priority  String   @default("medium") // low | medium | high | critical
+  subject   String
+  message   String
+  status    String   @default("open") // open | in_progress | resolved
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@map("support_tickets")
+}
+
+// ─── Email Verification (OTP) ─────────────────────────────────────────────────
+
+/// One active code per user. Only relevant for credential (password) accounts
+/// — GitHub OAuth sign-in already verifies the address, so those users are
+/// marked verified immediately in auth.ts.
+model EmailVerification {
+  id        String   @id @default(cuid())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String   @unique
+  codeHash  String
+  attempts  Int      @default(0)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@map("email_verifications")
 }

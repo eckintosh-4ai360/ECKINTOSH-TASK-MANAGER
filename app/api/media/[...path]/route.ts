@@ -7,9 +7,12 @@ import { getSession } from "@/lib/auth"
 import { hasPermission } from "@/lib/rbac"
 import {
   isInlineRenderable,
+  isSafeKeySegments,
   keyToMediaUrl,
   lookupMimeByExtension,
+  readBlobObject,
   resolveMediaPath,
+  useBlobStorage,
 } from "@/lib/media-storage"
 
 export const runtime = "nodejs"
@@ -34,14 +37,47 @@ export async function GET(request: NextRequest, context: { params: Promise<{ pat
 
   const { path: segments } = await context.params
 
-  const absolutePath = resolveMediaPath(segments)
-  if (!absolutePath) {
+  if (!isSafeKeySegments(segments)) {
     return NextResponse.json({ error: "Not found" }, { status: 404 })
   }
 
   const key = segments.join("/")
   if (!(await canAccess(session.id, key))) {
     // Deliberately 404, not 403 — a 403 would confirm the file exists.
+    return NextResponse.json({ error: "Not found" }, { status: 404 })
+  }
+
+  const extension = key.split(".").pop() ?? ""
+  const mimeType = lookupMimeByExtension(extension)
+  const disposition = isInlineRenderable(mimeType) ? "inline" : "attachment"
+
+  return useBlobStorage()
+    ? serveFromBlob(key, mimeType, disposition)
+    : serveFromDisk(segments, mimeType, disposition)
+}
+
+async function serveFromBlob(key: string, mimeType: string, disposition: string) {
+  // get() with access:"private" is the only way to read this object — its
+  // real URL was never handed to a client, so there's nothing to leak.
+  const result = await readBlobObject(key).catch(() => null)
+  if (!result || result.statusCode !== 200) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 })
+  }
+
+  const headers = new Headers({
+    "Content-Type": mimeType,
+    "Content-Length": String(result.blob.size),
+    "Cache-Control": "private, max-age=3600",
+    "X-Content-Type-Options": "nosniff",
+    "Content-Disposition": disposition,
+  })
+
+  return new NextResponse(result.stream, { status: 200, headers })
+}
+
+async function serveFromDisk(segments: string[], mimeType: string, disposition: string) {
+  const absolutePath = resolveMediaPath(segments)
+  if (!absolutePath) {
     return NextResponse.json({ error: "Not found" }, { status: 404 })
   }
 
@@ -53,9 +89,6 @@ export async function GET(request: NextRequest, context: { params: Promise<{ pat
     return NextResponse.json({ error: "Not found" }, { status: 404 })
   }
 
-  const extension = absolutePath.split(".").pop() ?? ""
-  const mimeType = lookupMimeByExtension(extension)
-
   const headers = new Headers({
     "Content-Type": mimeType,
     "Content-Length": String(fileStat.size),
@@ -63,7 +96,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ pat
     "Cache-Control": "private, max-age=3600",
     "X-Content-Type-Options": "nosniff",
     // Anything not safely renderable is downloaded rather than executed.
-    "Content-Disposition": isInlineRenderable(mimeType) ? "inline" : "attachment",
+    "Content-Disposition": disposition,
   })
 
   const stream = Readable.toWeb(createReadStream(absolutePath)) as ReadableStream

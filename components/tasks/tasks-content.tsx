@@ -38,6 +38,7 @@ interface Task {
   sprint?: { id: string; name: string } | null
   assignee?: { name: string | null; avatar: string | null } | null
   _count?: { comments?: number }
+  subtaskSummary?: { total: number; completed: number } | null
 }
 
 interface ProjectOption {

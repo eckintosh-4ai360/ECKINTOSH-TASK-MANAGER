@@ -190,6 +190,13 @@ export function VideoTutorialsTab() {
 
   return (
     <div className="space-y-8 animate-fade-in">
+      {/* This tab is illustrative — there's no real video library or player
+          behind it yet. */}
+      <div className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-primary/20 bg-primary/5 text-xs text-muted-foreground">
+        <Eye className="w-3.5 h-3.5 text-primary shrink-0" />
+        Preview — this shows what a tutorial library could look like. No videos are hosted here yet.
+      </div>
+
       {/* Hero Section */}
       <div className="relative">
         <div className="absolute inset-0 bg-gradient-to-r from-purple-500/20 via-primary/10 to-blue-500/20 rounded-2xl blur-xl opacity-50" />

@@ -7,6 +7,7 @@ import { revalidatePath } from "next/cache"
 import prisma from "@/lib/prisma"
 import { createSession, requireAdmin } from "@/lib/auth"
 import { validatePassword } from "@/lib/password-policy"
+import { issueVerificationOtp } from "@/lib/email-verification"
 import {
   clearIpAttempts,
   describeLockout,
@@ -114,7 +115,7 @@ export async function createUserAction(formData: FormData) {
 
   const hashed = await bcrypt.hash(password, 12)
 
-  await prisma.user.create({
+  const user = await prisma.user.create({
     data: {
       name,
       email,
@@ -122,6 +123,10 @@ export async function createUserAction(formData: FormData) {
       role: role as "ADMIN" | "USER" | "GUEST",
     },
   })
+
+  // Credential accounts haven't proven control of the address the way GitHub
+  // OAuth does, so send them a code to verify it.
+  await issueVerificationOtp(user.id, user.email, user.name ?? "there")
 
   revalidatePath("/admin/users")
   return { success: true }

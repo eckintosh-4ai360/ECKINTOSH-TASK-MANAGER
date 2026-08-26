@@ -89,6 +89,7 @@ Replace the placeholders below with your actual screenshot paths:
 - **Push notifications** (Web Push / VAPID) and **email notifications** via Gmail or any SMTP server
 - Admins configure outbound email in-app under **Settings → Email Delivery** — credentials are verified on save and stored encrypted
 - Granular preference controls: task reminders, team updates, daily digest, overdue escalation, quiet hours
+- A scheduled sweep (`/api/cron/reminders`, wired up in `vercel.json`) actually sends these — requires `CRON_SECRET` (see [Configure environment variables](#3-configure-environment-variables))
 
 ### 👥 Team Management
 
@@ -98,7 +99,14 @@ Replace the placeholders below with your actual screenshot paths:
 ### 🔗 GitHub Integration
 
 - Link repositories to projects (GitHub, GitLab, Bitbucket)
-- Commit and deployment tracking per project
+- Repository writes (file edits, branches, PRs, merges) run under each user's own connected GitHub account, not a shared token
+- Commit and deployment tracking per project — deployments are recorded automatically from pushes to `main`/`staging`/`develop` via the GitHub webhook (`GITHUB_WEBHOOK_SECRET` required), with a manual "Log Deployment" option for admins
+
+### 🎫 Help & Support
+
+- In-app support ticket form — tickets are saved and notify admins (in-app + email)
+- Documentation and FAQ reference content
+- Community forum and video tutorial tabs are illustrative previews, not backed by live data
 
 ### 🔐 Authentication
 

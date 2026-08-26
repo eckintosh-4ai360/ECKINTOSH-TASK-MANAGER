@@ -33,25 +33,24 @@ export async function POST(request: NextRequest) {
     const filename = `${Date.now()}-${Math.random().toString(36).slice(2)}.${entry.ext}`
     const key = `chat/${session.id}/${filename}`
 
-    let url: string
-
     if (process.env.BLOB_READ_WRITE_TOKEN) {
-      // Vercel Blob cloud object storage
-      const blob = await put(key, file, {
-        access: "public",
+      // Vercel Blob cloud object storage. `access: "private"` means the
+      // blob's real URL is never fetchable directly — only this server, via
+      // /api/media, can read it back after checking the session. The client
+      // only ever receives our own proxy path below, never a blob.url.
+      await put(key, file, {
+        access: "private",
         addRandomSuffix: false,
       })
-      url = blob.url
     } else {
       // Local storage fallback for offline / development environments
       const uploadDir = path.join(MEDIA_ROOT, `chat/${session.id}`)
       await mkdir(uploadDir, { recursive: true })
       await writeFile(path.join(uploadDir, filename), Buffer.from(await file.arrayBuffer()))
-      url = keyToMediaUrl(key)
     }
 
     return NextResponse.json({
-      url,
+      url: keyToMediaUrl(key),
       mediaType: entry.kind,
       mediaName: file.name,
       mediaSize: file.size,

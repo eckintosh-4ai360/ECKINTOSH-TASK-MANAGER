@@ -5,13 +5,22 @@ import path from "node:path"
  * them statically, and are read back through /api/media/[...path], which checks
  * the session and that the caller is a party to the message.
  *
- * Override with MEDIA_STORAGE_DIR on hosts with a mounted volume.
+ * On Vercel (BLOB_READ_WRITE_TOKEN set) files are stored in Vercel Blob with
+ * `access: "private"` — the SDK's own private-object mode, not "public but the
+ * URL is hard to guess." The blob's real URL is never handed to the client;
+ * only our own /api/media key is. Everywhere else, files sit on local disk
+ * outside public/. Override the local root with MEDIA_STORAGE_DIR on hosts
+ * with a mounted volume.
  */
 export const MEDIA_ROOT = process.env.MEDIA_STORAGE_DIR
   ? path.resolve(process.env.MEDIA_STORAGE_DIR)
   : path.join(process.cwd(), "storage", "uploads")
 
 export const MEDIA_URL_PREFIX = "/api/media"
+
+export function useBlobStorage() {
+  return Boolean(process.env.BLOB_READ_WRITE_TOKEN)
+}
 
 /**
  * SVG is deliberately absent: the browser executes script inside an SVG served
@@ -65,18 +74,28 @@ export function lookupMimeByExtension(ext: string) {
 }
 
 /**
- * Resolves a stored-media URL to an absolute path, refusing anything that
- * escapes MEDIA_ROOT. Returns null when the segments are unsafe.
+ * Rejects traversal, absolute paths, NUL bytes, and path separators hiding
+ * inside a single segment — checked before the key touches disk or Blob.
+ */
+export function isSafeKeySegments(segments: string[]) {
+  if (segments.length === 0) return false
+
+  for (const segment of segments) {
+    if (!segment || segment === "." || segment === "..") return false
+    if (segment.includes("\0") || segment.includes("/") || segment.includes("\\")) return false
+  }
+
+  return true
+}
+
+/**
+ * Resolves a stored-media URL to an absolute local-disk path, refusing
+ * anything that escapes MEDIA_ROOT. Returns null when the segments are unsafe.
+ * Only used for the local-disk storage backend — Blob-backed reads go through
+ * readBlobObject() with the raw (already-validated) key instead.
  */
 export function resolveMediaPath(segments: string[]) {
-  if (segments.length === 0) return null
-
-  // Reject traversal, absolute paths, NUL bytes, and Windows drive prefixes
-  // before they reach the filesystem.
-  for (const segment of segments) {
-    if (!segment || segment === "." || segment === "..") return null
-    if (segment.includes("\0") || segment.includes("/") || segment.includes("\\")) return null
-  }
+  if (!isSafeKeySegments(segments)) return null
 
   const resolved = path.resolve(MEDIA_ROOT, ...segments)
   const root = path.resolve(MEDIA_ROOT)
@@ -95,4 +114,14 @@ export function mediaUrlToKey(url: string) {
 
 export function keyToMediaUrl(key: string) {
   return `${MEDIA_URL_PREFIX}/${key}`
+}
+
+/**
+ * Reads a private blob's content server-side. Never returns or forwards the
+ * blob's own URL — only the caller of this function sees it, and it's used
+ * once to open the fetch stream.
+ */
+export async function readBlobObject(key: string) {
+  const { get } = await import("@vercel/blob")
+  return get(key, { access: "private" })
 }

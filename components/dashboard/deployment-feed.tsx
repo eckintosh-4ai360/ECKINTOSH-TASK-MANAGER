@@ -1,8 +1,9 @@
 "use client"
 
-import { Rocket, CheckCircle2, XCircle, Clock, RefreshCw, ChevronRight } from "lucide-react"
+import { Rocket, CheckCircle2, XCircle, Clock, RefreshCw, ChevronRight, Plus } from "lucide-react"
 import Link from "next/link"
 import { useSearch } from "./search-context"
+import { LogDeploymentModal } from "@/components/modals/log-deployment-modal"
 
 import { formatDistanceToNow } from "date-fns"
 
@@ -21,6 +22,9 @@ export type DeploymentItem = {
 
 interface DeploymentFeedProps {
   deployments: DeploymentItem[]
+  /** Admins can log a deployment that wasn't picked up from a GitHub push. */
+  canLog?: boolean
+  projects?: Array<{ id: string; name: string }>
 }
 
 
@@ -61,7 +65,7 @@ const envConfig: Record<string, string> = {
   development: "bg-primary/10 text-primary border-primary/20",
 }
 
-export function DeploymentFeed({ deployments }: DeploymentFeedProps) {
+export function DeploymentFeed({ deployments, canLog = false, projects = [] }: DeploymentFeedProps) {
   const { matches, isSearching } = useSearch()
 
   const filtered = deployments.filter((d) =>
@@ -83,17 +87,39 @@ export function DeploymentFeed({ deployments }: DeploymentFeedProps) {
             <p className="text-[10px] text-muted-foreground">Recent releases</p>
           </div>
         </div>
-        <Link
-          href="/analytics"
-          className="flex items-center gap-1 text-xs text-primary hover:text-primary/80 transition-colors"
-        >
-          All <ChevronRight className="w-3 h-3" />
-        </Link>
+        <div className="flex items-center gap-2 shrink-0">
+          {canLog && (
+            <LogDeploymentModal projects={projects}>
+              <button
+                type="button"
+                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors"
+                title="Log a deployment"
+              >
+                <Plus className="w-3.5 h-3.5" />
+              </button>
+            </LogDeploymentModal>
+          )}
+          <Link
+            href="/analytics"
+            className="flex items-center gap-1 text-xs text-primary hover:text-primary/80 transition-colors"
+          >
+            All <ChevronRight className="w-3 h-3" />
+          </Link>
+        </div>
       </div>
 
       <div className="space-y-2.5">
         {filtered.length === 0 && isSearching && (
           <p className="text-xs text-muted-foreground text-center py-6 italic">No deployments match your search.</p>
+        )}
+        {deployments.length === 0 && !isSearching && (
+          <div className="text-center py-6">
+            <p className="text-xs text-muted-foreground italic">No deployments recorded yet.</p>
+            <p className="text-[10px] text-muted-foreground/70 mt-1">
+              These appear automatically when your tracked GitHub repo receives a push to production, staging, or
+              develop.
+            </p>
+          </div>
         )}
         {filtered.map((deploy) => {
           const cfg = statusConfig[deploy.status as keyof typeof statusConfig] || statusConfig.pending

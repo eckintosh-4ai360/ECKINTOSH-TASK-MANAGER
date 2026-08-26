@@ -1,7 +1,7 @@
 "use client"
 
 import { Draggable } from "@hello-pangea/dnd"
-import { Calendar, Tag, Flag, Brain, MessageSquare } from "lucide-react"
+import { Calendar, Tag, Flag, Brain, MessageSquare, ListChecks } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 
@@ -20,6 +20,7 @@ interface Task {
   sprint?: { id: string; name: string } | null
   assignee?: { name: string | null; avatar: string | null } | null
   _count?: { comments?: number }
+  subtaskSummary?: { total: number; completed: number } | null
 }
 
 interface KanbanCardProps {
@@ -120,6 +121,12 @@ export function KanbanCard({ task, index, onClick, aiScore }: KanbanCardProps) {
                   <span className="flex items-center gap-1 text-[10px] text-muted-foreground font-mono">
                     <MessageSquare className="w-3 h-3" />
                     {task._count.comments}
+                  </span>
+                )}
+                {task.subtaskSummary && (
+                  <span className="flex items-center gap-1 text-[10px] text-muted-foreground font-mono">
+                    <ListChecks className="w-3 h-3" />
+                    {task.subtaskSummary.completed}/{task.subtaskSummary.total}
                   </span>
                 )}
                 {task.assignee ? (

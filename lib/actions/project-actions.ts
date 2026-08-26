@@ -502,13 +502,22 @@ export async function getTasks() {
         assignee: {
           select: { name: true, avatar: true },
         },
+        subtasks: {
+          select: { completed: true },
+        },
         _count: {
           select: { comments: true },
         },
       },
       orderBy: { createdAt: "desc" },
     })
-    return tasks
+    return tasks.map((task) => ({
+      ...task,
+      subtaskSummary:
+        task.subtasks.length > 0
+          ? { total: task.subtasks.length, completed: task.subtasks.filter((s) => s.completed).length }
+          : null,
+    }))
   } catch (error) {
     console.error("Failed to fetch tasks:", error)
     return []

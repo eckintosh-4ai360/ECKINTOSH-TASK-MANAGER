@@ -12,6 +12,7 @@ import { generateGroqJson } from "@/lib/ai/groq"
 import {
   buildProductivityIntelligence,
   type ProductivityIntelligence,
+  type ProductivityTimeEntryInput,
 } from "@/lib/ai/productivity-engine"
 import { marked } from "marked"
 
@@ -212,6 +213,9 @@ export async function getAIProductivityIntelligence(): Promise<ProductivityIntel
       where: {
         userId: session.id,
         startTime: { gte: recentWindow },
+        // A still-running timer has no duration yet — exclude it rather than
+        // report 0 minutes worked, which would skew the productivity signal.
+        endTime: { not: null },
       },
       select: {
         id: true,
@@ -251,7 +255,9 @@ export async function getAIProductivityIntelligence(): Promise<ProductivityIntel
   return buildProductivityIntelligence({
     tasks,
     events: calendarEvents,
-    timeEntries,
+    // endTime:{not:null} in the query guarantees these are never null at
+    // runtime; the cast just reflects that Prisma's static types can't encode it.
+    timeEntries: timeEntries as ProductivityTimeEntryInput[],
     standups,
     commits: githubWorkspace?.activityStream ?? [],
     now,

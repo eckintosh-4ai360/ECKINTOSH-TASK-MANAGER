@@ -143,6 +143,14 @@ export function CommunityForumTab() {
 
   return (
     <div className="space-y-6 animate-fade-in">
+      {/* This tab is illustrative — no forum backend exists yet, so nothing
+          below is live or persisted. Contact Support is the real channel. */}
+      <div className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-primary/20 bg-primary/5 text-xs text-muted-foreground">
+        <Eye className="w-3.5 h-3.5 text-primary shrink-0" />
+        Preview — this shows what a community forum could look like. It&apos;s not connected to real discussions yet;
+        use the Contact Support tab to actually reach the team.
+      </div>
+
       {/* Community Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {communityStats.map((stat, index) => (

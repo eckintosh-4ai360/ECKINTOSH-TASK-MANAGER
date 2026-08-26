@@ -106,7 +106,7 @@ function LoginForm() {
       </div>
 
       <a
-        href="/auth/reset"
+        href="/auth/clear-session"
         className="mt-4 block text-center text-[11px] text-muted-foreground hover:text-primary transition-colors"
       >
         Having trouble? Clear this browser&apos;s saved session.

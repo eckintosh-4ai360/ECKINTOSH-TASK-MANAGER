@@ -110,6 +110,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
               // invited signup gets the role the inviter chose.
               role: decision.reason === "bootstrap" ? "ADMIN" : invitation?.role ?? "USER",
               title: "Developer",
+              // GitHub OAuth already proves control of this address — no OTP
+              // step needed, unlike a credential (password) signup.
+              emailVerified: new Date(),
               ...githubIdentity,
             },
           })
@@ -124,6 +127,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
               avatar: user.image ?? existing.avatar,
               name: user.name ?? existing.name,
               lastLoginAt: new Date(),
+              emailVerified: existing.emailVerified ?? new Date(),
               ...githubIdentity,
             },
           })

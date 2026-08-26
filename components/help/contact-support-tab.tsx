@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useTransition } from "react"
+import { createSupportTicketAction, type SupportTicketView } from "@/lib/actions/support-actions"
 import {
   Mail,
   Phone,
@@ -61,48 +62,51 @@ const ticketCategories = [
   { icon: Zap, label: "Performance Issue", value: "performance", color: "text-orange-400" },
 ]
 
-const recentTickets = [
-  {
-    id: "TKT-4521",
-    subject: "Unable to export analytics report",
-    status: "Open",
-    statusColor: "bg-amber-500/20 text-amber-400 border-amber-500/30",
-    priority: "Medium",
-    created: "2 hours ago",
-  },
-  {
-    id: "TKT-4518",
-    subject: "Sprint board drag-and-drop not working on Safari",
-    status: "In Progress",
-    statusColor: "bg-blue-500/20 text-blue-400 border-blue-500/30",
-    priority: "High",
-    created: "1 day ago",
-  },
-  {
-    id: "TKT-4512",
-    subject: "Two-factor authentication setup question",
-    status: "Resolved",
-    statusColor: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
-    priority: "Low",
-    created: "3 days ago",
-  },
-]
+const STATUS_DISPLAY: Record<string, { label: string; color: string }> = {
+  open: { label: "Open", color: "bg-amber-500/20 text-amber-400 border-amber-500/30" },
+  in_progress: { label: "In Progress", color: "bg-blue-500/20 text-blue-400 border-blue-500/30" },
+  resolved: { label: "Resolved", color: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" },
+}
 
-export function ContactSupportTab() {
+function formatRelativeTime(iso: string) {
+  const diffMs = Date.now() - new Date(iso).getTime()
+  const minutes = Math.floor(diffMs / 60_000)
+  if (minutes < 1) return "just now"
+  if (minutes < 60) return `${minutes}m ago`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours}h ago`
+  return `${Math.floor(hours / 24)}d ago`
+}
+
+export function ContactSupportTab({ initialTickets = [] }: { initialTickets?: SupportTicketView[] }) {
   const [selectedCategory, setSelectedCategory] = useState("")
   const [subject, setSubject] = useState("")
   const [message, setMessage] = useState("")
   const [priority, setPriority] = useState("medium")
   const [submitted, setSubmitted] = useState(false)
+  const [submitError, setSubmitError] = useState<string | null>(null)
+  const [tickets, setTickets] = useState<SupportTicketView[]>(initialTickets)
+  const [isSubmitting, startTransition] = useTransition()
 
   const handleSubmit = () => {
-    if (subject && message && selectedCategory) {
+    if (!subject || !message || !selectedCategory) return
+    setSubmitError(null)
+
+    startTransition(async () => {
+      const result = await createSupportTicketAction({ category: selectedCategory, priority, subject, message })
+
+      if (!result.success) {
+        setSubmitError(result.error)
+        return
+      }
+
+      setTickets((prev) => [result.ticket, ...prev].slice(0, 10))
       setSubmitted(true)
       setTimeout(() => setSubmitted(false), 3000)
       setSubject("")
       setMessage("")
       setSelectedCategory("")
-    }
+    })
   }
 
   return (
@@ -243,15 +247,22 @@ export function ContactSupportTab() {
               </p>
             </div>
 
+            {submitError && (
+              <div className="flex items-center gap-2 p-3 rounded-lg glass border border-destructive/30 bg-destructive/5">
+                <AlertTriangle className="w-4 h-4 text-destructive shrink-0" />
+                <p className="text-xs text-destructive">{submitError}</p>
+              </div>
+            )}
+
             {/* Submit Button */}
             <button
               onClick={handleSubmit}
-              disabled={!subject || !message || !selectedCategory}
+              disabled={!subject || !message || !selectedCategory || isSubmitting}
               className="w-full px-6 py-3 bg-gradient-to-r from-primary to-primary/80 text-primary-foreground rounded-xl font-semibold text-sm hover:from-primary/90 hover:to-primary/70 transition-all shadow-lg shadow-primary/20 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               id="submit-ticket-btn"
             >
               <Send className="w-4 h-4" />
-              Submit Ticket
+              {isSubmitting ? "Submitting..." : "Submit Ticket"}
             </button>
           </div>
         )}
@@ -265,15 +276,22 @@ export function ContactSupportTab() {
           </div>
           <h3 className="font-semibold text-lg text-foreground">Your Recent Tickets</h3>
         </div>
+        {tickets.length === 0 ? (
+          <p className="text-sm text-muted-foreground text-center py-8 italic">
+            You haven&apos;t submitted any tickets yet.
+          </p>
+        ) : (
         <div className="space-y-2">
-          {recentTickets.map((ticket, index) => (
+          {tickets.map((ticket, index) => {
+            const display = STATUS_DISPLAY[ticket.status] ?? STATUS_DISPLAY.open
+            return (
             <div
               key={ticket.id}
-              className="flex items-center gap-4 p-4 rounded-lg glass border border-transparent hover:border-primary/20 transition-all duration-300 cursor-pointer group animate-slide-in"
+              className="flex items-center gap-4 p-4 rounded-lg glass border border-transparent hover:border-primary/20 transition-all duration-300 group animate-slide-in"
               style={{ animationDelay: `${index * 50}ms` }}
             >
               <div className="shrink-0">
-                <span className="text-xs font-mono text-primary font-bold">{ticket.id}</span>
+                <span className="text-xs font-mono text-primary font-bold">{ticket.id.slice(0, 8).toUpperCase()}</span>
               </div>
               <div className="flex-1 min-w-0">
                 <h4 className="font-medium text-sm text-foreground group-hover:text-primary transition-colors truncate">
@@ -281,17 +299,19 @@ export function ContactSupportTab() {
                 </h4>
                 <div className="flex items-center gap-2 mt-1">
                   <span className="text-xs text-muted-foreground flex items-center gap-1">
-                    <Clock className="w-3 h-3" /> {ticket.created}
+                    <Clock className="w-3 h-3" /> {formatRelativeTime(ticket.createdAt)}
                   </span>
                 </div>
               </div>
-              <span className={`text-[10px] font-bold px-2 py-1 rounded-full border ${ticket.statusColor} shrink-0`}>
-                {ticket.status}
+              <span className={`text-[10px] font-bold px-2 py-1 rounded-full border ${display.color} shrink-0`}>
+                {display.label}
               </span>
               <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors shrink-0" />
             </div>
-          ))}
+            )
+          })}
         </div>
+        )}
       </div>
     </div>
   )

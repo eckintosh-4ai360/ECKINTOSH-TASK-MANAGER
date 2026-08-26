@@ -7,6 +7,7 @@ import { createSession } from "@/lib/auth"
 import { validatePassword } from "@/lib/password-policy"
 import { findInvitationByToken, markInvitationAccepted } from "@/lib/invitations"
 import type { InvitationView } from "@/lib/invitations"
+import { issueVerificationOtp } from "@/lib/email-verification"
 
 export async function getInvitationAction(token: string): Promise<InvitationView | null> {
   return findInvitationByToken(token)
@@ -55,6 +56,11 @@ export async function acceptInvitationAction(formData: FormData) {
   })
 
   await markInvitationAccepted(invitation.id)
+
+  // The invite link itself was emailed to this address, which is meaningful
+  // evidence — but not proof they, not just someone forwarding the link, hold
+  // it. Still require the OTP step rather than treating that as verification.
+  await issueVerificationOtp(user.id, user.email, user.name ?? "there")
 
   await createSession({
     id: user.id,

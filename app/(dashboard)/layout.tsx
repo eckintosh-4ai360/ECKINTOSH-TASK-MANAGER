@@ -1,7 +1,9 @@
 import type React from "react"
 import { Sidebar } from "@/components/dashboard/sidebar"
 import { SearchProvider } from "@/components/dashboard/search-context"
+import { EmailVerificationBanner } from "@/components/auth/email-verification-banner"
 import { requireSession } from "@/lib/auth"
+import { isEmailVerified } from "@/lib/email-verification"
 
 export const dynamic = "force-dynamic"
 
@@ -14,6 +16,7 @@ export default async function DashboardLayout({
   // getSession() is React.cache()'d so subsequent calls in Sidebar / Header
   // are free (no extra DB round-trip).
   const session = await requireSession()
+  const verified = await isEmailVerified(session.id)
 
   return (
     <SearchProvider>
@@ -22,6 +25,7 @@ export default async function DashboardLayout({
           <Sidebar role={session.role} />
         </div>
         <main className="flex-1 p-3 md:p-4 lg:p-6 lg:ml-64">
+          {!verified && <EmailVerificationBanner email={session.email} />}
           {children}
         </main>
       </div>

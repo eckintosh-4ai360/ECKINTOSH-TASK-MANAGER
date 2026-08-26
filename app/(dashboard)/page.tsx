@@ -75,7 +75,7 @@ export default async function DashboardPage() {
             <SprintOverview sprints={overviewSprints} />
           </div>
           <div>
-            <DeploymentFeed deployments={recentDeployments} />
+            <DeploymentFeed deployments={recentDeployments} canLog={canManageProjects} projects={projects} />
           </div>
         </div>
 

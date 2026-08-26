@@ -7,8 +7,13 @@ export const runtime = "nodejs"
 
 type GitHubPushEvent = {
   ref?: string
+  after?: string
+  deleted?: boolean
   pusher?: {
     name?: string
+  }
+  sender?: {
+    login?: string
   }
   head_commit?: {
     message?: string
@@ -87,6 +92,7 @@ async function findProjectRepository(repositoryUrl: string | null) {
     },
     select: {
       projectId: true,
+      defaultBranch: true,
       project: {
         select: {
           name: true,
@@ -95,6 +101,25 @@ async function findProjectRepository(repositoryUrl: string | null) {
       },
     },
   })
+}
+
+/** Which environment (if any) a push to this branch represents. Feature
+ * branches aren't deploys, so pushes to them don't create a Deployment row. */
+function resolveDeploymentEnvironment(branchName: string, defaultBranch: string) {
+  if (branchName === defaultBranch) return "production"
+  if (["staging", "stage"].includes(branchName)) return "staging"
+  if (["develop", "development", "dev"].includes(branchName)) return "development"
+  return null
+}
+
+/** Best-effort match of the GitHub actor to a workspace user; falls back to
+ * the project owner so the row always has a valid deployedById. */
+async function resolveDeployedById(githubLogin: string | undefined, fallbackUserId: string) {
+  if (githubLogin) {
+    const match = await prisma.user.findFirst({ where: { githubLogin }, select: { id: true } })
+    if (match) return match.id
+  }
+  return fallbackUserId
 }
 
 export async function POST(request: Request) {
@@ -135,6 +160,29 @@ export async function POST(request: Request) {
           subject: `GitHub push: ${repository.project.name}`,
         },
       })
+
+      // Record a deployment for pushes to a recognized deploy branch. This is
+      // a best-effort signal from source control, not a real CI/CD callback —
+      // there's no pending/running phase, so it lands straight at its outcome.
+      const environment = payload.deleted
+        ? null
+        : resolveDeploymentEnvironment(branchName, repository.defaultBranch)
+
+      if (environment) {
+        const deployedById = await resolveDeployedById(payload.sender?.login, repository.project.ownerId)
+        const version = payload.after?.slice(0, 7) || payload.commits?.at(-1)?.id?.slice(0, 7) || "unknown"
+
+        await prisma.deployment.create({
+          data: {
+            version,
+            environment,
+            status: "success",
+            projectId: repository.projectId,
+            deployedById,
+            notes: headline,
+          },
+        })
+      }
     }
 
     if (event === "pull_request") {

@@ -21,6 +21,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { DocumentationTab } from "./documentation-tab"
 import { CommunityForumTab } from "./community-forum-tab"
 import { ContactSupportTab } from "./contact-support-tab"
+import type { SupportTicketView } from "@/lib/actions/support-actions"
 import { VideoTutorialsTab } from "./video-tutorials-tab"
 
 const faqs = [
@@ -72,7 +73,7 @@ const quickLinks = [
   { icon: Clock, label: "System Status", description: "Check platform uptime", href: "#" },
 ]
 
-export function HelpContent() {
+export function HelpContent({ initialTickets = [] }: { initialTickets?: SupportTicketView[] }) {
   const [expandedFaq, setExpandedFaq] = useState<number | null>(null)
   const [globalSearch, setGlobalSearch] = useState("")
 
@@ -170,7 +171,7 @@ export function HelpContent() {
         </TabsContent>
 
         <TabsContent value="support" className="mt-6">
-          <ContactSupportTab />
+          <ContactSupportTab initialTickets={initialTickets} />
         </TabsContent>
 
         <TabsContent value="videos" className="mt-6">
