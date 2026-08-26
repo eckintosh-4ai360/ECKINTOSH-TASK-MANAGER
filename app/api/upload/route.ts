@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { writeFile, mkdir } from "fs/promises"
 import path from "path"
+import { put } from "@vercel/blob"
 import { getSession } from "@/lib/auth"
 import { hasPermission } from "@/lib/rbac"
 import { MEDIA_ROOT, MEDIA_TYPES, keyToMediaUrl } from "@/lib/media-storage"
@@ -29,18 +30,28 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: `Unsupported file type: ${file.type}` }, { status: 415 })
     }
 
-    // Store under a private root, never public/. The extension comes from our
-    // own allowlist rather than the client-supplied filename, so a
-    // "report.pdf.html" upload cannot pick its own content type on the way out.
-    const key = `chat/${session.id}`
-    const uploadDir = path.join(MEDIA_ROOT, key)
-    await mkdir(uploadDir, { recursive: true })
-
     const filename = `${Date.now()}-${Math.random().toString(36).slice(2)}.${entry.ext}`
-    await writeFile(path.join(uploadDir, filename), Buffer.from(await file.arrayBuffer()))
+    const key = `chat/${session.id}/${filename}`
+
+    let url: string
+
+    if (process.env.BLOB_READ_WRITE_TOKEN) {
+      // Vercel Blob cloud object storage
+      const blob = await put(key, file, {
+        access: "public",
+        addRandomSuffix: false,
+      })
+      url = blob.url
+    } else {
+      // Local storage fallback for offline / development environments
+      const uploadDir = path.join(MEDIA_ROOT, `chat/${session.id}`)
+      await mkdir(uploadDir, { recursive: true })
+      await writeFile(path.join(uploadDir, filename), Buffer.from(await file.arrayBuffer()))
+      url = keyToMediaUrl(key)
+    }
 
     return NextResponse.json({
-      url: keyToMediaUrl(`${key}/${filename}`),
+      url,
       mediaType: entry.kind,
       mediaName: file.name,
       mediaSize: file.size,

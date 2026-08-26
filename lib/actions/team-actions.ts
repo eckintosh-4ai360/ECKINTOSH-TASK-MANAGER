@@ -3,6 +3,7 @@
 import prisma from "@/lib/prisma"
 import { requireSession } from "@/lib/auth"
 import { listGitHubCommits, parseGitHubRepositoryUrl, isGitHubConfigured } from "@/lib/github"
+import { getPusherServer, WORKSPACE_PRESENCE_CHANNEL } from "@/lib/pusher/server"
 
 export type TeamMemberActivity = {
   id: string
@@ -95,8 +96,31 @@ export async function getTeamActivityData(): Promise<TeamMemberActivity[]> {
   // ── Fetch today's commit author identifiers from GitHub (one call, shared) ─
   const todaysAuthors = await getTodaysCommitAuthors(startOfToday)
 
-  // ── WebSocket presence map set up in server.ts ────────────────────────────
+  // ── Online presence via Pusher presence channel or local sockets ───────────
+  const onlineUserIds = new Set<string>()
   const clientsMap = (global as any).onlineUsersSet as Map<string, any> | undefined
+  if (clientsMap) {
+    for (const [userId, sockets] of clientsMap.entries()) {
+      if (sockets && (sockets instanceof Set ? sockets.size > 0 : true)) {
+        onlineUserIds.add(userId)
+      }
+    }
+  } else {
+    const pusher = getPusherServer()
+    if (pusher) {
+      try {
+        const res = await pusher.get({ path: `/channels/${WORKSPACE_PRESENCE_CHANNEL}/users` })
+        if (res.status === 200) {
+          const body = (await res.json()) as { users: { id: string }[] }
+          if (body?.users) {
+            body.users.forEach((u) => onlineUserIds.add(u.id))
+          }
+        }
+      } catch {
+        // Fallback gracefully
+      }
+    }
+  }
 
   // ── Build per-user activity records ───────────────────────────────────────
   const activities: TeamMemberActivity[] = await Promise.all(
@@ -131,9 +155,8 @@ export async function getTeamActivityData(): Promise<TeamMemberActivity[]> {
       })
       const activeProjectName = latestTask?.project.name ?? "DevFlow Platform"
 
-      // Real-time online status via WebSocket presence
-      const userSockets = clientsMap?.get(user.id)
-      const online = userSockets ? (userSockets instanceof Set ? userSockets.size > 0 : true) : false
+      // Real-time online status via presence
+      const online = onlineUserIds.has(user.id)
 
       const initials = getInitials(user.name, user.email)
       const roleTitle = user.title ?? (user.role === "ADMIN" ? "Lead Developer" : "Software Engineer")

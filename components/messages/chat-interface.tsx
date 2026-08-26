@@ -7,7 +7,16 @@ import {
   Send, Search, MessageSquare, Reply, X,
   CheckCheck, MoreVertical, Phone, Video, Trash2, Pencil, Check
 } from "lucide-react"
-import { getConversation, getChatUsers, markMessagesRead, getUnreadCounts } from "@/lib/actions/message-actions"
+import {
+  getConversation,
+  getChatUsers,
+  markMessagesRead,
+  getUnreadCounts,
+  sendMessageAction,
+  deleteMessageAction,
+  editMessageAction,
+} from "@/lib/actions/message-actions"
+import { getPusherClient, WORKSPACE_PRESENCE_CHANNEL } from "@/lib/pusher/client"
 import { MediaBubble } from "@/components/messages/media-bubble"
 import { MediaPicker } from "@/components/messages/media-picker"
 import { cn } from "@/lib/utils"
@@ -50,11 +59,7 @@ export function ChatInterface({ currentUserId, currentUserName }: ChatInterfaceP
   const [mediaUploading, setMediaUploading] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editInput, setEditInput] = useState("")
-  const [wsStatus, setWsStatus] = useState<"connected" | "reconnecting" | "offline">("reconnecting")
-  const wsRef = useRef<WebSocket | null>(null)
-  const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const reconnectDelay = useRef(1000)
-  const intentionalCloseRef = useRef(false)
+  const [wsStatus, setWsStatus] = useState<"connected" | "reconnecting" | "offline">("connected")
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const msgRefs = useRef<Record<string, HTMLDivElement | null>>({})
@@ -69,96 +74,84 @@ export function ChatInterface({ currentUserId, currentUserName }: ChatInterfaceP
     getUnreadCounts().then(setUnread)
   }, [])
 
-  // ── Stable WebSocket with auto-reconnect ─────────────────────────────────
-  const connectWs = useCallback(() => {
-    if (intentionalCloseRef.current) return
-
-    // Don't reconnect if already open
-    if (wsRef.current?.readyState === WebSocket.OPEN) return
-
-    const protocol = window.location.protocol === "https:" ? "wss" : "ws"
-    const wsUrl = `${protocol}://${window.location.host}/ws?userId=${currentUserId}`
-    const ws = new WebSocket(wsUrl)
-    wsRef.current = ws
-
-    ws.onopen = () => {
-      intentionalCloseRef.current = false
-      setWsStatus("connected")
-      reconnectDelay.current = 1000 // reset backoff on success
-      if (reconnectTimer.current) { clearTimeout(reconnectTimer.current); reconnectTimer.current = null }
-    }
-
-    ws.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data)
-        if (data.type === "chat") {
-          setMessages((prev) => {
-            if (prev.some((m) => m.id === data.id)) return prev
-            return [...prev, data]
-          })
-          if (data.from !== selectedUserRef.current?.id && data.from !== currentUserId) {
-            setUnread((prev) => ({ ...prev, [data.from]: (prev[data.from] ?? 0) + 1 }))
-          }
-        }
-        if (data.type === "delete_message") {
-          setMessages((prev) => prev.filter((m) => m.id !== data.id))
-        }
-        if (data.type === "edit_message") {
-          setMessages((prev) => prev.map((m) => m.id === data.id ? { ...m, content: data.content, edited: true } : m))
-        }
-        if (data.type === "presence") {
-          setOnlineUsers((prev) => {
-            const next = new Set(prev)
-            if (data.online) {
-              next.add(data.userId)
-            } else {
-              next.delete(data.userId)
-              // Record last seen timestamp so we can show "last seen X ago"
-              lastSeenRef.current[data.userId] = new Date()
-            }
-            return next
-          })
-        }
-      } catch {}
-    }
-
-    ws.onclose = () => {
-      if (intentionalCloseRef.current) return
-
-      setWsStatus("reconnecting")
-      // Exponential backoff: 1s → 2s → 4s → … max 30s
-      reconnectTimer.current = setTimeout(() => {
-        reconnectDelay.current = Math.min(reconnectDelay.current * 2, 30_000)
-        connectWs()
-      }, reconnectDelay.current)
-    }
-
-    ws.onerror = () => {
-      if (intentionalCloseRef.current) return
-
-      setWsStatus("offline")
-      ws.close() // triggers onclose → reconnect
-    }
-  }, [currentUserId])
-
-  useEffect(() => {
-    intentionalCloseRef.current = false
-    connectWs()
-    return () => {
-      intentionalCloseRef.current = true
-      if (reconnectTimer.current) clearTimeout(reconnectTimer.current)
-      reconnectTimer.current = null
-      wsRef.current?.close()
-      wsRef.current = null
-    }
-  }, [connectWs])
-
   const selectedUserRef = useRef(selectedUser)
   useEffect(() => { selectedUserRef.current = selectedUser }, [selectedUser])
 
+  // ── Stable Pusher Realtime Subscription ──────────────────────────────────
+  useEffect(() => {
+    const pusher = getPusherClient()
+    if (!pusher) {
+      setWsStatus("connected")
+      return
+    }
+
+    setWsStatus("reconnecting")
+
+    const handleStateChange = (states: { current: string }) => {
+      if (states.current === "connected") setWsStatus("connected")
+      else if (states.current === "connecting") setWsStatus("reconnecting")
+      else setWsStatus("offline")
+    }
+
+    pusher.connection.bind("state_change", handleStateChange)
+    if (pusher.connection.state === "connected") setWsStatus("connected")
+
+    const channel = pusher.subscribe(WORKSPACE_PRESENCE_CHANNEL) as any
+
+    channel.bind("pusher:subscription_succeeded", (members: { each: (fn: (m: { id: string }) => void) => void }) => {
+      const activeIds = new Set<string>()
+      members.each((m) => activeIds.add(m.id))
+      setOnlineUsers(activeIds)
+      setWsStatus("connected")
+    })
+
+    channel.bind("pusher:member_added", (member: { id: string }) => {
+      setOnlineUsers((prev) => new Set([...prev, member.id]))
+    })
+
+    channel.bind("pusher:member_removed", (member: { id: string }) => {
+      setOnlineUsers((prev) => {
+        const next = new Set(prev)
+        next.delete(member.id)
+        lastSeenRef.current[member.id] = new Date()
+        return next
+      })
+    })
+
+    channel.bind("chat", (data: Message) => {
+      const activePartnerId = selectedUserRef.current?.id
+      if (
+        (data.from === activePartnerId && data.to === currentUserId) ||
+        (data.from === currentUserId && data.to === activePartnerId)
+      ) {
+        setMessages((prev) => {
+          if (prev.some((m) => m.id === data.id)) return prev
+          return [...prev, data]
+        })
+      }
+
+      if (data.from !== activePartnerId && data.from !== currentUserId && data.to === currentUserId) {
+        setUnread((prev) => ({ ...prev, [data.from]: (prev[data.from] ?? 0) + 1 }))
+      }
+    })
+
+    channel.bind("delete_message", (data: { id: string }) => {
+      setMessages((prev) => prev.filter((m) => m.id !== data.id))
+    })
+
+    channel.bind("edit_message", (data: { id: string; content: string; edited: boolean }) => {
+      setMessages((prev) => prev.map((m) => (m.id === data.id ? { ...m, content: data.content, edited: true } : m)))
+    })
+
+    return () => {
+      pusher.connection.unbind("state_change", handleStateChange)
+      channel.unbind_all()
+      pusher.unsubscribe(WORKSPACE_PRESENCE_CHANNEL)
+    }
+  }, [currentUserId])
+
   const selectUser = useCallback(async (user: ChatUser) => {
     setSelectedUser(user)
-    // ← DO NOT clear messages immediately: keep old messages visible while loading
     setReplyingTo(null)
     setEditingId(null)
 
@@ -204,9 +197,9 @@ export function ChatInterface({ currentUserId, currentUserName }: ChatInterfaceP
     }
   }, [users, selectUser])
 
-  // Upload media file then send via WS
+  // Upload media file then send via server action
   const sendMedia = async (file: File) => {
-    if (!selectedUser || wsRef.current?.readyState !== WebSocket.OPEN) return
+    if (!selectedUser) return
     setMediaUploading(true)
     try {
       const fd = new FormData()
@@ -214,15 +207,17 @@ export function ChatInterface({ currentUserId, currentUserName }: ChatInterfaceP
       const res = await fetch("/api/upload", { method: "POST", body: fd })
       if (!res.ok) { const e = await res.json(); throw new Error(e.error ?? "Upload failed") }
       const { url, mediaType, mediaName, mediaSize } = await res.json()
-      wsRef.current.send(JSON.stringify({
-        type: "chat",
+
+      const payload = await sendMessageAction({
         to: selectedUser.id,
         mediaUrl: url,
         mediaType,
         mediaName,
         mediaSize,
-        ...(replyingTo ? { replyToId: replyingTo.id } : {}),
-      }))
+        replyToId: replyingTo ? replyingTo.id : undefined,
+      })
+
+      setMessages((prev) => (prev.some((m) => m.id === payload.id) ? prev : [...prev, payload]))
       setReplyingTo(null)
     } catch (err: any) {
       alert(err.message)
@@ -235,18 +230,26 @@ export function ChatInterface({ currentUserId, currentUserName }: ChatInterfaceP
     bottomRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages])
 
-  const sendMessage = () => {
+  const sendMessage = async () => {
     const content = input.trim()
-    if (!content || !selectedUser || wsRef.current?.readyState !== WebSocket.OPEN) return
-    wsRef.current.send(JSON.stringify({
-      type: "chat",
-      to: selectedUser.id,
-      content,
-      ...(replyingTo ? { replyToId: replyingTo.id } : {}),
-    }))
+    if (!content || !selectedUser) return
     setInput("")
     sessionStorage.removeItem(`chat-draft:${selectedUser.id}`) // clear saved draft
+    const replyId = replyingTo ? replyingTo.id : undefined
     setReplyingTo(null)
+
+    try {
+      const payload = await sendMessageAction({
+        to: selectedUser.id,
+        content,
+        replyToId: replyId,
+      })
+
+      setMessages((prev) => (prev.some((m) => m.id === payload.id) ? prev : [...prev, payload]))
+    } catch (err: any) {
+      console.error("[Chat] Send failed:", err)
+      alert(err.message ?? "Failed to send message")
+    }
   }
 
   // Persist draft as user types
@@ -258,10 +261,14 @@ export function ChatInterface({ currentUserId, currentUserName }: ChatInterfaceP
     }
   }
 
-  const sendDelete = (msgId: string) => {
-    if (wsRef.current?.readyState !== WebSocket.OPEN) return
+  const sendDelete = async (msgId: string) => {
     if (!confirm("Delete this message for everyone?")) return
-    wsRef.current.send(JSON.stringify({ type: "delete_message", id: msgId }))
+    try {
+      await deleteMessageAction(msgId)
+      setMessages((prev) => prev.filter((m) => m.id !== msgId))
+    } catch (err: any) {
+      alert(err.message ?? "Failed to delete message")
+    }
   }
 
   const startEdit = (msg: Message) => {
@@ -270,12 +277,17 @@ export function ChatInterface({ currentUserId, currentUserName }: ChatInterfaceP
     setHoveredMsg(null)
   }
 
-  const submitEdit = (msgId: string) => {
+  const submitEdit = async (msgId: string) => {
     const content = editInput.trim()
-    if (!content || wsRef.current?.readyState !== WebSocket.OPEN) { setEditingId(null); return }
-    wsRef.current.send(JSON.stringify({ type: "edit_message", id: msgId, content }))
-    setMessages((prev) => prev.map((m) => m.id === msgId ? { ...m, content, edited: true } : m))
-    setEditingId(null)
+    if (!content) { setEditingId(null); return }
+    try {
+      await editMessageAction(msgId, content)
+      setMessages((prev) => prev.map((m) => m.id === msgId ? { ...m, content, edited: true } : m))
+    } catch (err: any) {
+      alert(err.message ?? "Failed to edit message")
+    } finally {
+      setEditingId(null)
+    }
   }
 
   const scrollToMessage = (id: string) => {
