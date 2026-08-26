@@ -4,10 +4,7 @@ import { revalidatePath } from "next/cache"
 import prisma from "@/lib/prisma"
 import { requireSession } from "@/lib/auth"
 import { hasPermission, getPermissionError } from "@/lib/rbac"
-
-const VALID_ENVIRONMENTS = ["development", "staging", "production"]
-const VALID_STATUSES = ["pending", "running", "success", "failed", "rolled_back"]
-const MAX_NOTES_LENGTH = 500
+import { validateInput, createDeploymentSchema } from "@/lib/validation"
 
 export async function createDeploymentAction(input: {
   projectId: string
@@ -21,25 +18,21 @@ export async function createDeploymentAction(input: {
     return { success: false, error: getPermissionError("manage_projects") }
   }
 
-  const version = input.version.trim()
-  if (!version) return { success: false, error: "Version is required." }
-  if (!VALID_ENVIRONMENTS.includes(input.environment)) {
-    return { success: false, error: "Invalid environment." }
-  }
+  const parsed = validateInput(createDeploymentSchema, input)
+  if (!parsed.success) return { success: false, error: parsed.error }
+  const validated = parsed.data
 
-  const status = input.status && VALID_STATUSES.includes(input.status) ? input.status : "success"
-
-  const project = await prisma.project.findUnique({ where: { id: input.projectId }, select: { id: true } })
+  const project = await prisma.project.findUnique({ where: { id: validated.projectId }, select: { id: true } })
   if (!project) return { success: false, error: "Project not found." }
 
   const deployment = await prisma.deployment.create({
     data: {
-      projectId: input.projectId,
-      version,
-      environment: input.environment,
-      status,
+      projectId: validated.projectId,
+      version: validated.version,
+      environment: validated.environment,
+      status: validated.status ?? "success",
       deployedById: session.id,
-      notes: input.notes?.trim().slice(0, MAX_NOTES_LENGTH) || null,
+      notes: validated.notes || null,
     },
   })
 

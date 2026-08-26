@@ -100,7 +100,7 @@ export function TeamActivity({ currentUserId, initialActivities }: TeamActivityP
           </div>
           <div>
             <h2 className="text-sm font-bold text-foreground">Team Activity</h2>
-            <p className="text-[10px] text-muted-foreground">Today's contributions</p>
+            <p className="text-[10px] text-muted-foreground">Today&apos;s contributions</p>
           </div>
         </div>
         <div className="flex items-center gap-2">

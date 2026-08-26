@@ -8,6 +8,7 @@ import prisma from "@/lib/prisma"
 import { createSession, requireAdmin } from "@/lib/auth"
 import { validatePassword } from "@/lib/password-policy"
 import { issueVerificationOtp } from "@/lib/email-verification"
+import { validateInput, createUserSchema, updateUserRoleSchema } from "@/lib/validation"
 import {
   clearIpAttempts,
   describeLockout,
@@ -92,18 +93,14 @@ export async function loginAction(formData: FormData) {
 export async function createUserAction(formData: FormData) {
   await requireAdmin()
 
-  const name = (formData.get("name") as string | null)?.trim()
-  const email = (formData.get("email") as string | null)?.trim().toLowerCase()
-  const password = formData.get("password") as string | null
-  const role = (formData.get("role") as string | null) || "USER"
-
-  if (!name || !email || !password) {
-    return { error: "Name, email, and password are required" }
-  }
-
-  if (!["ADMIN", "USER", "GUEST"].includes(role)) {
-    return { error: "Invalid role" }
-  }
+  const parsed = validateInput(createUserSchema, {
+    name: (formData.get("name") as string | null)?.trim(),
+    email: (formData.get("email") as string | null)?.trim().toLowerCase(),
+    password: formData.get("password") as string | null,
+    role: (formData.get("role") as string | null) || "USER",
+  })
+  if (!parsed.success) return { error: parsed.error }
+  const { name, email, password, role } = parsed.data
 
   const policyError = validatePassword(password, { email, name })
   if (policyError) return { error: policyError }
@@ -120,7 +117,7 @@ export async function createUserAction(formData: FormData) {
       name,
       email,
       password: hashed,
-      role: role as "ADMIN" | "USER" | "GUEST",
+      role,
     },
   })
 
@@ -154,19 +151,19 @@ export async function getUsers() {
 export async function updateUserRoleAction(userId: string, role: string) {
   const admin = await requireAdmin()
 
-  if (!["ADMIN", "USER", "GUEST"].includes(role)) {
-    return { error: "Invalid role" }
-  }
+  const parsed = validateInput(updateUserRoleSchema, { userId, role })
+  if (!parsed.success) return { error: parsed.error }
+  const validated = parsed.data
 
-  if (admin.id === userId && role !== "ADMIN") {
+  if (admin.id === validated.userId && validated.role !== "ADMIN") {
     return { error: "You cannot remove your own admin role" }
   }
 
-  const target = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } })
+  const target = await prisma.user.findUnique({ where: { id: validated.userId }, select: { role: true } })
   if (!target) return { error: "User not found" }
 
   // Never let the workspace end up with no administrator.
-  if (target.role === "ADMIN" && role !== "ADMIN") {
+  if (target.role === "ADMIN" && validated.role !== "ADMIN") {
     const adminCount = await prisma.user.count({ where: { role: "ADMIN" } })
     if (adminCount <= 1) {
       return { error: "This is the only admin. Promote someone else first." }
@@ -174,8 +171,8 @@ export async function updateUserRoleAction(userId: string, role: string) {
   }
 
   await prisma.user.update({
-    where: { id: userId },
-    data: { role: role as "ADMIN" | "USER" | "GUEST" },
+    where: { id: validated.userId },
+    data: { role: validated.role },
   })
 
   // getSession() re-reads the role on every request, so this takes effect on

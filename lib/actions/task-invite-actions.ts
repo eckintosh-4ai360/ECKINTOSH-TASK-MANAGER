@@ -4,6 +4,7 @@ import prisma from "@/lib/prisma"
 import { requireSession } from "@/lib/auth"
 import { sendExternalEmail } from "@/lib/email-delivery"
 import { revalidatePath } from "next/cache"
+import { validateInput, taskCommentSchema } from "@/lib/validation"
 
 // ─── Comments ────────────────────────────────────────────────────────────────
 
@@ -27,8 +28,10 @@ export async function getTaskComments(taskId: string) {
 export async function addTaskComment(taskId: string, content: string) {
   try {
     const session = await requireSession()
-    const trimmed = content.trim()
-    if (!trimmed) return { success: false, error: "Comment cannot be empty." }
+
+    const parsed = validateInput(taskCommentSchema, { taskId, content })
+    if (!parsed.success) return { success: false, error: parsed.error }
+    const trimmed = parsed.data.content
 
     const comment = await prisma.taskComment.create({
       data: { taskId, authorId: session.id, content: trimmed },

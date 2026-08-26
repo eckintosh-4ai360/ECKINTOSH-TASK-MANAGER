@@ -16,6 +16,7 @@ import {
 } from "@/lib/email-delivery"
 import type { EmailSettingsView } from "@/lib/settings"
 import { readEmailSettings } from "@/lib/email-settings"
+import { validateInput, emailSettingsSchema } from "@/lib/validation"
 
 export type EmailSettingsInput = {
   provider: EmailProvider
@@ -126,6 +127,15 @@ export async function saveEmailSettingsAction(
 ): Promise<ActionResult<{ settings: EmailSettingsView; verified: boolean; warning?: string }>> {
   const guard = await requireEmailAdmin()
   if (!guard.ok) return { success: false, error: guard.error }
+
+  // Shape/type check first — the Gmail-specific business rules (App Password
+  // format, live SMTP verification, etc.) still live in normalize()/validate()
+  // below; this just rejects structurally malformed input before that.
+  const shapeCheck = validateInput(emailSettingsSchema, {
+    ...input,
+    password: input.password || undefined,
+  })
+  if (!shapeCheck.success) return { success: false, error: shapeCheck.error }
 
   const values = normalize(input)
   const password = await resolvePassword(input)

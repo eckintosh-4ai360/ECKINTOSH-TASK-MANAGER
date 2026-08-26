@@ -4,11 +4,7 @@ import { revalidatePath } from "next/cache"
 import prisma from "@/lib/prisma"
 import { requireSession } from "@/lib/auth"
 import { createNotificationsForUsers } from "@/lib/notifications"
-
-const VALID_CATEGORIES = ["bug", "feature", "question", "security", "billing", "performance"]
-const VALID_PRIORITIES = ["low", "medium", "high", "critical"]
-const MAX_SUBJECT_LENGTH = 200
-const MAX_MESSAGE_LENGTH = 5000
+import { validateInput, createSupportTicketSchema } from "@/lib/validation"
 
 export type SupportTicketView = {
   id: string
@@ -40,19 +36,12 @@ export async function createSupportTicketAction(input: {
 }): Promise<{ success: true; ticket: SupportTicketView } | { success: false; error: string }> {
   const session = await requireSession()
 
-  if (!VALID_CATEGORIES.includes(input.category)) {
-    return { success: false, error: "Select a category." }
-  }
-  const priority = VALID_PRIORITIES.includes(input.priority) ? input.priority : "medium"
-
-  const subject = input.subject.trim().slice(0, MAX_SUBJECT_LENGTH)
-  const message = input.message.trim().slice(0, MAX_MESSAGE_LENGTH)
-
-  if (!subject) return { success: false, error: "Enter a subject." }
-  if (!message) return { success: false, error: "Describe the issue." }
+  const parsed = validateInput(createSupportTicketSchema, input)
+  if (!parsed.success) return { success: false, error: parsed.error }
+  const { category, priority, subject, message } = parsed.data
 
   const ticket = await prisma.supportTicket.create({
-    data: { userId: session.id, category: input.category, priority, subject, message },
+    data: { userId: session.id, category, priority, subject, message },
   })
 
   // Notify admins — this is the only place the ticket actually goes; there's

@@ -5,6 +5,7 @@ import { requireSession } from "@/lib/auth"
 import { createNotificationsForUsers, getWorkspaceRecipientIds } from "@/lib/notifications"
 import { getPermissionError, hasPermission } from "@/lib/rbac"
 import { revalidatePath } from "next/cache"
+import { validateInput, createCalendarEventSchema } from "@/lib/validation"
 
 type CalendarEventInput = {
   title: string
@@ -97,32 +98,32 @@ export async function createCalendarEvent(input: CalendarEventInput) {
     return { success: false, error: getPermissionError("manage_calendar") }
   }
 
-  if (!input.title.trim() || !input.date) {
-    return { success: false, error: "Event title and date are required" }
-  }
+  const parsed = validateInput(createCalendarEventSchema, input)
+  if (!parsed.success) return { success: false, error: parsed.error }
+  const validated = parsed.data
 
-  const startTime = toDateTime(input.date, input.startTime, "09:00")
-  let endTime = input.endTime ? toDateTime(input.date, input.endTime, "09:30") : addMinutes(startTime, 30)
+  const startTime = toDateTime(validated.date, validated.startTime, "09:00")
+  let endTime = validated.endTime ? toDateTime(validated.date, validated.endTime, "09:30") : addMinutes(startTime, 30)
 
   if (endTime <= startTime) {
     endTime = addMinutes(startTime, 30)
   }
 
-  const eventType = input.type || "meeting"
+  const eventType = validated.type || "meeting"
   const recipientIds = await getWorkspaceRecipientIds(session.id)
 
-  const body = formatEventBody(input, startTime, endTime, session.name)
-  const subject = `Scheduled: ${input.title.trim()}`
+  const body = formatEventBody(validated, startTime, endTime, session.name)
+  const subject = `Scheduled: ${validated.title}`
 
   const event = await prisma.calendarEvent.create({
     data: {
-      title: input.title.trim(),
-      description: input.description?.trim() || null,
+      title: validated.title,
+      description: validated.description || null,
       startTime,
       endTime,
       type: eventType,
       color: TYPE_COLORS[eventType] ?? TYPE_COLORS.meeting,
-      location: input.location?.trim() || null,
+      location: validated.location || null,
     },
   })
 
@@ -131,7 +132,7 @@ export async function createCalendarEvent(input: CalendarEventInput) {
       userIds: recipientIds,
       channel: "teamUpdates",
       title: "New scheduled event",
-      message: `${session.name} scheduled ${input.title.trim()}.`,
+      message: `${session.name} scheduled ${validated.title}.`,
       type: "info",
       link: "/calendar",
       email: {

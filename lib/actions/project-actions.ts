@@ -6,6 +6,14 @@ import { syncProjectRepository, getGitHubWorkspaceData } from "@/lib/actions/git
 import { createNotificationsForUsers, getWorkspaceRecipientIds } from "@/lib/notifications"
 import { canUpdateTaskStatus, getPermissionError, hasPermission } from "@/lib/rbac"
 import { revalidatePath } from "next/cache"
+import {
+  validateInput,
+  createProjectSchema,
+  updateProjectSchema,
+  createTaskSchema,
+  updateTaskSchema,
+  taskStatusSchema,
+} from "@/lib/validation"
 
 async function resolveSprintAssignment(projectId: string, sprintId?: string | null) {
   const normalizedSprintId = sprintId?.trim()
@@ -47,17 +55,12 @@ export async function createProject(formData: {
       return { success: false, error: getPermissionError("manage_projects") }
     }
 
-    const name = formData.name.trim()
-    if (!name) {
-      return { success: false, error: "Project name is required." }
-    }
-
-    if (!formData.teamLeaderId) {
-      return { success: false, error: "Select a team leader for this project." }
-    }
+    const parsed = validateInput(createProjectSchema, formData)
+    if (!parsed.success) return { success: false, error: parsed.error }
+    const input = parsed.data
 
     const teamLeader = await prisma.user.findUnique({
-      where: { id: formData.teamLeaderId },
+      where: { id: input.teamLeaderId },
       select: { id: true, name: true, email: true, role: true },
     })
 
@@ -67,10 +70,10 @@ export async function createProject(formData: {
 
     const project = await prisma.project.create({
       data: {
-        name,
-        description: formData.description?.trim() || "",
-        priority: (formData.priority || "medium").toLowerCase(),
-        endDate: formData.dueDate ? new Date(formData.dueDate) : null,
+        name: input.name,
+        description: input.description || "",
+        priority: input.priority ?? "medium",
+        endDate: input.dueDate ? new Date(input.dueDate) : null,
         tech: [],
         owner: {
           connect: { id: teamLeader.id },
@@ -87,8 +90,8 @@ export async function createProject(formData: {
     })
 
     let repositoryWarning: string | undefined
-    if (formData.repositoryUrl?.trim()) {
-      const repositoryResult = await syncProjectRepository(project.id, formData.repositoryUrl)
+    if (input.repositoryUrl?.trim()) {
+      const repositoryResult = await syncProjectRepository(project.id, input.repositoryUrl)
       if (!repositoryResult.success) {
         repositoryWarning = repositoryResult.error ?? "The project was created, but the repository could not be connected yet."
       }
@@ -133,18 +136,22 @@ export async function updateProject(input: {
       return { success: false, error: getPermissionError("manage_projects") }
     }
 
+    const parsed = validateInput(updateProjectSchema, input)
+    if (!parsed.success) return { success: false, error: parsed.error }
+    const validated = parsed.data
+
     const project = await prisma.project.update({
-      where: { id: input.id },
+      where: { id: validated.id },
       data: {
-        name: input.name.trim(),
-        description: input.description?.trim() || "",
-        priority: (input.priority || "medium").toLowerCase(),
-        status: (input.status || "active").toLowerCase(),
-        endDate: input.dueDate ? new Date(input.dueDate) : null,
+        name: validated.name,
+        description: validated.description || "",
+        priority: validated.priority ?? "medium",
+        status: validated.status ?? "active",
+        endDate: validated.dueDate ? new Date(validated.dueDate) : null,
       },
     })
 
-    const repositoryResult = await syncProjectRepository(input.id, input.repositoryUrl)
+    const repositoryResult = await syncProjectRepository(validated.id, validated.repositoryUrl)
     if (!repositoryResult.success) {
       return {
         success: false,
@@ -305,26 +312,25 @@ export async function createTask(formData: {
       return { success: false, error: getPermissionError("manage_tasks") }
     }
 
-    const title = formData.title.trim()
-    if (!title) {
-      return { success: false, error: "Task title is required." }
-    }
+    const parsed = validateInput(createTaskSchema, formData)
+    if (!parsed.success) return { success: false, error: parsed.error }
+    const input = parsed.data
 
-    const sprintAssignment = await resolveSprintAssignment(formData.projectId, formData.sprintId)
+    const sprintAssignment = await resolveSprintAssignment(input.projectId, input.sprintId)
     if ("error" in sprintAssignment) {
       return { success: false, error: sprintAssignment.error }
     }
 
     const task = await prisma.task.create({
       data: {
-        title,
-        description: formData.description || "",
-        projectId: formData.projectId,
+        title: input.title,
+        description: input.description || "",
+        projectId: input.projectId,
         sprintId: sprintAssignment.sprintId,
-        priority: (formData.priority || "medium").toLowerCase(),
-        dueDate: formData.dueDate ? new Date(formData.dueDate) : null,
-        tags: formData.tags
-          ? formData.tags.split(",").map((tag) => tag.trim()).filter(Boolean)
+        priority: input.priority ?? "medium",
+        dueDate: input.dueDate ? new Date(input.dueDate) : null,
+        tags: input.tags
+          ? input.tags.split(",").map((tag) => tag.trim()).filter(Boolean)
           : [],
       },
     })
@@ -373,29 +379,28 @@ export async function updateTask(input: {
       return { success: false, error: getPermissionError("manage_tasks") }
     }
 
-    const title = input.title.trim()
-    if (!title) {
-      return { success: false, error: "Task title is required." }
-    }
+    const parsed = validateInput(updateTaskSchema, input)
+    if (!parsed.success) return { success: false, error: parsed.error }
+    const validated = parsed.data
 
-    const sprintAssignment = await resolveSprintAssignment(input.projectId, input.sprintId)
+    const sprintAssignment = await resolveSprintAssignment(validated.projectId, validated.sprintId)
     if ("error" in sprintAssignment) {
       return { success: false, error: sprintAssignment.error }
     }
 
     const task = await prisma.task.update({
-      where: { id: input.id },
+      where: { id: validated.id },
       data: {
-        title,
-        description: input.description?.trim() || "",
-        projectId: input.projectId,
+        title: validated.title,
+        description: validated.description || "",
+        projectId: validated.projectId,
         sprintId: sprintAssignment.sprintId,
-        priority: (input.priority || "medium").toLowerCase(),
-        dueDate: input.dueDate ? new Date(input.dueDate) : null,
-        status: (input.status as any) || "TODO",
-        assigneeId: input.assigneeId || null,
-        tags: input.tags
-          ? input.tags.split(",").map((tag) => tag.trim()).filter(Boolean)
+        priority: validated.priority ?? "medium",
+        dueDate: validated.dueDate ? new Date(validated.dueDate) : null,
+        status: validated.status ?? "TODO",
+        assigneeId: validated.assigneeId || null,
+        tags: validated.tags
+          ? validated.tags.split(",").map((tag) => tag.trim()).filter(Boolean)
           : [],
       },
       select: {
@@ -558,9 +563,12 @@ export async function updateTaskStatus(taskId: string, status: string) {
       return { success: false, error: getPermissionError("update_assigned_task_status") }
     }
 
+    const parsedStatus = validateInput(taskStatusSchema, status)
+    if (!parsedStatus.success) return { success: false, error: parsedStatus.error }
+
     const task = await prisma.task.update({
       where: { id: taskId },
-      data: { status: status as any },
+      data: { status: parsedStatus.data },
       select: {
         title: true,
         assigneeId: true,

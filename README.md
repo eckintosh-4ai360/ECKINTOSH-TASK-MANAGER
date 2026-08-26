@@ -232,14 +232,24 @@ GITHUB_WEBHOOK_SECRET=""
 
 ### 4. Set up the database
 
+Schema changes are tracked with Prisma Migrate (`prisma/migrations/`), not `db push` — this gives you rollback history and makes `npm run build` fail loudly if a migration can't apply, instead of drifting silently.
+
 ```bash
-# Apply the schema and generate the Prisma client
-npx prisma db push
+# First time: create the database and apply all migrations
+npx prisma migrate deploy
 npx prisma generate
 
 # (Optional) Seed with sample data
 npx tsx prisma/seed.ts
 ```
+
+When you change `schema.prisma` during development, generate a new migration instead of pushing:
+
+```bash
+npx prisma migrate dev --name describe_your_change
+```
+
+This writes a new folder under `prisma/migrations/` — commit it. `npm run build` runs `prisma migrate deploy` automatically (via `prebuild`), so production applies whatever migrations are checked in.
 
 ---
 

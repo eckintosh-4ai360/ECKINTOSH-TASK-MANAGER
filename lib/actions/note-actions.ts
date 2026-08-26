@@ -5,6 +5,7 @@ import { requireSession } from "@/lib/auth"
 import { sanitizeNoteHtml } from "@/lib/sanitize-html"
 import { getPermissionError, hasPermission } from "@/lib/rbac"
 import { revalidatePath } from "next/cache"
+import { validateInput, noteInputSchema } from "@/lib/validation"
 
 type NoteInput = {
   title?: string
@@ -55,14 +56,18 @@ export async function createNote(input: NoteInput) {
   if (!hasPermission(session.role, "manage_own_notes")) {
     return { success: false, error: getPermissionError("manage_own_notes") }
   }
+  const parsed = validateInput(noteInputSchema, input)
+  if (!parsed.success) return { success: false, error: parsed.error }
+  const validated = parsed.data
+
   // Note bodies are rendered as HTML, so scrub them before they are stored.
-  const content = sanitizeNoteHtml(input.content?.trim() ?? "")
+  const content = sanitizeNoteHtml(validated.content?.trim() ?? "")
 
   const note = await prisma.note.create({
     data: {
-      title: normalizeTitle(input.title, content),
+      title: normalizeTitle(validated.title, content),
       content,
-      color: input.color || "#00d4ff",
+      color: validated.color || "#00d4ff",
       ownerId: session.id,
     },
   })
@@ -76,14 +81,18 @@ export async function updateNote(noteId: string, input: NoteInput) {
   if (!hasPermission(session.role, "manage_own_notes")) {
     return { success: false, error: getPermissionError("manage_own_notes") }
   }
-  const content = sanitizeNoteHtml(input.content ?? "")
+  const parsed = validateInput(noteInputSchema, input)
+  if (!parsed.success) return { success: false, error: parsed.error }
+  const validated = parsed.data
+
+  const content = sanitizeNoteHtml(validated.content ?? "")
 
   const updated = await prisma.note.updateMany({
     where: { id: noteId, ownerId: session.id },
     data: {
-      title: normalizeTitle(input.title, content),
+      title: normalizeTitle(validated.title, content),
       content,
-      color: input.color || "#00d4ff",
+      color: validated.color || "#00d4ff",
     },
   })
 

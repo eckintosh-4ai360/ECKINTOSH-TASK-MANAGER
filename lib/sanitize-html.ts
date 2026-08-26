@@ -1,4 +1,4 @@
-import DOMPurify from "isomorphic-dompurify"
+import sanitizeHtml from "sanitize-html"
 
 /**
  * Note bodies are stored as HTML (TipTap writes it, and aiCreateNote runs
@@ -6,8 +6,8 @@ import DOMPurify from "isomorphic-dompurify"
  * dangerouslySetInnerHTML, so both have to be sanitized — model output is
  * untrusted input like any other.
  *
- * Sanitizing on write keeps bad markup out of the database; sanitizing again on
- * render covers rows written before this existed.
+ * Using `sanitize-html` ensures fast, reliable server-side & SSR execution
+ * without depending on `jsdom` or ESM-incompatible modules on Vercel.
  */
 
 const ALLOWED_TAGS = [
@@ -21,36 +21,53 @@ const ALLOWED_TAGS = [
   "img",
 ]
 
-const ALLOWED_ATTR = ["href", "title", "target", "rel", "src", "alt", "width", "height", "class", "colspan", "rowspan"]
-
-const CONFIG = {
-  ALLOWED_TAGS,
-  ALLOWED_ATTR,
-  // Block javascript:, vbscript:, and data: URLs; allow http(s), mailto, and
-  // inline base64 images only.
-  ALLOWED_URI_REGEXP: /^(?:(?:https?|mailto):|[^a-z]|[a-z+.-]+(?:[^a-z+.\-:]|$))/i,
-  FORBID_TAGS: ["script", "style", "iframe", "object", "embed", "form", "input", "button", "link", "meta", "svg"],
-  // on* handlers, and anything that could pull in remote code.
-  FORBID_ATTR: ["style", "srcset", "formaction", "form", "ping"],
-  ALLOW_DATA_ATTR: false,
+const ALLOWED_ATTRIBUTES: Record<string, string[]> = {
+  a: ["href", "title", "target", "rel"],
+  img: ["src", "alt", "width", "height", "class"],
+  table: ["class"],
+  th: ["colspan", "rowspan", "class"],
+  td: ["colspan", "rowspan", "class"],
+  div: ["class"],
+  span: ["class"],
+  p: ["class"],
+  code: ["class"],
+  pre: ["class"],
 }
 
 export function sanitizeNoteHtml(html: string): string {
   if (!html) return ""
 
-  const clean = DOMPurify.sanitize(html, CONFIG) as unknown as string
-
-  // Any link that survived should not be able to reach back through
-  // window.opener when opened in a new tab.
-  return clean.replace(/<a\s+([^>]*?)>/gi, (match, attrs: string) => {
-    if (/\btarget\s*=/i.test(attrs) && !/\brel\s*=/i.test(attrs)) {
-      return `<a ${attrs} rel="noopener noreferrer">`
-    }
-    return match
+  const clean = sanitizeHtml(html, {
+    allowedTags: ALLOWED_TAGS,
+    allowedAttributes: ALLOWED_ATTRIBUTES,
+    allowedSchemes: ["http", "https", "mailto", "data"],
+    allowedSchemesByTag: {
+      img: ["http", "https", "data"],
+    },
+    transformTags: {
+      a: (tagName, attribs) => {
+        if (attribs.target === "_blank") {
+          return {
+            tagName: "a",
+            attribs: {
+              ...attribs,
+              rel: "noopener noreferrer",
+            },
+          }
+        }
+        return { tagName, attribs }
+      },
+    },
   })
+
+  return clean
 }
 
 /** Plain-text preview, e.g. for note list snippets. */
 export function stripHtml(html: string): string {
-  return (DOMPurify.sanitize(html, { ALLOWED_TAGS: [], ALLOWED_ATTR: [] }) as unknown as string).trim()
+  if (!html) return ""
+  return sanitizeHtml(html, {
+    allowedTags: [],
+    allowedAttributes: {},
+  }).trim()
 }

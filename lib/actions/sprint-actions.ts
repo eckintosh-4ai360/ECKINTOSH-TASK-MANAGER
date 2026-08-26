@@ -5,6 +5,7 @@ import { requireSession } from "@/lib/auth"
 import { createNotificationsForUsers, getWorkspaceRecipientIds } from "@/lib/notifications"
 import { getPermissionError, hasPermission } from "@/lib/rbac"
 import { revalidatePath } from "next/cache"
+import { validateInput, createSprintSchema } from "@/lib/validation"
 
 type SprintInput = {
   name: string
@@ -128,18 +129,18 @@ export async function createSprint(input: SprintInput) {
     return { success: false, error: getPermissionError("manage_sprints") }
   }
 
-  if (!input.name.trim() || !input.projectId) {
-    return { success: false, error: "Sprint name and project are required" }
-  }
+  const parsed = validateInput(createSprintSchema, input)
+  if (!parsed.success) return { success: false, error: parsed.error }
+  const validated = parsed.data
 
   const sprint = await prisma.sprint.create({
     data: {
-      name: input.name.trim(),
-      goal: input.goal?.trim() || null,
-      projectId: input.projectId,
-      status: input.status ?? "PLANNING",
-      startDate: input.startDate ? new Date(input.startDate) : null,
-      endDate: input.endDate ? new Date(input.endDate) : null,
+      name: validated.name,
+      goal: validated.goal || null,
+      projectId: validated.projectId,
+      status: validated.status ?? "PLANNING",
+      startDate: validated.startDate ? new Date(validated.startDate) : null,
+      endDate: validated.endDate ? new Date(validated.endDate) : null,
     },
     select: {
       id: true,

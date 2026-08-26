@@ -12,7 +12,7 @@ import {
   lookupMimeByExtension,
   readBlobObject,
   resolveMediaPath,
-  useBlobStorage,
+  isBlobStorageEnabled,
 } from "@/lib/media-storage"
 
 export const runtime = "nodejs"
@@ -51,7 +51,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ pat
   const mimeType = lookupMimeByExtension(extension)
   const disposition = isInlineRenderable(mimeType) ? "inline" : "attachment"
 
-  return useBlobStorage()
+  return isBlobStorageEnabled()
     ? serveFromBlob(key, mimeType, disposition)
     : serveFromDisk(segments, mimeType, disposition)
 }

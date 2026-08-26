@@ -18,7 +18,7 @@ export const MEDIA_ROOT = process.env.MEDIA_STORAGE_DIR
 
 export const MEDIA_URL_PREFIX = "/api/media"
 
-export function useBlobStorage() {
+export function isBlobStorageEnabled() {
   return Boolean(process.env.BLOB_READ_WRITE_TOKEN)
 }
 

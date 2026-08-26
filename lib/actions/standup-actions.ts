@@ -5,6 +5,7 @@ import { requireSession } from "@/lib/auth"
 import { createNotificationsForUsers, getWorkspaceRecipientIds } from "@/lib/notifications"
 import { canManageStandup, getPermissionError, hasPermission } from "@/lib/rbac"
 import { revalidatePath } from "next/cache"
+import { validateInput, createStandupSchema } from "@/lib/validation"
 
 type StandupInput = {
   didYesterday: string
@@ -79,20 +80,18 @@ export async function createStandup(input: StandupInput) {
     return { success: false, error: getPermissionError("post_standups") }
   }
 
-  if (!input.didYesterday.trim() || !input.doingToday.trim()) {
-    return { success: false, error: "Yesterday and today updates are required" }
-  }
-
-  const mood = Math.max(1, Math.min(5, Number(input.mood) || 3))
+  const parsed = validateInput(createStandupSchema, input)
+  if (!parsed.success) return { success: false, error: parsed.error }
+  const validated = parsed.data
 
   const standup = await prisma.standup.create({
     data: {
       userId: session.id,
-      projectId: input.projectId || null,
-      didYesterday: input.didYesterday.trim(),
-      doingToday: input.doingToday.trim(),
-      blockers: input.blockers?.trim() || null,
-      mood,
+      projectId: validated.projectId || null,
+      didYesterday: validated.didYesterday,
+      doingToday: validated.doingToday,
+      blockers: validated.blockers || null,
+      mood: validated.mood,
     },
     select: {
       id: true,
