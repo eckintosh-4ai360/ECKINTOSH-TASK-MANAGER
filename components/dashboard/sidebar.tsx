@@ -139,8 +139,12 @@ export function Sidebar({ role }: { role: AppRole }) {
     return true
   })
 
+  // Fills its container rather than pinning itself to the viewport: on desktop
+  // the layout supplies the fixed rail, on mobile it is the drawer's content.
+  // `bg-sidebar` is opaque on purpose — a translucent nav drawer lets the page
+  // show through, and backdrop-filter is unreliable on mobile Safari.
   return (
-    <aside className="fixed top-0 left-0 w-64 h-screen overflow-y-auto flex flex-col glass-card border-r border-primary/10 lg:block">
+    <aside className="flex h-full w-full flex-col overflow-y-auto bg-sidebar border-r border-primary/10">
       {/* ── Logo & Brand ─────────────────────────────────── */}
       <div className="px-4 pt-5 pb-4 border-b border-white/5">
         <Link href="/" className="flex items-center gap-3 group">
