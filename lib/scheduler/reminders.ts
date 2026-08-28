@@ -24,6 +24,9 @@ const LEAD_TIME_MS: Record<SettingsReminderLeadTime, number> = {
 
 const ACTIVE_STATUSES = ["BACKLOG", "TODO", "IN_PROGRESS", "IN_REVIEW"] as const
 const DIGEST_INTERVAL_MS = 24 * 60 * 60_000
+/** No configurable lead time reaches further out than this, so nothing due
+ *  beyond it can qualify — worth bounding, since the sweep now runs often. */
+const MAX_LEAD_TIME_MS = Math.max(...Object.values(LEAD_TIME_MS))
 
 export type ReminderSweepSummary = {
   dueSoonSent: number
@@ -64,6 +67,22 @@ function isWithinQuietHours(pref: { quietHoursEnabled: boolean; quietHoursStart:
   return current >= start || current < end
 }
 
+/**
+ * One query for every candidate's existing reminder of a given kind, instead of
+ * a findUnique per task. The sweep is expected to run on a short interval, so
+ * an N+1 here would be paid over and over against a mostly unchanging set.
+ */
+async function loadReminders(kind: string, tasks: { id: string }[]) {
+  if (tasks.length === 0) return new Map<string, { sent: boolean; dueTime: Date }>()
+
+  const reminders = await prisma.reminder.findMany({
+    where: { kind, taskId: { in: tasks.map((task) => task.id) } },
+    select: { taskId: true, sent: true, dueTime: true },
+  })
+
+  return new Map(reminders.map((reminder) => [reminder.taskId, reminder]))
+}
+
 export async function runReminderSweep(now = new Date()): Promise<ReminderSweepSummary> {
   const summary: ReminderSweepSummary = { dueSoonSent: 0, overdueSent: 0, digestsSent: 0, skippedQuietHours: 0 }
 
@@ -80,7 +99,7 @@ async function runDueSoon(now: Date, summary: ReminderSweepSummary) {
   const candidates = await prisma.task.findMany({
     where: {
       status: { in: [...ACTIVE_STATUSES] },
-      dueDate: { gt: now },
+      dueDate: { gt: now, lte: new Date(now.getTime() + MAX_LEAD_TIME_MS) },
       assigneeId: { not: null },
     },
     select: {
@@ -101,6 +120,8 @@ async function runDueSoon(now: Date, summary: ReminderSweepSummary) {
     },
   })
 
+  const alreadySent = await loadReminders("due_soon", candidates)
+
   for (const task of candidates) {
     const pref = task.assignee?.notificationPreference
     if (!task.assignee || !task.dueDate || pref?.taskRemindersEnabled === false) continue
@@ -109,9 +130,7 @@ async function runDueSoon(now: Date, summary: ReminderSweepSummary) {
     const dueInMs = task.dueDate.getTime() - now.getTime()
     if (dueInMs > leadTime) continue // not due soon yet
 
-    const existing = await prisma.reminder.findUnique({
-      where: { taskId_kind: { taskId: task.id, kind: "due_soon" } },
-    })
+    const existing = alreadySent.get(task.id)
 
     // Already sent for this exact due date — don't repeat until it changes.
     if (existing?.sent && existing.dueTime.getTime() === task.dueDate.getTime()) continue
@@ -166,13 +185,13 @@ async function runOverdueEscalation(now: Date, summary: ReminderSweepSummary) {
     },
   })
 
+  const alreadySent = await loadReminders("overdue", overdue)
+
   for (const task of overdue) {
     const pref = task.assignee?.notificationPreference
     if (!task.assignee || !task.dueDate || pref?.overdueEscalationEnabled === false) continue
 
-    const existing = await prisma.reminder.findUnique({
-      where: { taskId_kind: { taskId: task.id, kind: "overdue" } },
-    })
+    const existing = alreadySent.get(task.id)
     if (existing?.sent && existing.dueTime.getTime() === task.dueDate.getTime()) continue
 
     if (pref && isWithinQuietHours(pref, task.assignee.timezone ?? "UTC", now)) {

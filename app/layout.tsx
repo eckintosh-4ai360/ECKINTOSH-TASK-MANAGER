@@ -1,8 +1,9 @@
 import type React from "react"
-import type { Metadata } from "next"
+import type { Metadata, Viewport } from "next"
 import { Geist, Geist_Mono } from "next/font/google"
 import { Analytics } from "@vercel/analytics/next"
 import { ThemeProvider } from "@/components/theme-provider"
+import { ServiceWorkerRegistrar } from "@/components/service-worker-registrar"
 import "./globals.css"
 
 const _geist = Geist({ subsets: ["latin"] })
@@ -29,6 +30,20 @@ export const metadata: Metadata = {
     ],
     apple: "/apple-icon.png",
   },
+  manifest: "/manifest.webmanifest",
+  // Lets iOS run the Home Screen install chrome-free, which is the only mode
+  // in which Safari will hand out push permission.
+  appleWebApp: {
+    capable: true,
+    title: "Spagad",
+    statusBarStyle: "black-translucent",
+  },
+}
+
+export const viewport: Viewport = {
+  themeColor: "#04111f",
+  // Home Screen installs render under the notch; let the app paint there.
+  viewportFit: "cover",
 }
 
 export default function RootLayout({
@@ -42,6 +57,7 @@ export default function RootLayout({
         <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false} storageKey="spagad-theme">
           {children}
         </ThemeProvider>
+        <ServiceWorkerRegistrar />
         <Analytics />
       </body>
     </html>

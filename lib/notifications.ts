@@ -1,9 +1,10 @@
 import { sendExternalEmail } from "@/lib/email-delivery"
 import prisma from "@/lib/prisma"
+import { sendPushNotificationToUserSubscriptions } from "@/lib/push"
 
 export type NotificationChannel = "teamUpdates" | "taskReminders" | "system"
 
-type PreferenceField = "emailEnabled" | "teamUpdatesEnabled" | "taskRemindersEnabled"
+type PreferenceField = "emailEnabled" | "teamUpdatesEnabled" | "taskRemindersEnabled" | "pushEnabled"
 
 type NotificationPayload = {
   title: string
@@ -68,7 +69,17 @@ function buildNotificationEmailHtml({
   `
 }
 
-async function filterRecipientsByPreference(userIds: string[], preferenceField?: PreferenceField) {
+/**
+ * @param defaultWhenMissing what to assume for a user with no preference row.
+ *   Opt-out channels (email, team updates, task reminders) default to on, the
+ *   same as the schema. Push defaults to off: it is opt-in, and a user who has
+ *   never opened settings has no subscription to send to anyway.
+ */
+async function filterRecipientsByPreference(
+  userIds: string[],
+  preferenceField?: PreferenceField,
+  defaultWhenMissing = true,
+) {
   if (!preferenceField || userIds.length === 0) return userIds
 
   const preferences = await prisma.notificationPreference.findMany({
@@ -78,6 +89,7 @@ async function filterRecipientsByPreference(userIds: string[], preferenceField?:
       emailEnabled: true,
       teamUpdatesEnabled: true,
       taskRemindersEnabled: true,
+      pushEnabled: true,
     },
   })
 
@@ -85,8 +97,43 @@ async function filterRecipientsByPreference(userIds: string[], preferenceField?:
 
   return userIds.filter((userId) => {
     const preference = preferenceMap.get(userId)
-    return preference ? Boolean(preference[preferenceField]) : true
+    return preference ? Boolean(preference[preferenceField]) : defaultWhenMissing
   })
+}
+
+/**
+ * Fans a notification out to every browser/phone the recipients have subscribed
+ * from, for those who have push switched on.
+ *
+ * Best-effort by design: a push failure must never take down the in-app record
+ * or the email, so everything here is caught and logged. Stale endpoints are
+ * pruned inside lib/push.ts.
+ */
+async function deliverPushNotifications(
+  userIds: string[],
+  { title, message, link, channel }: { title: string; message: string; link?: string | null; channel: NotificationChannel },
+) {
+  try {
+    const pushRecipientIds = await filterRecipientsByPreference(userIds, "pushEnabled", false)
+    if (pushRecipientIds.length === 0) return
+
+    // Tagging by destination lets a re-sent reminder for the same task replace
+    // its predecessor on the lock screen instead of stacking up.
+    const tag = link ? `spagad:${link}` : `spagad:${channel}`
+
+    await Promise.allSettled(
+      pushRecipientIds.map((userId) =>
+        sendPushNotificationToUserSubscriptions(userId, {
+          title,
+          body: message,
+          url: link ?? "/tasks",
+          tag,
+        }),
+      ),
+    )
+  } catch (error) {
+    console.error("[notifications] Push fan-out failed:", error)
+  }
 }
 
 export async function getWorkspaceRecipientIds(excludeUserId?: string) {
@@ -119,6 +166,8 @@ export async function createNotificationsForUsers({
       link,
     })),
   })
+
+  await deliverPushNotifications(eligibleUserIds, { title, message, link, channel })
 
   if (email) {
     const emailRecipientIds = await filterRecipientsByPreference(eligibleUserIds, "emailEnabled")

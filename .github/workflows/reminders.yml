@@ -1,0 +1,48 @@
+# Drives the reminder sweep on a short interval.
+#
+# Vercel Cron is still configured in vercel.json as a once-a-day safety net —
+# that is the most the Hobby plan allows, and a 15-minute lead time is
+# meaningless if the sweep only runs at 09:00. This workflow is the real
+# scheduler: it just pings the same authenticated endpoint more often.
+#
+# Requires two GitHub repository secrets:
+#   APP_URL      https://your-deployment.vercel.app  (no trailing slash)
+#   CRON_SECRET  the same value set in the Vercel project's env vars
+#
+# Note: GitHub's scheduler is best-effort and drifts under load — runs are
+# often several minutes late and can be skipped entirely at busy times. For
+# punctual reminders, point cron-job.org at the same URL and header instead;
+# this workflow needs no external account.
+name: Task reminders
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch: # lets you fire a sweep by hand from the Actions tab
+
+# A slow sweep should delay the next run, not overlap with it.
+concurrency:
+  group: task-reminders
+  cancel-in-progress: false
+
+jobs:
+  sweep:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Trigger reminder sweep
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$APP_URL" ] || [ -z "$CRON_SECRET" ]; then
+            echo "::error::APP_URL and CRON_SECRET repository secrets must both be set."
+            exit 1
+          fi
+
+          # --fail-with-body so a 401/500 fails the run *and* shows the reason.
+          curl --silent --show-error --fail-with-body \
+            --max-time 120 \
+            --retry 2 --retry-delay 10 --retry-connrefused \
+            --header "X-Cron-Secret: $CRON_SECRET" \
+            "$APP_URL/api/cron/reminders"
