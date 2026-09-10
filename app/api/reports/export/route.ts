@@ -120,14 +120,14 @@ function wrapLine(line: string, width = 92) {
   return lines.length ? lines : [""]
 }
 
-async function getReportData(config: ExportConfig, user: { id: string; email: string; name: string }) {
+async function getReportData(config: ExportConfig, user: { id: string; email: string; name: string }, workspaceId: string) {
   const fromDate = getDateFilter(config.dateRange)
   const dateWhere = fromDate ? { gte: fromDate } : undefined
 
   const [projects, tasks, users, standups, deployments, activeSprints] = await Promise.all([
     config.includeProjects || config.includeAnalytics
       ? prisma.project.findMany({
-          where: dateWhere ? { createdAt: dateWhere } : undefined,
+          where: { workspaceId, ...(dateWhere ? { createdAt: dateWhere } : {}) },
           orderBy: { createdAt: "desc" },
           select: {
             id: true,
@@ -148,7 +148,7 @@ async function getReportData(config: ExportConfig, user: { id: string; email: st
       : Promise.resolve([]),
     config.includeTasks || config.includeAnalytics
       ? prisma.task.findMany({
-          where: dateWhere ? { createdAt: dateWhere } : undefined,
+          where: { project: { workspaceId }, ...(dateWhere ? { createdAt: dateWhere } : {}) },
           orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
           select: {
             id: true,
@@ -165,7 +165,7 @@ async function getReportData(config: ExportConfig, user: { id: string; email: st
       : Promise.resolve([]),
     config.includeTeam || config.includeAnalytics
       ? prisma.user.findMany({
-          where: dateWhere ? { createdAt: dateWhere } : undefined,
+          where: { workspaceMemberships: { some: { workspaceId } }, ...(dateWhere ? { createdAt: dateWhere } : {}) },
           orderBy: { createdAt: "desc" },
           select: {
             id: true,
@@ -175,13 +175,19 @@ async function getReportData(config: ExportConfig, user: { id: string; email: st
             title: true,
             timezone: true,
             createdAt: true,
-            _count: { select: { tasks: true, projectMembers: true, standups: true } },
+            _count: {
+              select: {
+                tasks: { where: { project: { workspaceId } } },
+                projectMembers: { where: { project: { workspaceId } } },
+                standups: { where: { workspaceId } },
+              },
+            },
           },
         })
       : Promise.resolve([]),
     config.includeTeam
       ? prisma.standup.findMany({
-          where: dateWhere ? { date: dateWhere } : undefined,
+          where: { workspaceId, ...(dateWhere ? { date: dateWhere } : {}) },
           orderBy: { date: "desc" },
           take: 25,
           select: {
@@ -198,7 +204,7 @@ async function getReportData(config: ExportConfig, user: { id: string; email: st
       : Promise.resolve([]),
     config.includeAnalytics
       ? prisma.deployment.findMany({
-          where: dateWhere ? { deployedAt: dateWhere } : undefined,
+          where: { project: { workspaceId }, ...(dateWhere ? { deployedAt: dateWhere } : {}) },
           orderBy: { deployedAt: "desc" },
           take: 50,
           select: {
@@ -215,6 +221,7 @@ async function getReportData(config: ExportConfig, user: { id: string; email: st
       ? prisma.sprint.count({
           where: {
             status: "ACTIVE",
+            project: { workspaceId },
             ...(dateWhere ? { createdAt: dateWhere } : {}),
           },
         })
@@ -552,6 +559,7 @@ function getHeaders(format: ExportFormat, filename: string) {
 export async function POST(request: NextRequest) {
   const session = await getSession()
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  if (!session.workspaceId) return NextResponse.json({ error: "No active workspace." }, { status: 403 })
   if (!hasPermission(session.role, "export_reports")) {
     return NextResponse.json({ error: "Only admins can export workspace reports." }, { status: 403 })
   }
@@ -578,7 +586,7 @@ export async function POST(request: NextRequest) {
       id: session.id,
       name: session.name,
       email: session.email,
-    })
+    }, session.workspaceId)
     const generatedDate = new Date().toISOString().slice(0, 10)
     const baseName = `spagad-${slugify(config.dateRange)}-report-${generatedDate}`
     const filename = `${baseName}.${FORMAT_EXTENSIONS[config.format]}`

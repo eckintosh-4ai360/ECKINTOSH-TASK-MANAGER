@@ -97,6 +97,7 @@ async function findProjectRepository(repositoryUrl: string | null) {
         select: {
           name: true,
           ownerId: true,
+          workspaceId: true,
         },
       },
     },
@@ -142,7 +143,7 @@ export async function POST(request: Request) {
         return NextResponse.json({ ok: true, ignored: true })
       }
 
-      const recipients = await getWorkspaceRecipientIds()
+      const recipients = await getWorkspaceRecipientIds(repository.project.workspaceId)
       const branchName = payload.ref?.split("/").pop() ?? "unknown branch"
       const authorName = payload.pusher?.name ?? "A developer"
       const commitCount = payload.commits?.length ?? 0
@@ -150,6 +151,7 @@ export async function POST(request: Request) {
 
       await createNotificationsForUsers({
         userIds: recipients,
+        workspaceId: repository.project.workspaceId,
         channel: "teamUpdates",
         title: "GitHub push received",
         message: `${authorName} pushed ${commitCount} commit${commitCount === 1 ? "" : "s"} to ${branchName} on ${repository.project.name}. ${headline}`,
@@ -194,7 +196,7 @@ export async function POST(request: Request) {
         return NextResponse.json({ ok: true, ignored: true })
       }
 
-      const recipients = await getWorkspaceRecipientIds()
+      const recipients = await getWorkspaceRecipientIds(repository.project.workspaceId)
       const authorName = payload.pull_request?.user?.login ?? "A developer"
       const title = payload.pull_request?.title ?? "Pull request update"
       const action = payload.pull_request?.merged
@@ -203,6 +205,7 @@ export async function POST(request: Request) {
 
       await createNotificationsForUsers({
         userIds: recipients,
+        workspaceId: repository.project.workspaceId,
         channel: "teamUpdates",
         title: payload.pull_request?.merged ? "Pull request merged" : "Pull request updated",
         message: `${authorName} ${action} PR #${payload.pull_request?.number ?? "?"} on ${repository.project.name}: ${title}`,

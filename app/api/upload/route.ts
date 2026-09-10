@@ -18,6 +18,7 @@ export async function POST(request: NextRequest) {
     if (!hasPermission(session.role, "use_messages")) {
       return NextResponse.json({ error: "Your role does not allow message uploads." }, { status: 403 })
     }
+    if (!session.workspaceId) return NextResponse.json({ error: "No active workspace." }, { status: 403 })
 
     const formData = await request.formData()
     const file = formData.get("file") as File | null
@@ -31,7 +32,7 @@ export async function POST(request: NextRequest) {
     }
 
     const filename = `${Date.now()}-${Math.random().toString(36).slice(2)}.${entry.ext}`
-    const key = `chat/${session.id}/${filename}`
+    const key = `chat/${session.workspaceId}/${session.id}/${filename}`
 
     if (process.env.BLOB_READ_WRITE_TOKEN) {
       // Vercel Blob cloud object storage. `access: "private"` means the
@@ -44,7 +45,7 @@ export async function POST(request: NextRequest) {
       })
     } else {
       // Local storage fallback for offline / development environments
-      const uploadDir = path.join(MEDIA_ROOT, `chat/${session.id}`)
+      const uploadDir = path.join(MEDIA_ROOT, `chat/${session.workspaceId}/${session.id}`)
       await mkdir(uploadDir, { recursive: true })
       await writeFile(path.join(uploadDir, filename), Buffer.from(await file.arrayBuffer()))
     }

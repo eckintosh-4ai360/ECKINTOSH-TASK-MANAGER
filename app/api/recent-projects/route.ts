@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
-import { requireSession } from "@/lib/auth"
+import { requireWorkspace } from "@/lib/auth"
 
 export async function GET() {
-  await requireSession()
+  const session = await requireWorkspace()
 
   const projects = await prisma.project.findMany({
+    where: { workspaceId: session.workspaceId },
     orderBy: { updatedAt: "desc" },
     take: 5,
     select: {

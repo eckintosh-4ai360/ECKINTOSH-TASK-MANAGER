@@ -8,6 +8,7 @@ import { PrismaPg } from "@prisma/adapter-pg"
 import pg from "pg"
 import { hasPermission } from "@/lib/rbac"
 import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/session"
+import { effectiveWorkspaceRole, type WorkspaceRole } from "@/lib/workspace"
 import { getDatabaseSslOptions, normalizeDatabaseUrl } from "@/lib/db-ssl"
 
 const { Pool } = pg
@@ -50,7 +51,24 @@ async function getSocketSession(req: { headers: { cookie?: string } }) {
   const token = getCookieValue(req.headers.cookie, SESSION_COOKIE_NAME)
   if (!token) return null
 
-  return verifySessionToken(token)
+  const session = await verifySessionToken(token)
+  if (!session) return null
+  const dbUser = await prisma.user.findUnique({ where: { id: session.id }, select: { id: true, email: true, role: true } })
+  if (!dbUser || dbUser.email !== session.email) return null
+  const preferredWorkspaceId = getCookieValue(req.headers.cookie, "spagad_workspace")
+  const membership = await prisma.workspaceMember.findFirst({
+    where: { userId: session.id, ...(preferredWorkspaceId ? { workspaceId: preferredWorkspaceId } : {}) },
+    select: { workspaceId: true, role: true },
+    orderBy: { joinedAt: "asc" },
+  })
+  if (!membership) return null
+  return {
+    ...session,
+    email: dbUser.email,
+    workspaceId: membership.workspaceId,
+    workspaceRole: membership.role as WorkspaceRole,
+    role: effectiveWorkspaceRole(dbUser.role, membership.role as WorkspaceRole),
+  }
 }
 
 // ─── Rate limiting helper (max 20 messages per 5 seconds per socket) ───────────
@@ -118,19 +136,22 @@ app.prepare().then(() => {
         return
       }
 
+      const workspaceId = session.workspaceId
+      const clientKey = `${workspaceId}:${userId}`
+
       // Register client in Set to allow multiple tabs/windows
-      let userSockets = clients.get(userId)
+      let userSockets = clients.get(clientKey)
       const isFirstConnection = !userSockets || userSockets.size === 0
       if (!userSockets) {
         userSockets = new Set<ExtendedWebSocket>()
-        clients.set(userId, userSockets)
+        clients.set(clientKey, userSockets)
       }
       userSockets.add(ws)
       console.log(`[WS] Connected: ${userId} (${clients.size} distinct users online, ${userSockets.size} tabs for this user)`)
 
       // Broadcast online presence if first tab connected
       if (isFirstConnection) {
-        broadcast({ type: "presence", userId, online: true }, userId)
+        broadcast({ type: "presence", userId, online: true }, workspaceId, userId)
       }
 
       ws.on("message", async (raw) => {
@@ -155,11 +176,22 @@ app.prepare().then(() => {
 
             if (!to || (!content?.trim() && !mediaUrl)) return
 
+            const recipient = await prisma.workspaceMember.findUnique({
+              where: { workspaceId_userId: { workspaceId, userId: to } },
+              select: { userId: true },
+            })
+            if (!recipient) return
+            if (replyToId) {
+              const reply = await prisma.message.findFirst({ where: { id: replyToId, workspaceId }, select: { id: true } })
+              if (!reply) return
+            }
+
             // Persist to DB
             const saved = await prisma.message.create({
               data: {
                 senderId: userId,
                 receiverId: to,
+                workspaceId,
                 content: content?.trim() ?? null,
                 ...(replyToId ? { replyToId } : {}),
                 ...(mediaUrl ? { mediaUrl, mediaType, mediaName, mediaSize } : {}),
@@ -199,10 +231,10 @@ app.prepare().then(() => {
             })
 
             // Deliver to recipient's active tabs
-            sendToUser(to, payload)
+            sendToUser(to, payload, workspaceId)
 
             // Echo back to all sender's tabs
-            sendToUser(userId, payload)
+            sendToUser(userId, payload, workspaceId)
           }
 
           // ── Delete message ─────────────────────────────────────────────────────
@@ -211,15 +243,15 @@ app.prepare().then(() => {
             if (!id) return
 
             // Verify ownership
-            const msg = await prisma.message.findUnique({ where: { id }, select: { senderId: true, receiverId: true } })
+            const msg = await prisma.message.findFirst({ where: { id, workspaceId }, select: { senderId: true, receiverId: true } })
             if (!msg || msg.senderId !== userId) return
 
             await prisma.message.delete({ where: { id } })
 
             // Notify both sides across all tabs
             const deletePayload = JSON.stringify({ type: "delete_message", id })
-            sendToUser(userId, deletePayload)
-            sendToUser(msg.receiverId, deletePayload)
+            sendToUser(userId, deletePayload, workspaceId)
+            sendToUser(msg.receiverId, deletePayload, workspaceId)
             console.log(`[WS] Message deleted: ${id}`)
           }
 
@@ -229,7 +261,7 @@ app.prepare().then(() => {
             if (!id || !content?.trim()) return
 
             // Verify ownership
-            const msg = await prisma.message.findUnique({ where: { id }, select: { senderId: true, receiverId: true } })
+            const msg = await prisma.message.findFirst({ where: { id, workspaceId }, select: { senderId: true, receiverId: true } })
             if (!msg || msg.senderId !== userId) return
 
             const updated = await prisma.message.update({
@@ -239,8 +271,8 @@ app.prepare().then(() => {
 
             // Notify both sides across all tabs
             const editPayload = JSON.stringify({ type: "edit_message", id, content: updated.content, edited: true })
-            sendToUser(userId, editPayload)
-            sendToUser(msg.receiverId, editPayload)
+            sendToUser(userId, editPayload, workspaceId)
+            sendToUser(msg.receiverId, editPayload, workspaceId)
             console.log(`[WS] Message edited: ${id}`)
           }
 
@@ -250,13 +282,13 @@ app.prepare().then(() => {
       })
 
       ws.on("close", () => {
-        const sockets = clients.get(userId)
+        const sockets = clients.get(clientKey)
         if (sockets) {
           sockets.delete(ws)
           if (sockets.size === 0) {
-            clients.delete(userId)
+            clients.delete(clientKey)
             console.log(`[WS] User fully disconnected: ${userId} (${clients.size} users online)`)
-            broadcast({ type: "presence", userId, online: false }, userId)
+            broadcast({ type: "presence", userId, online: false }, workspaceId, userId)
           } else {
             console.log(`[WS] Tab closed for user: ${userId} (${sockets.size} tab(s) remaining)`)
           }
@@ -269,8 +301,8 @@ app.prepare().then(() => {
     })()
   })
 
-  function sendToUser(targetUserId: string, message: string) {
-    const userSockets = clients.get(targetUserId)
+  function sendToUser(targetUserId: string, message: string, workspaceId: string) {
+    const userSockets = clients.get(`${workspaceId}:${targetUserId}`)
     if (!userSockets) return
     for (const socket of userSockets) {
       if (socket.readyState === WebSocket.OPEN) {
@@ -279,10 +311,10 @@ app.prepare().then(() => {
     }
   }
 
-  function broadcast(payload: object, excludeUserId?: string) {
+  function broadcast(payload: object, workspaceId: string, excludeUserId?: string) {
     const msg = JSON.stringify(payload)
     clients.forEach((userSockets, id) => {
-      if (id !== excludeUserId) {
+      if (id.startsWith(`${workspaceId}:`) && !id.endsWith(`:${excludeUserId ?? ""}`)) {
         for (const socket of userSockets) {
           if (socket.readyState === WebSocket.OPEN) {
             socket.send(msg)

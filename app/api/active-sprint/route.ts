@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
-import { requireSession } from "@/lib/auth"
+import { requireWorkspace } from "@/lib/auth"
 
 export async function GET() {
-  await requireSession()
+  const session = await requireWorkspace()
 
   const sprint = await prisma.sprint.findFirst({
-    where: { status: "ACTIVE" },
+    where: { status: "ACTIVE", project: { workspaceId: session.workspaceId } },
     include: {
       project: {
         select: { id: true, name: true, color: true },

@@ -1,5 +1,5 @@
 import { AIAssistantContent } from "@/components/ai/ai-assistant-content"
-import { requireSession } from "@/lib/auth"
+import { requireWorkspace } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 
 export const dynamic = "force-dynamic"
@@ -9,13 +9,13 @@ export const metadata = {
   description: "Chat, plan, and act across your Spagad workspace with AI.",
 }
 
-async function getStats() {
+async function getStats(workspaceId: string) {
   try {
     const [projects, notes, calendarEvents] = await Promise.all([
-      prisma.project.count(),
-      prisma.note.count(),
+      prisma.project.count({ where: { workspaceId } }),
+      prisma.note.count({ where: { workspaceId } }),
       prisma.calendarEvent.count({
-        where: { startTime: { gte: new Date() } },
+        where: { workspaceId, startTime: { gte: new Date() } },
       }),
     ])
     return { projects, notes, calendarEvents }
@@ -25,8 +25,8 @@ async function getStats() {
 }
 
 export default async function AIAssistantPage() {
-  await requireSession()
-  const stats = await getStats()
+  const session = await requireWorkspace()
+  const stats = await getStats(session.workspaceId)
 
   return (
     <div className="max-w-5xl mx-auto">

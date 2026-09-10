@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button"
 import { AddProjectModal } from "@/components/modals/add-project-modal"
 
 import { getProjects, getWorkspaceUsers } from "@/lib/actions/project-actions"
-import { requireSession } from "@/lib/auth"
+import { requireWorkspace } from "@/lib/auth"
 import { hasPermission } from "@/lib/rbac"
 
 export default async function ProjectsPage({
@@ -14,7 +14,7 @@ export default async function ProjectsPage({
 }) {
   const resolvedParams = await searchParams
   const filter = resolvedParams.filter
-  const session = await requireSession()
+  const session = await requireWorkspace()
   const canManageProjects = hasPermission(session.role, "manage_projects")
   const [projects, workspaceUsers] = await Promise.all([
     getProjects(),

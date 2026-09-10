@@ -32,6 +32,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ pat
   if (!hasPermission(session.role, "use_messages")) {
     return NextResponse.json({ error: "Your role does not allow message attachments." }, { status: 403 })
   }
+  if (!session.workspaceId) return NextResponse.json({ error: "No active workspace." }, { status: 403 })
 
   const { path: segments } = await context.params
 
@@ -40,7 +41,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ pat
   }
 
   const key = segments.join("/")
-  if (!(await canAccess(session.id, key))) {
+  if (!(await canAccess(session.id, session.workspaceId, key))) {
     // Deliberately 404, not 403 — a 403 would confirm the file exists.
     return NextResponse.json({ error: "Not found" }, { status: 404 })
   }
@@ -104,14 +105,15 @@ async function serveFromDisk(segments: string[], mimeType: string, disposition: 
 
 // The uploader always may. Otherwise the file must belong to a message that
 // this user sent or received.
-async function canAccess(userId: string, key: string) {
-  const [scope, ownerId] = key.split("/")
+async function canAccess(userId: string, workspaceId: string, key: string) {
+  const [scope, first, second] = key.split("/")
 
-  if (scope === "chat" && ownerId === userId) return true
+  if (scope === "chat" && ((first === workspaceId && second === userId) || first === userId)) return true
 
   const message = await prisma.message.findFirst({
     where: {
       mediaUrl: keyToMediaUrl(key),
+      workspaceId,
       OR: [{ senderId: userId }, { receiverId: userId }],
     },
     select: { id: true },

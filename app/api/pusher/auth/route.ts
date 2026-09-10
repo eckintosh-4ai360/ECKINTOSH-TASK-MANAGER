@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { getSession } from "@/lib/auth"
-import { getPusherServer } from "@/lib/pusher/server"
+import { getPusherServer, getWorkspacePresenceChannel } from "@/lib/pusher/server"
 
 export const runtime = "nodejs"
 
@@ -10,6 +10,7 @@ export async function POST(request: NextRequest) {
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
+    if (!session.workspaceId) return NextResponse.json({ error: "No active workspace." }, { status: 403 })
 
     const pusher = getPusherServer()
     if (!pusher) {
@@ -34,8 +35,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "socket_id and channel_name are required." }, { status: 400 })
     }
 
-    // Authorize presence or private channel
-    if (channelName.startsWith("presence-")) {
+    const expectedPresenceChannel = getWorkspacePresenceChannel(session.workspaceId)
+    if (channelName !== expectedPresenceChannel) {
+      return NextResponse.json({ error: "Channel is outside the active workspace." }, { status: 403 })
+    }
+
+    // Authorize the active workspace presence channel only.
+    if (channelName === expectedPresenceChannel) {
       const presenceData = {
         user_id: session.id,
         user_info: {

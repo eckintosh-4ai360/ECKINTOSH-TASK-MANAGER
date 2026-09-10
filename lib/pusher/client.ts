@@ -26,3 +26,7 @@ export function getPusherClient(): PusherClient | null {
 }
 
 export const WORKSPACE_PRESENCE_CHANNEL = "presence-workspace"
+
+export function getWorkspacePresenceChannel(workspaceId: string) {
+  return `presence-workspace-${workspaceId}`
+}

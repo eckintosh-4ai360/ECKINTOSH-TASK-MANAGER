@@ -16,7 +16,7 @@ import {
   deleteMessageAction,
   editMessageAction,
 } from "@/lib/actions/message-actions"
-import { getPusherClient, WORKSPACE_PRESENCE_CHANNEL } from "@/lib/pusher/client"
+import { getPusherClient, getWorkspacePresenceChannel } from "@/lib/pusher/client"
 import { MediaBubble } from "@/components/messages/media-bubble"
 import { MediaPicker } from "@/components/messages/media-picker"
 import { cn } from "@/lib/utils"
@@ -44,9 +44,10 @@ type Message = {
 interface ChatInterfaceProps {
   currentUserId: string
   currentUserName: string
+  workspaceId: string
 }
 
-export function ChatInterface({ currentUserId, currentUserName }: ChatInterfaceProps) {
+export function ChatInterface({ currentUserId, currentUserName, workspaceId }: ChatInterfaceProps) {
   const [users, setUsers] = useState<ChatUser[]>([])
   const [selectedUser, setSelectedUser] = useState<ChatUser | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
@@ -96,7 +97,8 @@ export function ChatInterface({ currentUserId, currentUserName }: ChatInterfaceP
     pusher.connection.bind("state_change", handleStateChange)
     if (pusher.connection.state === "connected") setWsStatus("connected")
 
-    const channel = pusher.subscribe(WORKSPACE_PRESENCE_CHANNEL) as any
+    const presenceChannel = getWorkspacePresenceChannel(workspaceId)
+    const channel = pusher.subscribe(presenceChannel) as any
 
     channel.bind("pusher:subscription_succeeded", (members: { each: (fn: (m: { id: string }) => void) => void }) => {
       const activeIds = new Set<string>()
@@ -146,9 +148,9 @@ export function ChatInterface({ currentUserId, currentUserName }: ChatInterfaceP
     return () => {
       pusher.connection.unbind("state_change", handleStateChange)
       channel.unbind_all()
-      pusher.unsubscribe(WORKSPACE_PRESENCE_CHANNEL)
+      pusher.unsubscribe(presenceChannel)
     }
-  }, [currentUserId])
+  }, [currentUserId, workspaceId])
 
   const selectUser = useCallback(async (user: ChatUser) => {
     setSelectedUser(user)

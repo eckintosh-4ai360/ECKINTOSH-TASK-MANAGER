@@ -11,6 +11,9 @@ export async function POST(req: NextRequest) {
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
+    if (!session.workspaceId) {
+      return NextResponse.json({ error: "An active workspace is required." }, { status: 403 })
+    }
 
     const groq = getGroqClient()
     if (!groq) {

@@ -2,17 +2,18 @@ import { HeaderWithUser as Header } from "@/components/dashboard/header-with-use
 import { TeamContent, TeamMember } from "@/components/team/team-content"
 import { Button } from "@/components/ui/button"
 import { AddMemberModal } from "@/components/modals/add-member-modal"
-import { requireSession } from "@/lib/auth"
+import { requireWorkspace } from "@/lib/auth"
 import { hasPermission } from "@/lib/rbac"
 import prisma from "@/lib/prisma"
 
 export default async function TeamPage() {
-  const session = await requireSession()
+  const session = await requireWorkspace()
   const canManageTeam = hasPermission(session.role, "manage_team")
 
   const users = await prisma.user.findMany({
+    where: { workspaceMemberships: { some: { workspaceId: session.workspaceId } } },
     include: {
-      tasks: true,
+      tasks: { where: { project: { workspaceId: session.workspaceId } } },
     },
     orderBy: {
       name: 'asc'

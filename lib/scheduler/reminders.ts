@@ -103,7 +103,7 @@ async function runDueSoon(now: Date, summary: ReminderSweepSummary) {
       title: true,
       dueDate: true,
       projectId: true,
-      project: { select: { name: true, ownerId: true } },
+      project: { select: { name: true, ownerId: true, workspaceId: true } },
       assignee: {
         select: {
           id: true,
@@ -144,6 +144,7 @@ async function runDueSoon(now: Date, summary: ReminderSweepSummary) {
       type: "warning",
       link: `/tasks?taskId=${task.id}`,
       channel: "taskReminders",
+      workspaceId: task.project.workspaceId,
       email: { senderId: task.project.ownerId, subject: `Reminder: ${task.title}` },
     })
 
@@ -168,7 +169,7 @@ async function runOverdueEscalation(now: Date, summary: ReminderSweepSummary) {
       id: true,
       title: true,
       dueDate: true,
-      project: { select: { name: true, ownerId: true } },
+      project: { select: { name: true, ownerId: true, workspaceId: true } },
       assignee: {
         select: {
           id: true,
@@ -203,12 +204,14 @@ async function runOverdueEscalation(now: Date, summary: ReminderSweepSummary) {
       type: "error",
       link: `/tasks?taskId=${task.id}`,
       channel: "taskReminders",
+      workspaceId: task.project.workspaceId,
       email: { senderId: task.project.ownerId, subject: `Overdue: ${task.title}` },
     })
 
     // Escalate to the project owner too, unless they're the one who's late.
     if (task.project.ownerId !== task.assignee.id) {
       await createNotificationForUser(task.project.ownerId, {
+        workspaceId: task.project.workspaceId,
         title: "A task on your project is overdue",
         message,
         type: "warning",
@@ -228,25 +231,29 @@ async function runOverdueEscalation(now: Date, summary: ReminderSweepSummary) {
 }
 
 async function runDailyDigest(now: Date, summary: ReminderSweepSummary) {
-  const candidates = await prisma.user.findMany({
-    where: {
-      notificationPreference: { dailyDigestEnabled: true },
-    },
+  const candidates = await prisma.workspaceMember.findMany({
+    where: { user: { notificationPreference: { dailyDigestEnabled: true } } },
     select: {
-      id: true,
-      timezone: true,
-      notificationPreference: {
-        select: { lastDigestSentAt: true, quietHoursEnabled: true, quietHoursStart: true, quietHoursEnd: true },
+      workspaceId: true,
+      user: {
+        select: {
+          id: true,
+          timezone: true,
+          notificationPreference: {
+            select: { lastDigestSentAt: true, quietHoursEnabled: true, quietHoursStart: true, quietHoursEnd: true },
+          },
+        },
       },
     },
   })
 
   for (const user of candidates) {
-    const pref = user.notificationPreference
+    const person = user.user
+    const pref = person.notificationPreference
     if (!pref) continue
 
     if (pref.lastDigestSentAt && now.getTime() - pref.lastDigestSentAt.getTime() < DIGEST_INTERVAL_MS) continue
-    if (isWithinQuietHours(pref, user.timezone ?? "UTC", now)) {
+    if (isWithinQuietHours(pref, person.timezone ?? "UTC", now)) {
       summary.skippedQuietHours++
       continue
     }
@@ -254,24 +261,26 @@ async function runDailyDigest(now: Date, summary: ReminderSweepSummary) {
     const [dueSoon, overdue, unread] = await Promise.all([
       prisma.task.count({
         where: {
-          assigneeId: user.id,
+          assigneeId: person.id,
+          project: { workspaceId: user.workspaceId },
           status: { in: [...ACTIVE_STATUSES] },
           dueDate: { gte: now, lte: new Date(now.getTime() + LEAD_TIME_MS["3d"]) },
         },
       }),
       prisma.task.count({
-        where: { assigneeId: user.id, status: { in: [...ACTIVE_STATUSES] }, dueDate: { lt: now } },
+        where: { assigneeId: person.id, status: { in: [...ACTIVE_STATUSES] }, dueDate: { lt: now }, project: { workspaceId: user.workspaceId } },
       }),
-      prisma.notification.count({ where: { userId: user.id, read: false } }),
+      prisma.notification.count({ where: { userId: person.id, workspaceId: user.workspaceId, read: false } }),
     ])
 
     if (dueSoon === 0 && overdue === 0 && unread === 0) {
       // Nothing to report — still mark as sent so we don't check every run.
-      await prisma.notificationPreference.update({ where: { userId: user.id }, data: { lastDigestSentAt: now } })
+      await prisma.notificationPreference.update({ where: { userId: person.id }, data: { lastDigestSentAt: now } })
       continue
     }
 
-    await createNotificationForUser(user.id, {
+    await createNotificationForUser(person.id, {
+      workspaceId: user.workspaceId,
       title: "Your daily digest",
       message: `${dueSoon} task${dueSoon === 1 ? "" : "s"} due soon, ${overdue} overdue, ${unread} unread notification${unread === 1 ? "" : "s"}.`,
       type: "info",
@@ -279,7 +288,7 @@ async function runDailyDigest(now: Date, summary: ReminderSweepSummary) {
       channel: "system",
     })
 
-    await prisma.notificationPreference.update({ where: { userId: user.id }, data: { lastDigestSentAt: now } })
+    await prisma.notificationPreference.update({ where: { userId: person.id }, data: { lastDigestSentAt: now } })
     summary.digestsSent++
   }
 }
