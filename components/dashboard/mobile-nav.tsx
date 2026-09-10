@@ -5,8 +5,9 @@ import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { Sidebar } from "./sidebar"
 import type { AppRole } from "@/lib/rbac"
+import type { WorkspaceOption } from "@/lib/workspace"
 
-export function MobileNav({ role }: { role: AppRole }) {
+export function MobileNav({ role, workspaces = [], activeWorkspaceId }: { role: AppRole; workspaces?: WorkspaceOption[]; activeWorkspaceId?: string }) {
   return (
     <Sheet>
       <SheetTrigger asChild>
@@ -28,7 +29,7 @@ export function MobileNav({ role }: { role: AppRole }) {
         {/* Radix requires an accessible title on every dialog; the drawer is
             branded visually by the sidebar's own logo, so hide this one. */}
         <SheetTitle className="sr-only">Navigation menu</SheetTitle>
-        <Sidebar role={role} />
+        <Sidebar role={role} workspaces={workspaces} activeWorkspaceId={activeWorkspaceId} />
       </SheetContent>
     </Sheet>
   )

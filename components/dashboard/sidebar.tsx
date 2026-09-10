@@ -18,7 +18,6 @@ import {
   Zap,
   GitBranch,
   ClipboardList,
-  ChevronRight,
   Bot,
   PenLine,
 } from "lucide-react"
@@ -27,6 +26,8 @@ import { useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { hasPermission, type AppRole } from "@/lib/rbac"
+import { WorkspaceSwitcher } from "@/components/dashboard/workspace-switcher"
+import type { WorkspaceOption } from "@/lib/workspace"
 
 type NavItem = {
   icon: typeof LayoutDashboard
@@ -116,7 +117,7 @@ function NavSection({ title, items }: { title: string; items: NavItem[] }) {
   )
 }
 
-export function Sidebar({ role }: { role: AppRole }) {
+export function Sidebar({ role, workspaces = [], activeWorkspaceId }: { role: AppRole; workspaces?: WorkspaceOption[]; activeWorkspaceId?: string }) {
   const pathname = usePathname()
 
   const visibleWorkspaceItems = workspaceItems.filter((item) => {
@@ -158,15 +159,7 @@ export function Sidebar({ role }: { role: AppRole }) {
         </Link>
 
         {/* Workspace chip */}
-        <button className="mt-3 w-full flex items-center justify-between px-3 py-2 rounded-lg glass border border-primary/20 hover:border-primary/40 transition-all duration-200 group">
-          <div className="flex items-center gap-2">
-            <div className="w-5 h-5 rounded-md bg-gradient-to-br from-primary/30 to-primary/10 flex items-center justify-center">
-              <span className="text-[8px] font-bold text-primary">SP</span>
-            </div>
-            <span className="text-xs font-semibold text-foreground">Spagad Workspace</span>
-          </div>
-          <ChevronRight className="w-3 h-3 text-muted-foreground group-hover:text-primary transition-colors" />
-        </button>
+        <WorkspaceSwitcher workspaces={workspaces} activeWorkspaceId={activeWorkspaceId} />
       </div>
 
       {/* ── Navigation ───────────────────────────────────── */}

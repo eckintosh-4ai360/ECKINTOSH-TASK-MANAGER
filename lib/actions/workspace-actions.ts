@@ -35,6 +35,7 @@ export async function switchWorkspaceAction(workspaceId: string) {
 
 export async function createWorkspaceAction(input: { name: string; description?: string }) {
   const session = await requireSession()
+  if (session.role === "GUEST") return { success: false, error: "Viewers cannot create workspaces." }
   const name = input.name.trim().slice(0, 120)
   if (!name) return { success: false, error: "Workspace name is required." }
 

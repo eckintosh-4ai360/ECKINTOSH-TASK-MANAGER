@@ -14,6 +14,10 @@ export interface SessionUser {
   email: string
   name: string
   role: AppRole
+  workspaceId?: string
+  workspaceName?: string
+  workspaceSlug?: string
+  workspaceRole?: "OWNER" | "ADMIN" | "MEMBER" | "VIEWER"
 }
 
 export function getSessionCookieOptions() {

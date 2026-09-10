@@ -40,6 +40,7 @@ export async function getActiveWorkspaceMembership(userId: string, preferredWork
     const preferred = await prisma.workspaceMember.findFirst({
       where: { userId, workspaceId: preferredWorkspaceId },
       select: {
+        workspaceId: true,
         role: true,
         workspace: { select: { id: true, name: true, slug: true } },
       },
@@ -50,6 +51,7 @@ export async function getActiveWorkspaceMembership(userId: string, preferredWork
   return prisma.workspaceMember.findFirst({
     where: { userId },
     select: {
+      workspaceId: true,
       role: true,
       workspace: { select: { id: true, name: true, slug: true } },
     },

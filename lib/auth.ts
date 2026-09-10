@@ -4,6 +4,7 @@ import { redirect } from "next/navigation"
 import { auth } from "@/auth"
 import prisma from "@/lib/prisma"
 import { type Permission, hasPermission } from "@/lib/rbac"
+import { effectiveWorkspaceRole, getActiveWorkspaceMembership, getSelectedWorkspaceId, type WorkspaceRole } from "@/lib/workspace"
 import {
   SESSION_COOKIE_NAME,
   createSessionToken,
@@ -57,11 +58,22 @@ export const getSession = cache(async (): Promise<SessionUser | null> => {
     // Deleted user — the signed cookie is still valid, the account is not.
     if (!dbUser) return null
 
+    const membership = await getActiveWorkspaceMembership(dbUser.id, await getSelectedWorkspaceId())
+    const workspaceRole = membership?.role as WorkspaceRole | undefined
+
     return {
       id: dbUser.id,
       email: dbUser.email,
       name: dbUser.name ?? "User",
-      role: dbUser.role,
+      role: membership ? effectiveWorkspaceRole(dbUser.role, workspaceRole!) : dbUser.role,
+      ...(membership
+        ? {
+            workspaceId: membership.workspaceId,
+            workspaceName: membership.workspace.name,
+            workspaceSlug: membership.workspace.slug,
+            workspaceRole,
+          }
+        : {}),
     }
   } catch {
     return null
@@ -73,6 +85,21 @@ export async function requireSession(): Promise<SessionUser> {
   const session = await getSession()
   if (!session) redirect("/login")
   return session
+}
+
+export type WorkspaceSession = SessionUser & {
+  workspaceId: string
+  workspaceName: string
+  workspaceSlug: string
+  workspaceRole: "OWNER" | "ADMIN" | "MEMBER" | "VIEWER"
+}
+
+export async function requireWorkspace(): Promise<WorkspaceSession> {
+  const session = await requireSession()
+  if (!session.workspaceId || !session.workspaceName || !session.workspaceSlug || !session.workspaceRole) {
+    redirect("/workspaces")
+  }
+  return session as WorkspaceSession
 }
 
 // ─── Require admin role ───────────────────────────────────────────────────────

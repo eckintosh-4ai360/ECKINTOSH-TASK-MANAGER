@@ -273,6 +273,7 @@ model Standup {
   date         DateTime @default(now())
   createdAt    DateTime @default(now())
 
+  @@index([workspaceId, createdAt])
   @@map("standups")
 }
 
@@ -323,6 +324,7 @@ model Team {
   workspaceId String
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
+  @@index([workspaceId])
   @@map("teams")
 }
 
@@ -356,6 +358,7 @@ model CalendarEvent {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  @@index([workspaceId, startTime])
   @@map("calendar_events")
 }
 
@@ -375,6 +378,7 @@ model Note {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@index([workspaceId, ownerId])
   @@map("notes")
 }
 
@@ -392,6 +396,7 @@ model Whiteboard {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@index([workspaceId, ownerId])
   @@map("whiteboards")
 }
 
