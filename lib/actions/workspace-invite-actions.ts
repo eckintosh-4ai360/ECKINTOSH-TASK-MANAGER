@@ -1,9 +1,10 @@
 "use server"
 
 import prisma from "@/lib/prisma"
-import { requireSession } from "@/lib/auth"
+import { requireWorkspace } from "@/lib/auth"
 import { hasPermission } from "@/lib/rbac"
 import type { AppRole } from "@/lib/rbac"
+import type { WorkspaceRole } from "@/lib/workspace"
 import { sendExternalEmail } from "@/lib/email-delivery"
 import { createInvitation } from "@/lib/invitations"
 
@@ -12,10 +13,10 @@ const MAX_INVITES_PER_CALL = 25
 // UI role labels map onto the app's actual roles. Only USER and GUEST are
 // available to a regular inviter; ADMIN requires the inviter to already be
 // one, so this can't be used to self-escalate.
-const ROLE_MAP: Record<string, AppRole> = {
-  member: "USER",
-  viewer: "GUEST",
-  admin: "ADMIN",
+const ROLE_MAP: Record<string, { globalRole: AppRole; workspaceRole: WorkspaceRole }> = {
+  member: { globalRole: "USER", workspaceRole: "MEMBER" },
+  viewer: { globalRole: "USER", workspaceRole: "VIEWER" },
+  admin: { globalRole: "USER", workspaceRole: "ADMIN" },
 }
 
 export async function sendWorkspaceInvites({
@@ -28,10 +29,13 @@ export async function sendWorkspaceInvites({
   message?: string
 }) {
   try {
-    const session = await requireSession()
+    const session = await requireWorkspace()
+    if (!hasPermission(session.role, "manage_users")) {
+      return { success: false, error: "Only workspace admins can send invitations." }
+    }
 
-    const requestedRole = ROLE_MAP[role] ?? "USER"
-    if (requestedRole === "ADMIN" && !hasPermission(session.role, "manage_users")) {
+    const requestedRole = ROLE_MAP[role] ?? ROLE_MAP.member
+    if (requestedRole.workspaceRole === "ADMIN" && !hasPermission(session.role, "manage_users")) {
       return { success: false, error: "Only admins can invite someone as an admin." }
     }
 
@@ -45,11 +49,11 @@ export async function sendWorkspaceInvites({
       return { success: false, error: `Send at most ${MAX_INVITES_PER_CALL} invitations at a time.` }
     }
 
-    const existingUsers = await prisma.user.findMany({
-      where: { email: { in: validEmails } },
-      select: { email: true },
+    const existingUsers = await prisma.workspaceMember.findMany({
+      where: { workspaceId: session.workspaceId, user: { email: { in: validEmails } } },
+      select: { user: { select: { email: true } } },
     })
-    const alreadyMembers = new Set(existingUsers.map((u) => u.email))
+    const alreadyMembers = new Set(existingUsers.map((u) => u.user.email))
     const toInvite = validEmails.filter((email) => !alreadyMembers.has(email))
 
     const appUrl =
@@ -64,7 +68,9 @@ export async function sendWorkspaceInvites({
         // any earlier pending invite for the same address.
         const token = await createInvitation({
           email,
-          role: requestedRole,
+          role: requestedRole.globalRole,
+          workspaceRole: requestedRole.workspaceRole,
+          workspaceId: session.workspaceId,
           message,
           invitedById: session.id,
         })

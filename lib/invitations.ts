@@ -1,6 +1,7 @@
 import crypto from "node:crypto"
 import prisma from "@/lib/prisma"
 import type { AppRole } from "@/lib/rbac"
+import type { WorkspaceRole } from "@/lib/workspace"
 
 // Token-based workspace invitations.
 //
@@ -14,6 +15,9 @@ export type InvitationView = {
   id: string
   email: string
   role: AppRole
+  workspaceRole: WorkspaceRole
+  workspaceId: string
+  workspaceName: string
   message: string | null
   invitedByName: string
   expiresAt: Date
@@ -35,17 +39,21 @@ export async function createInvitation(params: {
   role: AppRole
   message?: string
   invitedById: string
+  workspaceId: string
+  workspaceRole: WorkspaceRole
 }) {
   const email = params.email.trim().toLowerCase()
   const token = generateInviteToken()
   const expiresAt = new Date(Date.now() + INVITE_TTL_DAYS * 24 * 60 * 60 * 1000)
 
-  await prisma.invitation.deleteMany({ where: { email, acceptedAt: null } })
+  await prisma.invitation.deleteMany({ where: { email, workspaceId: params.workspaceId, acceptedAt: null } })
 
   await prisma.invitation.create({
     data: {
       email,
       role: params.role,
+      workspaceRole: params.workspaceRole,
+      workspaceId: params.workspaceId,
       message: params.message?.trim() || null,
       tokenHash: hashToken(token),
       invitedById: params.invitedById,
@@ -66,10 +74,13 @@ export async function findInvitationByToken(token: string): Promise<InvitationVi
       id: true,
       email: true,
       role: true,
+      workspaceRole: true,
+      workspaceId: true,
       message: true,
       acceptedAt: true,
       expiresAt: true,
       invitedBy: { select: { name: true, email: true } },
+      workspace: { select: { name: true } },
     },
   })
 
@@ -79,6 +90,9 @@ export async function findInvitationByToken(token: string): Promise<InvitationVi
     id: record.id,
     email: record.email,
     role: record.role,
+    workspaceRole: record.workspaceRole as WorkspaceRole,
+    workspaceId: record.workspaceId,
+    workspaceName: record.workspace.name,
     message: record.message,
     invitedByName: record.invitedBy.name ?? record.invitedBy.email,
     expiresAt: record.expiresAt,

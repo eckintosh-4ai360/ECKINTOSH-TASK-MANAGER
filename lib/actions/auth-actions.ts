@@ -5,10 +5,11 @@ import { headers } from "next/headers"
 import { redirect } from "next/navigation"
 import { revalidatePath } from "next/cache"
 import prisma from "@/lib/prisma"
-import { createSession, requireAdmin, requireWorkspace } from "@/lib/auth"
+import { createSession, requireWorkspace } from "@/lib/auth"
 import { validatePassword } from "@/lib/password-policy"
 import { issueVerificationOtp } from "@/lib/email-verification"
 import { validateInput, createUserSchema, updateUserRoleSchema } from "@/lib/validation"
+import { hasPermission } from "@/lib/rbac"
 import {
   clearIpAttempts,
   describeLockout,
@@ -24,6 +25,12 @@ import {
 const DUMMY_HASH = "$2b$12$6Nc3bDSnZtv4GE9KIQkWUuJFCSfLPaYXdLN2RTiIgNyEK.JPl6IuC"
 
 const GENERIC_LOGIN_ERROR = "Invalid email or password"
+
+async function requireWorkspaceAdmin() {
+  const session = await requireWorkspace()
+  if (!hasPermission(session.role, "manage_users")) redirect("/")
+  return session
+}
 
 async function getClientIp() {
   const headerList = await headers()
@@ -91,7 +98,7 @@ export async function loginAction(formData: FormData) {
 
 // ─── Admin: Create User ───────────────────────────────────────────────────────
 export async function createUserAction(formData: FormData) {
-  const admin = await requireWorkspace()
+  const admin = await requireWorkspaceAdmin()
 
   const parsed = validateInput(createUserSchema, {
     name: (formData.get("name") as string | null)?.trim(),
@@ -117,7 +124,9 @@ export async function createUserAction(formData: FormData) {
       name,
       email,
       password: hashed,
-      role,
+      // Platform-wide ADMIN is reserved for the bootstrap/super-admin account.
+      // Workspace administrators are represented by WorkspaceMember.role.
+      role: "USER",
     },
   })
 
@@ -139,8 +148,9 @@ export async function createUserAction(formData: FormData) {
 
 // ─── Admin: List Users ────────────────────────────────────────────────────────
 export async function getUsers() {
-  await requireAdmin()
-  return prisma.user.findMany({
+  const admin = await requireWorkspaceAdmin()
+  const users = await prisma.user.findMany({
+    where: { workspaceMemberships: { some: { workspaceId: admin.workspaceId } } },
     select: {
       id: true,
       name: true,
@@ -150,14 +160,19 @@ export async function getUsers() {
       lockedUntil: true,
       lastLoginAt: true,
       githubLogin: true,
+      workspaceMemberships: { where: { workspaceId: admin.workspaceId }, select: { role: true } },
     },
     orderBy: { createdAt: "desc" },
   })
+  return users.map(({ workspaceMemberships, ...user }) => ({
+    ...user,
+    role: workspaceMemberships[0]?.role === "VIEWER" ? "GUEST" : workspaceMemberships[0]?.role === "MEMBER" ? "USER" : "ADMIN",
+  }))
 }
 
 // ─── Admin: Change Role ───────────────────────────────────────────────────────
 export async function updateUserRoleAction(userId: string, role: string) {
-  const admin = await requireAdmin()
+  const admin = await requireWorkspaceAdmin()
 
   const parsed = validateInput(updateUserRoleSchema, { userId, role })
   if (!parsed.success) return { error: parsed.error }
@@ -167,20 +182,23 @@ export async function updateUserRoleAction(userId: string, role: string) {
     return { error: "You cannot remove your own admin role" }
   }
 
-  const target = await prisma.user.findUnique({ where: { id: validated.userId }, select: { role: true } })
-  if (!target) return { error: "User not found" }
+  const target = await prisma.workspaceMember.findUnique({
+    where: { workspaceId_userId: { workspaceId: admin.workspaceId, userId: validated.userId } },
+    select: { role: true },
+  })
+  if (!target) return { error: "User is not a member of the active workspace" }
 
   // Never let the workspace end up with no administrator.
-  if (target.role === "ADMIN" && validated.role !== "ADMIN") {
-    const adminCount = await prisma.user.count({ where: { role: "ADMIN" } })
+  if (["OWNER", "ADMIN"].includes(target.role) && validated.role !== "ADMIN") {
+    const adminCount = await prisma.workspaceMember.count({ where: { workspaceId: admin.workspaceId, role: { in: ["OWNER", "ADMIN"] } } })
     if (adminCount <= 1) {
       return { error: "This is the only admin. Promote someone else first." }
     }
   }
 
-  await prisma.user.update({
-    where: { id: validated.userId },
-    data: { role: validated.role },
+  await prisma.workspaceMember.update({
+    where: { workspaceId_userId: { workspaceId: admin.workspaceId, userId: validated.userId } },
+    data: { role: validated.role === "ADMIN" ? "ADMIN" : validated.role === "GUEST" ? "VIEWER" : "MEMBER" },
   })
 
   // getSession() re-reads the role on every request, so this takes effect on
@@ -191,7 +209,9 @@ export async function updateUserRoleAction(userId: string, role: string) {
 
 // ─── Admin: Unlock a locked-out account ───────────────────────────────────────
 export async function unlockUserAction(userId: string): Promise<{ success: true } | { error: string }> {
-  await requireAdmin()
+  const admin = await requireWorkspaceAdmin()
+  const member = await prisma.workspaceMember.findUnique({ where: { workspaceId_userId: { workspaceId: admin.workspaceId, userId } }, select: { userId: true } })
+  if (!member) return { error: "User is not a member of the active workspace." }
 
   try {
     await prisma.user.update({
@@ -208,22 +228,22 @@ export async function unlockUserAction(userId: string): Promise<{ success: true 
 
 // ─── Admin: Delete User ───────────────────────────────────────────────────────
 export async function deleteUserAction(userId: string) {
-  const admin = await requireAdmin()
+  const admin = await requireWorkspaceAdmin()
   if (admin.id === userId) {
     return { error: "You cannot delete your own account" }
   }
 
-  const target = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } })
+  const target = await prisma.workspaceMember.findUnique({ where: { workspaceId_userId: { workspaceId: admin.workspaceId, userId } }, select: { role: true } })
   if (!target) return { error: "User not found" }
 
-  if (target.role === "ADMIN") {
-    const adminCount = await prisma.user.count({ where: { role: "ADMIN" } })
+  if (["OWNER", "ADMIN"].includes(target.role)) {
+    const adminCount = await prisma.workspaceMember.count({ where: { workspaceId: admin.workspaceId, role: { in: ["OWNER", "ADMIN"] } } })
     if (adminCount <= 1) {
       return { error: "This is the only admin. Promote someone else first." }
     }
   }
 
-  await prisma.user.delete({ where: { id: userId } })
+  await prisma.workspaceMember.delete({ where: { workspaceId_userId: { workspaceId: admin.workspaceId, userId } } })
   revalidatePath("/admin/users")
   return { success: true }
 }

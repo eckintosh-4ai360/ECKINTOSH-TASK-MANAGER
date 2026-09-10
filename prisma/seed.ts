@@ -81,6 +81,23 @@ async function main() {
 
   console.log("Created team members: Jay, Kemi, Tunde")
 
+  const workspace = await prisma.workspace.create({
+    data: {
+      name: "Spagad Engineering",
+      slug: "spagad-engineering",
+      description: "Shared engineering workspace for the demo organization.",
+      createdById: admin.id,
+    },
+  })
+  await prisma.workspaceMember.createMany({
+    data: [
+      { workspaceId: workspace.id, userId: admin.id, role: "OWNER" },
+      { workspaceId: workspace.id, userId: jay.id, role: "MEMBER" },
+      { workspaceId: workspace.id, userId: kemi.id, role: "MEMBER" },
+      { workspaceId: workspace.id, userId: tunde.id, role: "MEMBER" },
+    ],
+  })
+
   await prisma.notificationPreference.createMany({
     data: [
       { userId: admin.id },
@@ -100,6 +117,7 @@ async function main() {
       tech: ["Next.js", "Prisma", "PostgreSQL", "WebSocket"],
       progress: 45,
       ownerId: admin.id,
+      workspaceId: workspace.id,
       endDate: new Date("2026-09-01"),
     },
   })
@@ -114,6 +132,7 @@ async function main() {
       tech: ["Node.js", "Express", "PostgreSQL", "Paystack"],
       progress: 72,
       ownerId: admin.id,
+      workspaceId: workspace.id,
       endDate: new Date("2026-07-15"),
     },
   })
@@ -128,6 +147,7 @@ async function main() {
       tech: ["Flutter", "Firebase", "Dart"],
       progress: 20,
       ownerId: admin.id,
+      workspaceId: workspace.id,
       endDate: new Date("2026-11-01"),
     },
   })
@@ -203,6 +223,7 @@ async function main() {
     data: [
       {
         userId: admin.id,
+        workspaceId: workspace.id,
         projectId: devflow.id,
         didYesterday: "Finished the sidebar redesign, sprint overview, and deployment feed components.",
         doingToday: "Building the standup feed widget and planning a staging deploy.",
@@ -211,6 +232,7 @@ async function main() {
       },
       {
         userId: jay.id,
+        workspaceId: workspace.id,
         projectId: ecommerce.id,
         didYesterday: "Resolved the auth issue on order endpoints and debugged JWT handling.",
         doingToday: "Integrating the Paystack webhook and tightening tests.",
@@ -219,6 +241,7 @@ async function main() {
       },
       {
         userId: kemi.id,
+        workspaceId: workspace.id,
         projectId: mobileApp.id,
         didYesterday: "Set up the Flutter project structure and CI pipeline.",
         doingToday: "Building login, registration, and password reset screens.",
@@ -232,6 +255,7 @@ async function main() {
     data: [
       {
         title: "Sprint review sync",
+        workspaceId: workspace.id,
         description: "Live walkthrough of sprint deliverables and blockers.",
         startTime: inHours(6),
         endTime: inHours(7),
@@ -241,6 +265,7 @@ async function main() {
       },
       {
         title: "Checkout cutover",
+        workspaceId: workspace.id,
         description: "Production readiness check for the new payment flow.",
         startTime: inDays(1),
         endTime: new Date(inDays(1).getTime() + 45 * 60 * 1000),
@@ -255,6 +280,7 @@ async function main() {
     data: [
       {
         userId: admin.id,
+        workspaceId: workspace.id,
         title: "New scheduled event",
         message: "Spagad scheduled Sprint review sync.",
         type: "info",
@@ -262,6 +288,7 @@ async function main() {
       },
       {
         userId: admin.id,
+        workspaceId: workspace.id,
         title: "Task reminder",
         message: "Configure GitHub Actions CI/CD is overdue and needs attention.",
         type: "warning",
@@ -269,6 +296,7 @@ async function main() {
       },
       {
         userId: admin.id,
+        workspaceId: workspace.id,
         title: "Standup pulse",
         message: "Jay posted a standup update for E-Commerce API.",
         type: "info",
@@ -276,6 +304,7 @@ async function main() {
       },
       {
         userId: jay.id,
+        workspaceId: workspace.id,
         title: "Task assigned or updated",
         message: "Spagad updated Paystack webhook integration and it is assigned to you.",
         type: "info",
