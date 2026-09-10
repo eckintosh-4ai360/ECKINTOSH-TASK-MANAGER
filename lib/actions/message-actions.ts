@@ -1,18 +1,24 @@
 "use server"
 
 import prisma from "@/lib/prisma"
-import { requireSession } from "@/lib/auth"
+import { requireWorkspace } from "@/lib/auth"
 import { hasPermission } from "@/lib/rbac"
-import { getPusherServer, WORKSPACE_PRESENCE_CHANNEL } from "@/lib/pusher/server"
+import { getPusherServer, getWorkspacePresenceChannel } from "@/lib/pusher/server"
 
 // Get conversation history between current user and another user
 export async function getConversation(otherUserId: string) {
-  const session = await requireSession()
+  const session = await requireWorkspace()
   if (!hasPermission(session.role, "use_messages")) return []
   const me = session.id
+  const otherMember = await prisma.workspaceMember.findUnique({
+    where: { workspaceId_userId: { workspaceId: session.workspaceId, userId: otherUserId } },
+    select: { userId: true },
+  })
+  if (!otherMember) return []
 
   return prisma.message.findMany({
     where: {
+      workspaceId: session.workspaceId,
       OR: [
         { senderId: me, receiverId: otherUserId },
         { senderId: otherUserId, receiverId: me },
@@ -48,10 +54,10 @@ export async function getConversation(otherUserId: string) {
 
 // Get all users to chat with (everyone except self)
 export async function getChatUsers() {
-  const session = await requireSession()
+  const session = await requireWorkspace()
   if (!hasPermission(session.role, "use_messages")) return []
   return prisma.user.findMany({
-    where: { id: { not: session.id } },
+    where: { id: { not: session.id }, workspaceMemberships: { some: { workspaceId: session.workspaceId } } },
     select: { id: true, name: true, email: true, role: true },
     orderBy: { name: "asc" },
   })
@@ -59,21 +65,26 @@ export async function getChatUsers() {
 
 // Mark messages from a user as read
 export async function markMessagesRead(fromUserId: string) {
-  const session = await requireSession()
+  const session = await requireWorkspace()
   if (!hasPermission(session.role, "use_messages")) return
+  const senderMember = await prisma.workspaceMember.findUnique({
+    where: { workspaceId_userId: { workspaceId: session.workspaceId, userId: fromUserId } },
+    select: { userId: true },
+  })
+  if (!senderMember) return
   await prisma.message.updateMany({
-    where: { senderId: fromUserId, receiverId: session.id, read: false },
+    where: { workspaceId: session.workspaceId, senderId: fromUserId, receiverId: session.id, read: false },
     data: { read: true },
   })
 }
 
 // Get unread message counts per sender
 export async function getUnreadCounts() {
-  const session = await requireSession()
+  const session = await requireWorkspace()
   if (!hasPermission(session.role, "use_messages")) return {}
   const unreadCounts = await prisma.message.groupBy({
     by: ["senderId"],
-    where: { receiverId: session.id, read: false },
+    where: { workspaceId: session.workspaceId, receiverId: session.id, read: false, sender: { workspaceMemberships: { some: { workspaceId: session.workspaceId } } } },
     _count: { _all: true },
   })
 
@@ -95,7 +106,7 @@ export type SendMessageInput = {
 }
 
 export async function sendMessageAction(input: SendMessageInput) {
-  const session = await requireSession()
+  const session = await requireWorkspace()
   if (!hasPermission(session.role, "use_messages")) {
     throw new Error("Unauthorized to send messages.")
   }
@@ -106,11 +117,22 @@ export async function sendMessageAction(input: SendMessageInput) {
     throw new Error("Recipient and either content or media is required.")
   }
 
+  const recipient = await prisma.workspaceMember.findUnique({
+    where: { workspaceId_userId: { workspaceId: session.workspaceId, userId: to } },
+    select: { userId: true },
+  })
+  if (!recipient) throw new Error("Recipient is not a member of the active workspace.")
+  if (replyToId) {
+    const reply = await prisma.message.findFirst({ where: { id: replyToId, workspaceId: session.workspaceId }, select: { id: true } })
+    if (!reply) throw new Error("Reply target is not in the active workspace.")
+  }
+
   // Persist to database
   const saved = await prisma.message.create({
     data: {
       senderId: session.id,
       receiverId: to,
+      workspaceId: session.workspaceId,
       content: content?.trim() ?? null,
       ...(replyToId ? { replyToId } : {}),
       ...(mediaUrl ? { mediaUrl, mediaType, mediaName, mediaSize } : {}),
@@ -154,7 +176,7 @@ export async function sendMessageAction(input: SendMessageInput) {
   const pusher = getPusherServer()
   if (pusher) {
     try {
-      await pusher.trigger(WORKSPACE_PRESENCE_CHANNEL, "chat", payload)
+      await pusher.trigger(getWorkspacePresenceChannel(session.workspaceId), "chat", payload)
     } catch (err) {
       console.error("[Pusher Trigger] Failed to broadcast message:", err)
     }
@@ -164,13 +186,13 @@ export async function sendMessageAction(input: SendMessageInput) {
 }
 
 export async function deleteMessageAction(messageId: string) {
-  const session = await requireSession()
+  const session = await requireWorkspace()
   if (!hasPermission(session.role, "use_messages")) {
     throw new Error("Unauthorized to delete messages.")
   }
 
   const msg = await prisma.message.findUnique({
-    where: { id: messageId },
+    where: { id: messageId, workspaceId: session.workspaceId },
     select: { senderId: true, receiverId: true },
   })
 
@@ -183,7 +205,7 @@ export async function deleteMessageAction(messageId: string) {
   const pusher = getPusherServer()
   if (pusher) {
     try {
-      await pusher.trigger(WORKSPACE_PRESENCE_CHANNEL, "delete_message", { id: messageId })
+      await pusher.trigger(getWorkspacePresenceChannel(session.workspaceId), "delete_message", { id: messageId })
     } catch (err) {
       console.error("[Pusher Trigger] Failed to broadcast delete_message:", err)
     }
@@ -193,7 +215,7 @@ export async function deleteMessageAction(messageId: string) {
 }
 
 export async function editMessageAction(messageId: string, content: string) {
-  const session = await requireSession()
+  const session = await requireWorkspace()
   if (!hasPermission(session.role, "use_messages")) {
     throw new Error("Unauthorized to edit messages.")
   }
@@ -203,7 +225,7 @@ export async function editMessageAction(messageId: string, content: string) {
   }
 
   const msg = await prisma.message.findUnique({
-    where: { id: messageId },
+    where: { id: messageId, workspaceId: session.workspaceId },
     select: { senderId: true, receiverId: true },
   })
 
@@ -225,7 +247,7 @@ export async function editMessageAction(messageId: string, content: string) {
   const pusher = getPusherServer()
   if (pusher) {
     try {
-      await pusher.trigger(WORKSPACE_PRESENCE_CHANNEL, "edit_message", payload)
+      await pusher.trigger(getWorkspacePresenceChannel(session.workspaceId), "edit_message", payload)
     } catch (err) {
       console.error("[Pusher Trigger] Failed to broadcast edit_message:", err)
     }

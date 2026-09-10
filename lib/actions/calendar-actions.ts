@@ -1,7 +1,7 @@
 "use server"
 
 import prisma from "@/lib/prisma"
-import { requireSession } from "@/lib/auth"
+import { requireWorkspace } from "@/lib/auth"
 import { createNotificationsForUsers, getWorkspaceRecipientIds } from "@/lib/notifications"
 import { getPermissionError, hasPermission } from "@/lib/rbac"
 import { revalidatePath } from "next/cache"
@@ -84,8 +84,9 @@ function formatEventBody(input: CalendarEventInput, startTime: Date, endTime: Da
 export type CalendarEventItem = ReturnType<typeof serializeCalendarEvent>
 
 export async function getCalendarEvents() {
-  await requireSession()
+  const session = await requireWorkspace()
   const events = await prisma.calendarEvent.findMany({
+    where: { workspaceId: session.workspaceId },
     orderBy: { startTime: "asc" },
   })
 
@@ -93,7 +94,7 @@ export async function getCalendarEvents() {
 }
 
 export async function createCalendarEvent(input: CalendarEventInput) {
-  const session = await requireSession()
+  const session = await requireWorkspace()
   if (!hasPermission(session.role, "manage_calendar")) {
     return { success: false, error: getPermissionError("manage_calendar") }
   }
@@ -110,7 +111,7 @@ export async function createCalendarEvent(input: CalendarEventInput) {
   }
 
   const eventType = validated.type || "meeting"
-  const recipientIds = await getWorkspaceRecipientIds(session.id)
+  const recipientIds = await getWorkspaceRecipientIds(session.workspaceId, session.id)
 
   const body = formatEventBody(validated, startTime, endTime, session.name)
   const subject = `Scheduled: ${validated.title}`
@@ -124,12 +125,14 @@ export async function createCalendarEvent(input: CalendarEventInput) {
       type: eventType,
       color: TYPE_COLORS[eventType] ?? TYPE_COLORS.meeting,
       location: validated.location || null,
+      workspaceId: session.workspaceId,
     },
   })
 
   if (recipientIds.length > 0) {
     await createNotificationsForUsers({
       userIds: recipientIds,
+      workspaceId: session.workspaceId,
       channel: "teamUpdates",
       title: "New scheduled event",
       message: `${session.name} scheduled ${validated.title}.`,
@@ -150,7 +153,7 @@ export async function createCalendarEvent(input: CalendarEventInput) {
 }
 
 export async function updateCalendarEvent(eventId: string, input: CalendarEventInput) {
-  const session = await requireSession()
+  const session = await requireWorkspace()
   if (!hasPermission(session.role, "manage_calendar")) {
     return { success: false, error: getPermissionError("manage_calendar") }
   }
@@ -167,8 +170,10 @@ export async function updateCalendarEvent(eventId: string, input: CalendarEventI
   }
 
   const eventType = input.type || "meeting"
+  const existing = await prisma.calendarEvent.findFirst({ where: { id: eventId, workspaceId: session.workspaceId }, select: { id: true } })
+  if (!existing) return { success: false, error: "Calendar event not found in the active workspace." }
   const event = await prisma.calendarEvent.update({
-    where: { id: eventId },
+    where: { id: existing.id },
     data: {
       title: input.title.trim(),
       description: input.description?.trim() || null,
@@ -180,9 +185,10 @@ export async function updateCalendarEvent(eventId: string, input: CalendarEventI
     },
   })
 
-  const recipients = await getWorkspaceRecipientIds(session.id)
+  const recipients = await getWorkspaceRecipientIds(session.workspaceId, session.id)
   await createNotificationsForUsers({
     userIds: recipients,
+    workspaceId: session.workspaceId,
     channel: "teamUpdates",
     title: "Calendar event updated",
     message: `${session.name} updated ${event.title}.`,
@@ -199,23 +205,25 @@ export async function updateCalendarEvent(eventId: string, input: CalendarEventI
 }
 
 export async function deleteCalendarEvent(eventId: string) {
-  const session = await requireSession()
+  const session = await requireWorkspace()
   if (!hasPermission(session.role, "manage_calendar")) {
     return { success: false, error: getPermissionError("manage_calendar") }
   }
 
-  const event = await prisma.calendarEvent.findUnique({
-    where: { id: eventId },
+  const event = await prisma.calendarEvent.findFirst({
+    where: { id: eventId, workspaceId: session.workspaceId },
     select: { title: true },
   })
+  if (!event) return { success: false, error: "Calendar event not found in the active workspace." }
 
   await prisma.calendarEvent.delete({
     where: { id: eventId },
   })
 
-  const recipients = await getWorkspaceRecipientIds(session.id)
+  const recipients = await getWorkspaceRecipientIds(session.workspaceId, session.id)
   await createNotificationsForUsers({
     userIds: recipients,
+    workspaceId: session.workspaceId,
     channel: "teamUpdates",
     title: "Calendar event removed",
     message: `${session.name} deleted ${event?.title ?? "a scheduled event"}.`,

@@ -1,7 +1,7 @@
 "use server"
 
 import prisma from "@/lib/prisma"
-import { requireSession } from "@/lib/auth"
+import { requireWorkspace } from "@/lib/auth"
 import { syncProjectRepository, getGitHubWorkspaceData } from "@/lib/actions/github-actions"
 import { createNotificationsForUsers, getWorkspaceRecipientIds } from "@/lib/notifications"
 import { canUpdateTaskStatus, getPermissionError, hasPermission } from "@/lib/rbac"
@@ -15,7 +15,7 @@ import {
   taskStatusSchema,
 } from "@/lib/validation"
 
-async function resolveSprintAssignment(projectId: string, sprintId?: string | null) {
+async function resolveSprintAssignment(projectId: string, sprintId?: string | null, workspaceId?: string) {
   const normalizedSprintId = sprintId?.trim()
 
   if (!normalizedSprintId) {
@@ -23,7 +23,7 @@ async function resolveSprintAssignment(projectId: string, sprintId?: string | nu
   }
 
   const sprint = await prisma.sprint.findUnique({
-    where: { id: normalizedSprintId },
+    where: { id: normalizedSprintId, ...(workspaceId ? { project: { workspaceId } } : {}) },
     select: {
       id: true,
       projectId: true,
@@ -50,7 +50,7 @@ export async function createProject(formData: {
   teamLeaderId?: string
 }) {
   try {
-    const session = await requireSession()
+    const session = await requireWorkspace()
     if (!hasPermission(session.role, "manage_projects")) {
       return { success: false, error: getPermissionError("manage_projects") }
     }
@@ -63,8 +63,12 @@ export async function createProject(formData: {
       where: { id: input.teamLeaderId },
       select: { id: true, name: true, email: true, role: true },
     })
+    const teamLeaderMembership = await prisma.workspaceMember.findUnique({
+      where: { workspaceId_userId: { workspaceId: session.workspaceId, userId: input.teamLeaderId } },
+      select: { role: true },
+    })
 
-    if (!teamLeader || teamLeader.role === "GUEST") {
+    if (!teamLeader || teamLeader.role === "GUEST" || !teamLeaderMembership || teamLeaderMembership.role === "VIEWER") {
       return { success: false, error: "Select an active workspace member as team leader." }
     }
 
@@ -75,9 +79,8 @@ export async function createProject(formData: {
         priority: input.priority ?? "medium",
         endDate: input.dueDate ? new Date(input.dueDate) : null,
         tech: [],
-        owner: {
-          connect: { id: teamLeader.id },
-        },
+        workspaceId: session.workspaceId,
+        ownerId: teamLeader.id,
         members: {
           create: {
             user: {
@@ -97,9 +100,10 @@ export async function createProject(formData: {
       }
     }
 
-    const recipients = await getWorkspaceRecipientIds(session.id)
+    const recipients = await getWorkspaceRecipientIds(session.workspaceId, session.id)
     await createNotificationsForUsers({
       userIds: recipients,
+      workspaceId: session.workspaceId,
       channel: "teamUpdates",
       title: "New project created",
       message: `${session.name} created ${project.name} with ${teamLeader.name ?? teamLeader.email} as team leader.`,
@@ -131,7 +135,7 @@ export async function updateProject(input: {
   repositoryUrl?: string
 }) {
   try {
-    const session = await requireSession()
+    const session = await requireWorkspace()
     if (!hasPermission(session.role, "manage_projects")) {
       return { success: false, error: getPermissionError("manage_projects") }
     }
@@ -141,7 +145,7 @@ export async function updateProject(input: {
     const validated = parsed.data
 
     const project = await prisma.project.update({
-      where: { id: validated.id },
+      where: { id: validated.id, workspaceId: session.workspaceId },
       data: {
         name: validated.name,
         description: validated.description || "",
@@ -159,9 +163,10 @@ export async function updateProject(input: {
       }
     }
 
-    const recipients = await getWorkspaceRecipientIds(session.id)
+    const recipients = await getWorkspaceRecipientIds(session.workspaceId, session.id)
     await createNotificationsForUsers({
       userIds: recipients,
+      workspaceId: session.workspaceId,
       channel: "teamUpdates",
       title: "Project updated",
       message: `${session.name} updated ${project.name}.`,
@@ -187,23 +192,24 @@ export async function updateProject(input: {
 
 export async function deleteProject(projectId: string) {
   try {
-    const session = await requireSession()
+    const session = await requireWorkspace()
     if (!hasPermission(session.role, "manage_projects")) {
       return { success: false, error: getPermissionError("manage_projects") }
     }
 
     const project = await prisma.project.findUnique({
-      where: { id: projectId },
+      where: { id: projectId, workspaceId: session.workspaceId },
       select: { name: true },
     })
 
     await prisma.project.delete({
-      where: { id: projectId },
+      where: { id: projectId, workspaceId: session.workspaceId },
     })
 
-    const recipients = await getWorkspaceRecipientIds(session.id)
+    const recipients = await getWorkspaceRecipientIds(session.workspaceId, session.id)
     await createNotificationsForUsers({
       userIds: recipients,
+      workspaceId: session.workspaceId,
       channel: "teamUpdates",
       title: "Project removed",
       message: `${session.name} deleted ${project?.name ?? "a project"}.`,
@@ -230,9 +236,10 @@ export async function deleteProject(projectId: string) {
 
 export async function getProjects() {
   try {
-    await requireSession()
+    const session = await requireWorkspace()
     const [projects, completedTaskCounts] = await Promise.all([
       prisma.project.findMany({
+        where: { workspaceId: session.workspaceId },
         select: {
           id: true,
           name: true,
@@ -269,7 +276,7 @@ export async function getProjects() {
       }),
       prisma.task.groupBy({
         by: ["projectId"],
-        where: { status: "COMPLETED" },
+        where: { status: "COMPLETED", project: { workspaceId: session.workspaceId } },
         _count: { _all: true },
       }),
     ])
@@ -307,7 +314,7 @@ export async function createTask(formData: {
   tags?: string
 }) {
   try {
-    const session = await requireSession()
+    const session = await requireWorkspace()
     if (!hasPermission(session.role, "manage_tasks")) {
       return { success: false, error: getPermissionError("manage_tasks") }
     }
@@ -316,7 +323,10 @@ export async function createTask(formData: {
     if (!parsed.success) return { success: false, error: parsed.error }
     const input = parsed.data
 
-    const sprintAssignment = await resolveSprintAssignment(input.projectId, input.sprintId)
+    const project = await prisma.project.findFirst({ where: { id: input.projectId, workspaceId: session.workspaceId }, select: { id: true } })
+    if (!project) return { success: false, error: "Project not found in the active workspace." }
+
+    const sprintAssignment = await resolveSprintAssignment(input.projectId, input.sprintId, session.workspaceId)
     if ("error" in sprintAssignment) {
       return { success: false, error: sprintAssignment.error }
     }
@@ -335,9 +345,10 @@ export async function createTask(formData: {
       },
     })
 
-    const recipients = await getWorkspaceRecipientIds(session.id)
+    const recipients = await getWorkspaceRecipientIds(session.workspaceId, session.id)
     await createNotificationsForUsers({
       userIds: recipients,
+      workspaceId: session.workspaceId,
       channel: "teamUpdates",
       title: "New task created",
       message: `${session.name} created ${task.title}.`,
@@ -374,7 +385,7 @@ export async function updateTask(input: {
   assigneeId?: string
 }) {
   try {
-    const session = await requireSession()
+    const session = await requireWorkspace()
     if (!hasPermission(session.role, "manage_tasks")) {
       return { success: false, error: getPermissionError("manage_tasks") }
     }
@@ -383,13 +394,30 @@ export async function updateTask(input: {
     if (!parsed.success) return { success: false, error: parsed.error }
     const validated = parsed.data
 
-    const sprintAssignment = await resolveSprintAssignment(validated.projectId, validated.sprintId)
+    const sprintAssignment = await resolveSprintAssignment(validated.projectId, validated.sprintId, session.workspaceId)
     if ("error" in sprintAssignment) {
       return { success: false, error: sprintAssignment.error }
     }
 
+    const existingTask = await prisma.task.findFirst({
+      where: { id: validated.id, project: { workspaceId: session.workspaceId } },
+      select: { id: true },
+    })
+    const project = await prisma.project.findFirst({
+      where: { id: validated.projectId, workspaceId: session.workspaceId },
+      select: { id: true },
+    })
+    if (!existingTask || !project) return { success: false, error: "Task or project not found in the active workspace." }
+    if (validated.assigneeId) {
+      const assignee = await prisma.workspaceMember.findUnique({
+        where: { workspaceId_userId: { workspaceId: session.workspaceId, userId: validated.assigneeId } },
+        select: { userId: true },
+      })
+      if (!assignee) return { success: false, error: "Assignee is not a member of the active workspace." }
+    }
+
     const task = await prisma.task.update({
-      where: { id: validated.id },
+      where: { id: existingTask.id },
       data: {
         title: validated.title,
         description: validated.description || "",
@@ -410,9 +438,10 @@ export async function updateTask(input: {
       },
     })
 
-    const workspaceRecipients = await getWorkspaceRecipientIds(session.id)
+    const workspaceRecipients = await getWorkspaceRecipientIds(session.workspaceId, session.id)
     await createNotificationsForUsers({
       userIds: workspaceRecipients,
+      workspaceId: session.workspaceId,
       channel: "teamUpdates",
       title: "Task updated",
       message: `${session.name} updated ${task.title}.`,
@@ -427,6 +456,7 @@ export async function updateTask(input: {
     if (task.assigneeId && task.assigneeId !== session.id) {
       await createNotificationsForUsers({
         userIds: [task.assigneeId],
+        workspaceId: session.workspaceId,
         channel: "taskReminders",
         title: "Task assigned or updated",
         message: `${session.name} updated ${task.title} and it is assigned to you.`,
@@ -453,23 +483,25 @@ export async function updateTask(input: {
 
 export async function deleteTask(taskId: string) {
   try {
-    const session = await requireSession()
+    const session = await requireWorkspace()
     if (!hasPermission(session.role, "manage_tasks")) {
       return { success: false, error: getPermissionError("manage_tasks") }
     }
 
-    const task = await prisma.task.findUnique({
-      where: { id: taskId },
+    const task = await prisma.task.findFirst({
+      where: { id: taskId, project: { workspaceId: session.workspaceId } },
       select: { title: true },
     })
+    if (!task) return { success: false, error: "Task not found in the active workspace." }
 
     await prisma.task.delete({
       where: { id: taskId },
     })
 
-    const recipients = await getWorkspaceRecipientIds(session.id)
+    const recipients = await getWorkspaceRecipientIds(session.workspaceId, session.id)
     await createNotificationsForUsers({
       userIds: recipients,
+      workspaceId: session.workspaceId,
       channel: "teamUpdates",
       title: "Task deleted",
       message: `${session.name} deleted ${task?.title ?? "a task"}.`,
@@ -495,7 +527,7 @@ export async function deleteTask(taskId: string) {
 
 export async function getTasks() {
   try {
-    await requireSession()
+    const session = await requireWorkspace()
     const tasks = await prisma.task.findMany({
       include: {
         project: {
@@ -514,6 +546,7 @@ export async function getTasks() {
           select: { comments: true },
         },
       },
+      where: { project: { workspaceId: session.workspaceId } },
       orderBy: { createdAt: "desc" },
     })
     return tasks.map((task) => ({
@@ -531,8 +564,9 @@ export async function getTasks() {
 
 export async function getWorkspaceUsers() {
   try {
-    await requireSession()
+    const session = await requireWorkspace()
     return await prisma.user.findMany({
+      where: { workspaceMemberships: { some: { workspaceId: session.workspaceId } } },
       select: {
         id: true,
         name: true,
@@ -549,9 +583,9 @@ export async function getWorkspaceUsers() {
 
 export async function updateTaskStatus(taskId: string, status: string) {
   try {
-    const session = await requireSession()
-    const existingTask = await prisma.task.findUnique({
-      where: { id: taskId },
+    const session = await requireWorkspace()
+    const existingTask = await prisma.task.findFirst({
+      where: { id: taskId, project: { workspaceId: session.workspaceId } },
       select: { assigneeId: true },
     })
 
@@ -578,6 +612,7 @@ export async function updateTaskStatus(taskId: string, status: string) {
     if (task.assigneeId && task.assigneeId !== session.id) {
       await createNotificationsForUsers({
         userIds: [task.assigneeId],
+        workspaceId: session.workspaceId,
         channel: "taskReminders",
         title: "Task status changed",
         message: `${session.name} changed ${task.title} to ${status.replace(/_/g, " ").toLowerCase()}.`,
@@ -602,9 +637,9 @@ export async function updateTaskStatus(taskId: string, status: string) {
 
 export async function toggleTaskStatus(taskId: string, isCompleted: boolean) {
   try {
-    const session = await requireSession()
-    const existingTask = await prisma.task.findUnique({
-      where: { id: taskId },
+    const session = await requireWorkspace()
+    const existingTask = await prisma.task.findFirst({
+      where: { id: taskId, project: { workspaceId: session.workspaceId } },
       select: { assigneeId: true },
     })
 
@@ -628,6 +663,7 @@ export async function toggleTaskStatus(taskId: string, isCompleted: boolean) {
     if (task.assigneeId && task.assigneeId !== session.id) {
       await createNotificationsForUsers({
         userIds: [task.assigneeId],
+        workspaceId: session.workspaceId,
         channel: "taskReminders",
         title: isCompleted ? "Task completed" : "Task reopened",
         message: `${session.name} ${isCompleted ? "completed" : "reopened"} ${task.title}.`,
@@ -652,7 +688,7 @@ export async function toggleTaskStatus(taskId: string, isCompleted: boolean) {
 
 export async function getDashboardStats() {
   try {
-    await requireSession()
+    const session = await requireWorkspace()
     const weekAgo = new Date()
     weekAgo.setDate(weekAgo.getDate() - 7)
 
@@ -661,13 +697,13 @@ export async function getDashboardStats() {
 
     const [totalProjects, completedProjects, activeProjects, pendingTasks, teamMembers, activeSprints, deployments, workspaceData] =
       await Promise.all([
-        prisma.project.count(),
-        prisma.project.count({ where: { status: "completed" } }),
-        prisma.project.count({ where: { status: "active" } }),
-        prisma.task.count({ where: { status: { in: ["TODO", "BACKLOG"] } } }),
-        prisma.user.count(),
-        prisma.sprint.count({ where: { status: "ACTIVE" } }),
-        prisma.deployment.count({ where: { deployedAt: { gte: weekAgo } } }),
+        prisma.project.count({ where: { workspaceId: session.workspaceId } }),
+        prisma.project.count({ where: { workspaceId: session.workspaceId, status: "completed" } }),
+        prisma.project.count({ where: { workspaceId: session.workspaceId, status: "active" } }),
+        prisma.task.count({ where: { status: { in: ["TODO", "BACKLOG"] }, project: { workspaceId: session.workspaceId } } }),
+        prisma.workspaceMember.count({ where: { workspaceId: session.workspaceId } }),
+        prisma.sprint.count({ where: { status: "ACTIVE", project: { workspaceId: session.workspaceId } } }),
+        prisma.deployment.count({ where: { deployedAt: { gte: weekAgo }, project: { workspaceId: session.workspaceId } } }),
         getGitHubWorkspaceData().catch(() => null)
       ])
 
@@ -703,8 +739,9 @@ export async function getDashboardStats() {
 
 export async function getDeployments() {
   try {
-    await requireSession()
+    const session = await requireWorkspace()
     return await prisma.deployment.findMany({
+      where: { project: { workspaceId: session.workspaceId } },
       include: {
         project: {
           select: { name: true, color: true },

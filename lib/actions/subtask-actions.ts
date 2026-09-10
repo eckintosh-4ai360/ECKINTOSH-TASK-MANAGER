@@ -2,14 +2,14 @@
 
 import { revalidatePath } from "next/cache"
 import prisma from "@/lib/prisma"
-import { requireSession } from "@/lib/auth"
+import { requireWorkspace } from "@/lib/auth"
 import { canUpdateTaskStatus, getPermissionError } from "@/lib/rbac"
 
 const MAX_SUBTASK_TITLE_LENGTH = 200
 
 async function requireSubtaskAccess(taskId: string) {
-  const session = await requireSession()
-  const task = await prisma.task.findUnique({ where: { id: taskId }, select: { assigneeId: true } })
+  const session = await requireWorkspace()
+  const task = await prisma.task.findFirst({ where: { id: taskId, project: { workspaceId: session.workspaceId } }, select: { assigneeId: true } })
 
   if (!task) return { ok: false as const, error: "Task not found." }
 
@@ -22,9 +22,9 @@ async function requireSubtaskAccess(taskId: string) {
 }
 
 export async function getSubtasks(taskId: string) {
-  await requireSession()
+  const session = await requireWorkspace()
   return prisma.subtask.findMany({
-    where: { taskId },
+    where: { taskId, task: { project: { workspaceId: session.workspaceId } } },
     orderBy: { createdAt: "asc" },
   })
 }

@@ -21,6 +21,7 @@ type NotificationEmailInput = {
 
 type CreateNotificationsInput = NotificationPayload & {
   userIds: string[]
+  workspaceId?: string
   channel?: NotificationChannel
   email?: NotificationEmailInput | null
 }
@@ -132,13 +133,16 @@ async function deliverPushNotifications(
   }
 }
 
-export async function getWorkspaceRecipientIds(excludeUserId?: string) {
-  const users = await prisma.user.findMany({
-    where: excludeUserId ? { id: { not: excludeUserId } } : undefined,
-    select: { id: true },
+export async function getWorkspaceRecipientIds(workspaceId: string, excludeUserId?: string) {
+  const members = await prisma.workspaceMember.findMany({
+    where: {
+      workspaceId,
+      ...(excludeUserId ? { userId: { not: excludeUserId } } : {}),
+    },
+    select: { userId: true },
   })
 
-  return users.map((user) => user.id)
+  return members.map((member) => member.userId)
 }
 
 export async function createNotificationsForUsers({
@@ -149,13 +153,26 @@ export async function createNotificationsForUsers({
   type = "info",
   link = null,
   email = null,
+  workspaceId,
 }: CreateNotificationsInput) {
-  const eligibleUserIds = await filterRecipientsByPreference(userIds, CHANNEL_PREFERENCE_FIELD[channel])
+  const memberships = await prisma.workspaceMember.findMany({
+    where: {
+      ...(workspaceId ? { workspaceId } : {}),
+      userId: { in: userIds },
+    },
+    select: { userId: true, workspaceId: true },
+  })
+  const scopedUserIds = memberships.map((membership) => membership.userId)
+  const notificationWorkspaceId = workspaceId ?? memberships[0]?.workspaceId
+  if (!notificationWorkspaceId) return 0
+
+  const eligibleUserIds = await filterRecipientsByPreference(scopedUserIds, CHANNEL_PREFERENCE_FIELD[channel])
   if (eligibleUserIds.length === 0) return 0
 
   const result = await prisma.notification.createMany({
     data: eligibleUserIds.map((userId) => ({
       userId,
+      workspaceId: notificationWorkspaceId,
       title,
       message,
       type,
@@ -172,14 +189,15 @@ export async function createNotificationsForUsers({
         // Verify the sender still exists before creating internal emails
         const senderExists = await prisma.user.findUnique({
           where: { id: email.senderId },
-          select: { id: true },
+          select: { id: true, workspaceMemberships: { where: { workspaceId: notificationWorkspaceId }, select: { id: true } } },
         })
 
-        if (senderExists) {
+        if (senderExists && senderExists.workspaceMemberships.length > 0) {
           await prisma.internalEmail.createMany({
             data: emailRecipientIds.map((userId) => ({
               fromId: email.senderId,
               toId: userId,
+              workspaceId: notificationWorkspaceId,
               subject: email.subject ?? title,
               body: email.body ?? message,
             })),
@@ -220,7 +238,7 @@ export async function createNotificationsForUsers({
 
 export async function createNotificationForUser(
   userId: string,
-  payload: NotificationPayload & { channel?: NotificationChannel; email?: NotificationEmailInput | null },
+  payload: NotificationPayload & { workspaceId?: string; channel?: NotificationChannel; email?: NotificationEmailInput | null },
 ) {
   const count = await createNotificationsForUsers({
     userIds: [userId],

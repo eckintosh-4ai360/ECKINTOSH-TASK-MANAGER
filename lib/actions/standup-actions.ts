@@ -1,7 +1,7 @@
 "use server"
 
 import prisma from "@/lib/prisma"
-import { requireSession } from "@/lib/auth"
+import { requireWorkspace } from "@/lib/auth"
 import { createNotificationsForUsers, getWorkspaceRecipientIds } from "@/lib/notifications"
 import { canManageStandup, getPermissionError, hasPermission } from "@/lib/rbac"
 import { revalidatePath } from "next/cache"
@@ -61,8 +61,9 @@ function serializeStandup(standup: {
 export type StandupItem = ReturnType<typeof serializeStandup>
 
 export async function getStandups() {
-  await requireSession()
+  const session = await requireWorkspace()
   const standups = await prisma.standup.findMany({
+    where: { workspaceId: session.workspaceId },
     include: {
       user: { select: { name: true, email: true, title: true } },
       project: { select: { name: true, color: true } },
@@ -75,7 +76,7 @@ export async function getStandups() {
 }
 
 export async function createStandup(input: StandupInput) {
-  const session = await requireSession()
+  const session = await requireWorkspace()
   if (!hasPermission(session.role, "post_standups")) {
     return { success: false, error: getPermissionError("post_standups") }
   }
@@ -84,9 +85,15 @@ export async function createStandup(input: StandupInput) {
   if (!parsed.success) return { success: false, error: parsed.error }
   const validated = parsed.data
 
+  if (validated.projectId) {
+    const project = await prisma.project.findFirst({ where: { id: validated.projectId, workspaceId: session.workspaceId }, select: { id: true } })
+    if (!project) return { success: false, error: "Project not found in the active workspace." }
+  }
+
   const standup = await prisma.standup.create({
     data: {
       userId: session.id,
+      workspaceId: session.workspaceId,
       projectId: validated.projectId || null,
       didYesterday: validated.didYesterday,
       doingToday: validated.doingToday,
@@ -99,9 +106,10 @@ export async function createStandup(input: StandupInput) {
     },
   })
 
-  const recipients = await getWorkspaceRecipientIds(session.id)
+  const recipients = await getWorkspaceRecipientIds(session.workspaceId, session.id)
   await createNotificationsForUsers({
     userIds: recipients,
+    workspaceId: session.workspaceId,
     channel: "teamUpdates",
     title: "New standup posted",
     message: `${session.name} posted a standup${standup.project?.name ? ` for ${standup.project.name}` : ""}.`,
@@ -119,9 +127,9 @@ export async function createStandup(input: StandupInput) {
 }
 
 export async function updateStandup(standupId: string, input: StandupInput) {
-  const session = await requireSession()
-  const standup = await prisma.standup.findUnique({
-    where: { id: standupId },
+  const session = await requireWorkspace()
+  const standup = await prisma.standup.findFirst({
+    where: { id: standupId, workspaceId: session.workspaceId },
     select: { userId: true },
   })
 
@@ -134,6 +142,11 @@ export async function updateStandup(standupId: string, input: StandupInput) {
   }
 
   const mood = Math.max(1, Math.min(5, Number(input.mood) || 3))
+
+  if (input.projectId) {
+    const project = await prisma.project.findFirst({ where: { id: input.projectId, workspaceId: session.workspaceId }, select: { id: true } })
+    if (!project) return { success: false, error: "Project not found in the active workspace." }
+  }
 
   const updatedStandup = await prisma.standup.update({
     where: { id: standupId },
@@ -150,9 +163,10 @@ export async function updateStandup(standupId: string, input: StandupInput) {
     },
   })
 
-  const recipients = await getWorkspaceRecipientIds(session.id)
+  const recipients = await getWorkspaceRecipientIds(session.workspaceId, session.id)
   await createNotificationsForUsers({
     userIds: recipients,
+    workspaceId: session.workspaceId,
     channel: "teamUpdates",
     title: "Standup updated",
     message: `${session.name} updated a standup${updatedStandup.project?.name ? ` for ${updatedStandup.project.name}` : ""}.`,
@@ -170,9 +184,9 @@ export async function updateStandup(standupId: string, input: StandupInput) {
 }
 
 export async function deleteStandup(standupId: string) {
-  const session = await requireSession()
-  const standup = await prisma.standup.findUnique({
-    where: { id: standupId },
+  const session = await requireWorkspace()
+  const standup = await prisma.standup.findFirst({
+    where: { id: standupId, workspaceId: session.workspaceId },
     select: { userId: true },
   })
 
@@ -188,9 +202,10 @@ export async function deleteStandup(standupId: string) {
     where: { id: standupId },
   })
 
-  const recipients = await getWorkspaceRecipientIds(session.id)
+  const recipients = await getWorkspaceRecipientIds(session.workspaceId, session.id)
   await createNotificationsForUsers({
     userIds: recipients,
+    workspaceId: session.workspaceId,
     channel: "teamUpdates",
     title: "Standup removed",
     message: `${session.name} deleted a standup update.`,

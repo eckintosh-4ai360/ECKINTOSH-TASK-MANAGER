@@ -1,7 +1,7 @@
 "use server"
 
 import prisma from "@/lib/prisma"
-import { requireSession } from "@/lib/auth"
+import { requireWorkspace } from "@/lib/auth"
 import { sanitizeNoteHtml } from "@/lib/sanitize-html"
 import { getPermissionError, hasPermission } from "@/lib/rbac"
 import { revalidatePath } from "next/cache"
@@ -41,10 +41,10 @@ function normalizeTitle(title?: string, content?: string) {
 export type JotNote = ReturnType<typeof serializeNote>
 
 export async function getNotes() {
-  const session = await requireSession()
+  const session = await requireWorkspace()
   if (!hasPermission(session.role, "manage_own_notes")) return []
   const notes = await prisma.note.findMany({
-    where: { ownerId: session.id, archived: false },
+    where: { ownerId: session.id, workspaceId: session.workspaceId, archived: false },
     orderBy: [{ pinned: "desc" }, { updatedAt: "desc" }],
   })
 
@@ -52,7 +52,7 @@ export async function getNotes() {
 }
 
 export async function createNote(input: NoteInput) {
-  const session = await requireSession()
+  const session = await requireWorkspace()
   if (!hasPermission(session.role, "manage_own_notes")) {
     return { success: false, error: getPermissionError("manage_own_notes") }
   }
@@ -69,6 +69,7 @@ export async function createNote(input: NoteInput) {
       content,
       color: validated.color || "#00d4ff",
       ownerId: session.id,
+      workspaceId: session.workspaceId,
     },
   })
 
@@ -77,7 +78,7 @@ export async function createNote(input: NoteInput) {
 }
 
 export async function updateNote(noteId: string, input: NoteInput) {
-  const session = await requireSession()
+  const session = await requireWorkspace()
   if (!hasPermission(session.role, "manage_own_notes")) {
     return { success: false, error: getPermissionError("manage_own_notes") }
   }
@@ -88,7 +89,7 @@ export async function updateNote(noteId: string, input: NoteInput) {
   const content = sanitizeNoteHtml(validated.content ?? "")
 
   const updated = await prisma.note.updateMany({
-    where: { id: noteId, ownerId: session.id },
+    where: { id: noteId, ownerId: session.id, workspaceId: session.workspaceId },
     data: {
       title: normalizeTitle(validated.title, content),
       content,
@@ -98,18 +99,18 @@ export async function updateNote(noteId: string, input: NoteInput) {
 
   if (updated.count === 0) return { success: false, error: "Note not found" }
 
-  const note = await prisma.note.findUniqueOrThrow({ where: { id: noteId } })
+  const note = await prisma.note.findFirstOrThrow({ where: { id: noteId, ownerId: session.id, workspaceId: session.workspaceId } })
   revalidatePath("/jot-it")
   return { success: true, note: serializeNote(note) }
 }
 
 export async function toggleNotePinned(noteId: string, pinned: boolean) {
-  const session = await requireSession()
+  const session = await requireWorkspace()
   if (!hasPermission(session.role, "manage_own_notes")) {
     return { success: false, error: getPermissionError("manage_own_notes") }
   }
   await prisma.note.updateMany({
-    where: { id: noteId, ownerId: session.id },
+    where: { id: noteId, ownerId: session.id, workspaceId: session.workspaceId },
     data: { pinned },
   })
 
@@ -118,11 +119,11 @@ export async function toggleNotePinned(noteId: string, pinned: boolean) {
 }
 
 export async function deleteNote(noteId: string) {
-  const session = await requireSession()
+  const session = await requireWorkspace()
   if (!hasPermission(session.role, "manage_own_notes")) {
     return { success: false, error: getPermissionError("manage_own_notes") }
   }
-  await prisma.note.deleteMany({ where: { id: noteId, ownerId: session.id } })
+  await prisma.note.deleteMany({ where: { id: noteId, ownerId: session.id, workspaceId: session.workspaceId } })
 
   revalidatePath("/jot-it")
   return { success: true }

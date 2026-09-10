@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache"
 import prisma from "@/lib/prisma"
-import { requireSession } from "@/lib/auth"
+import { requireWorkspace } from "@/lib/auth"
 import { createNotificationsForUsers } from "@/lib/notifications"
 import { validateInput, createSupportTicketSchema } from "@/lib/validation"
 
@@ -16,10 +16,10 @@ export type SupportTicketView = {
 }
 
 export async function getMySupportTickets(): Promise<SupportTicketView[]> {
-  const session = await requireSession()
+  const session = await requireWorkspace()
 
   const tickets = await prisma.supportTicket.findMany({
-    where: { userId: session.id },
+    where: { userId: session.id, workspaceId: session.workspaceId },
     orderBy: { createdAt: "desc" },
     take: 10,
     select: { id: true, category: true, priority: true, subject: true, status: true, createdAt: true },
@@ -34,23 +34,27 @@ export async function createSupportTicketAction(input: {
   subject: string
   message: string
 }): Promise<{ success: true; ticket: SupportTicketView } | { success: false; error: string }> {
-  const session = await requireSession()
+  const session = await requireWorkspace()
 
   const parsed = validateInput(createSupportTicketSchema, input)
   if (!parsed.success) return { success: false, error: parsed.error }
   const { category, priority, subject, message } = parsed.data
 
   const ticket = await prisma.supportTicket.create({
-    data: { userId: session.id, category, priority, subject, message },
+    data: { userId: session.id, workspaceId: session.workspaceId, category, priority, subject, message },
   })
 
   // Notify admins — this is the only place the ticket actually goes; there's
   // no separate support-agent inbox in this app.
-  const admins = await prisma.user.findMany({ where: { role: "ADMIN" }, select: { id: true } })
+  const admins = await prisma.workspaceMember.findMany({
+    where: { workspaceId: session.workspaceId, role: { in: ["OWNER", "ADMIN"] } },
+    select: { userId: true },
+  })
 
   if (admins.length > 0) {
     await createNotificationsForUsers({
-      userIds: admins.map((a) => a.id),
+      userIds: admins.map((a) => a.userId),
+      workspaceId: session.workspaceId,
       channel: "system",
       title: `New support ticket: ${subject}`,
       message: `${session.name ?? session.email} (${priority}, ${input.category}) — ${message.slice(0, 200)}`,

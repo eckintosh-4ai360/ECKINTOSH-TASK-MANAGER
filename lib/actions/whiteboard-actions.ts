@@ -1,7 +1,7 @@
 "use server"
 
 import prisma from "@/lib/prisma"
-import { requireSession } from "@/lib/auth"
+import { requireWorkspace } from "@/lib/auth"
 import { revalidatePath } from "next/cache"
 
 export type WhiteboardItem = {
@@ -21,7 +21,7 @@ export type WhiteboardData = {
 // ─── Queries ────────────────────────────────────────────────────────────────
 
 export async function getWhiteboards(): Promise<WhiteboardItem[]> {
-  const session = await requireSession()
+  const session = await requireWorkspace()
   const boards = await prisma.whiteboard.findMany({
     where: { ownerId: session.id },
     select: {
@@ -41,9 +41,9 @@ export async function getWhiteboards(): Promise<WhiteboardItem[]> {
 }
 
 export async function getWhiteboardData(id: string): Promise<WhiteboardData | null> {
-  const session = await requireSession()
+  const session = await requireWorkspace()
   const board = await prisma.whiteboard.findFirst({
-    where: { id, ownerId: session.id },
+    where: { id, ownerId: session.id, workspaceId: session.workspaceId },
     select: { data: true },
   })
   if (!board) return null
@@ -59,13 +59,14 @@ export async function getWhiteboardData(id: string): Promise<WhiteboardData | nu
 // ─── Mutations ───────────────────────────────────────────────────────────────
 
 export async function createWhiteboard(title?: string) {
-  const session = await requireSession()
+  const session = await requireWorkspace()
 
   const board = await prisma.whiteboard.create({
     data: {
       title: title?.trim() || "Untitled whiteboard",
       data: { elements: [], appState: {}, files: {} },
       ownerId: session.id,
+      workspaceId: session.workspaceId,
     },
     select: {
       id: true,
@@ -92,10 +93,10 @@ export async function updateWhiteboard(
   data: WhiteboardData,
   thumbnail?: string,
 ) {
-  const session = await requireSession()
+  const session = await requireWorkspace()
 
   await prisma.whiteboard.updateMany({
-    where: { id, ownerId: session.id },
+    where: { id, ownerId: session.id, workspaceId: session.workspaceId },
     data: {
       data: data as object,
       ...(thumbnail ? { thumbnail } : {}),
@@ -106,11 +107,11 @@ export async function updateWhiteboard(
 }
 
 export async function renameWhiteboard(id: string, title: string) {
-  const session = await requireSession()
+  const session = await requireWorkspace()
   if (!title.trim()) return { success: false, error: "Title is required" }
 
   await prisma.whiteboard.updateMany({
-    where: { id, ownerId: session.id },
+    where: { id, ownerId: session.id, workspaceId: session.workspaceId },
     data: { title: title.trim() },
   })
 
@@ -119,10 +120,10 @@ export async function renameWhiteboard(id: string, title: string) {
 }
 
 export async function deleteWhiteboard(id: string) {
-  const session = await requireSession()
+  const session = await requireWorkspace()
 
   await prisma.whiteboard.deleteMany({
-    where: { id, ownerId: session.id },
+    where: { id, ownerId: session.id, workspaceId: session.workspaceId },
   })
 
   revalidatePath("/whiteboard")

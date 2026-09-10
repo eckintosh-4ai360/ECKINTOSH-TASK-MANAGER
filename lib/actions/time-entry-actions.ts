@@ -2,16 +2,16 @@
 
 import { revalidatePath } from "next/cache"
 import prisma from "@/lib/prisma"
-import { requireSession } from "@/lib/auth"
+import { requireWorkspace } from "@/lib/auth"
 
 const MAX_NOTE_LENGTH = 500
 
 // The entry your own timer is running on, if any — endTime is null while active.
 export async function getActiveTimeEntry() {
-  const session = await requireSession()
+  const session = await requireWorkspace()
 
   return prisma.timeEntry.findFirst({
-    where: { userId: session.id, endTime: null },
+    where: { userId: session.id, endTime: null, task: { project: { workspaceId: session.workspaceId } } },
     select: {
       id: true,
       taskId: true,
@@ -22,10 +22,10 @@ export async function getActiveTimeEntry() {
 }
 
 export async function getTaskTimeEntries(taskId: string) {
-  await requireSession()
+  const session = await requireWorkspace()
 
   return prisma.timeEntry.findMany({
-    where: { taskId },
+    where: { taskId, task: { project: { workspaceId: session.workspaceId } } },
     orderBy: { startTime: "desc" },
     select: {
       id: true,
@@ -42,9 +42,9 @@ export async function getTaskTimeEntries(taskId: string) {
 // existing one is stopped first, exactly as if the user had clicked "stop"
 // themselves, so no time is silently lost when switching tasks.
 export async function startTimeEntry(taskId: string) {
-  const session = await requireSession()
+  const session = await requireWorkspace()
 
-  const task = await prisma.task.findUnique({ where: { id: taskId }, select: { id: true } })
+  const task = await prisma.task.findFirst({ where: { id: taskId, project: { workspaceId: session.workspaceId } }, select: { id: true } })
   if (!task) return { success: false, error: "Task not found." }
 
   const running = await prisma.timeEntry.findFirst({
@@ -74,10 +74,10 @@ async function stopEntry(id: string, startTime: Date) {
 }
 
 export async function stopTimeEntry(notes?: string) {
-  const session = await requireSession()
+  const session = await requireWorkspace()
 
   const running = await prisma.timeEntry.findFirst({
-    where: { userId: session.id, endTime: null },
+    where: { userId: session.id, endTime: null, task: { project: { workspaceId: session.workspaceId } } },
   })
 
   if (!running) return { success: false, error: "No timer is currently running." }
@@ -99,7 +99,7 @@ export async function logManualTimeEntry(input: {
   durationMinutes: number
   notes?: string
 }) {
-  const session = await requireSession()
+  const session = await requireWorkspace()
 
   if (!Number.isFinite(input.durationMinutes) || input.durationMinutes <= 0) {
     return { success: false, error: "Enter a duration greater than zero." }
@@ -108,7 +108,7 @@ export async function logManualTimeEntry(input: {
     return { success: false, error: "A single entry can't exceed 24 hours — split it up." }
   }
 
-  const task = await prisma.task.findUnique({ where: { id: input.taskId }, select: { id: true } })
+  const task = await prisma.task.findFirst({ where: { id: input.taskId, project: { workspaceId: session.workspaceId } }, select: { id: true } })
   if (!task) return { success: false, error: "Task not found." }
 
   const endTime = new Date()
@@ -130,9 +130,9 @@ export async function logManualTimeEntry(input: {
 }
 
 export async function deleteTimeEntry(id: string) {
-  const session = await requireSession()
+  const session = await requireWorkspace()
 
-  const entry = await prisma.timeEntry.findUnique({ where: { id }, select: { userId: true } })
+  const entry = await prisma.timeEntry.findFirst({ where: { id, task: { project: { workspaceId: session.workspaceId } } }, select: { userId: true } })
   if (!entry || entry.userId !== session.id) {
     return { success: false, error: "Time entry not found." }
   }

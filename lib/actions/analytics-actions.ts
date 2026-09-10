@@ -1,7 +1,7 @@
 "use server"
 
 import prisma from "@/lib/prisma"
-import { requireSession } from "@/lib/auth"
+import { requireWorkspace } from "@/lib/auth"
 import { getPermissionError, hasPermission } from "@/lib/rbac"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -81,7 +81,7 @@ const SHORT_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "S
 // ─── Main Action ──────────────────────────────────────────────────────────────
 
 export async function getAnalyticsData(): Promise<AnalyticsData | { error: string }> {
-  const session = await requireSession()
+  const session = await requireWorkspace()
   if (!hasPermission(session.role, "view_analytics")) {
     return { error: getPermissionError("view_analytics") }
   }
@@ -119,34 +119,37 @@ export async function getAnalyticsData(): Promise<AnalyticsData | { error: strin
     timeEntriesSum,
   ] = await Promise.all([
     // Completed tasks (all time)
-    prisma.task.count({ where: { status: "COMPLETED" } }),
+    prisma.task.count({ where: { status: "COMPLETED", project: { workspaceId: session.workspaceId } } }),
 
     // Completed tasks last calendar month
     prisma.task.count({
       where: {
         status: "COMPLETED",
+        project: { workspaceId: session.workspaceId },
         updatedAt: { gte: startOfLastMonth, lte: endOfLastMonth },
       },
     }),
 
     // Active projects (current)
-    prisma.project.count({ where: { status: "active" } }),
+    prisma.project.count({ where: { status: "active", workspaceId: session.workspaceId } }),
 
     // Active projects last month snapshot — best approximation: projects created before end of last month
     prisma.project.count({
       where: {
         status: "active",
+        workspaceId: session.workspaceId,
         createdAt: { lte: endOfLastMonth },
       },
     }),
 
     // Team members total
-    prisma.user.count(),
+    prisma.workspaceMember.count({ where: { workspaceId: session.workspaceId } }),
 
     // Completed tasks with timestamps for avg duration (current period)
     prisma.task.findMany({
       where: {
         status: "COMPLETED",
+        project: { workspaceId: session.workspaceId },
         updatedAt: { gte: startOfThisMonth },
       },
       select: { createdAt: true, updatedAt: true },
@@ -156,6 +159,7 @@ export async function getAnalyticsData(): Promise<AnalyticsData | { error: strin
     prisma.task.findMany({
       where: {
         status: "COMPLETED",
+        project: { workspaceId: session.workspaceId },
         updatedAt: { gte: startOfLastMonth, lte: endOfLastMonth },
       },
       select: { createdAt: true, updatedAt: true },
@@ -163,7 +167,7 @@ export async function getAnalyticsData(): Promise<AnalyticsData | { error: strin
 
     // Tasks created in the last 6 months grouped by month
     prisma.task.findMany({
-      where: { createdAt: { gte: sixMonthsAgo } },
+      where: { createdAt: { gte: sixMonthsAgo }, project: { workspaceId: session.workspaceId } },
       select: { createdAt: true },
     }),
 
@@ -171,6 +175,7 @@ export async function getAnalyticsData(): Promise<AnalyticsData | { error: strin
     prisma.task.findMany({
       where: {
         status: "COMPLETED",
+        project: { workspaceId: session.workspaceId },
         updatedAt: { gte: sixMonthsAgo },
       },
       select: { updatedAt: true },
@@ -179,34 +184,38 @@ export async function getAnalyticsData(): Promise<AnalyticsData | { error: strin
     // Project status counts
     prisma.project.groupBy({
       by: ["status"],
+      where: { workspaceId: session.workspaceId },
       _count: { _all: true },
     }),
 
     // Task status counts
     prisma.task.groupBy({
       by: ["status"],
+      where: { project: { workspaceId: session.workspaceId } },
       _count: { _all: true },
     }),
 
     // Task priority counts
     prisma.task.groupBy({
       by: ["priority"],
+      where: { project: { workspaceId: session.workspaceId } },
       _count: { _all: true },
     }),
 
     // Total tasks (for completion rate)
-    prisma.task.count(),
+    prisma.task.count({ where: { project: { workspaceId: session.workspaceId } } }),
 
     // Overdue tasks
     prisma.task.count({
       where: {
         dueDate: { lt: now },
         status: { notIn: ["COMPLETED", "ARCHIVED"] },
+        project: { workspaceId: session.workspaceId },
       },
     }),
 
     // Total logged hours from TimeEntry
-    prisma.timeEntry.aggregate({ _sum: { duration: true } }),
+    prisma.timeEntry.aggregate({ where: { task: { project: { workspaceId: session.workspaceId } } }, _sum: { duration: true } }),
   ])
 
   // ── Compute avg completion days ────────────────────────────────────────────

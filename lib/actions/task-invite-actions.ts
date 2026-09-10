@@ -1,7 +1,7 @@
 "use server"
 
 import prisma from "@/lib/prisma"
-import { requireSession } from "@/lib/auth"
+import { requireWorkspace } from "@/lib/auth"
 import { sendExternalEmail } from "@/lib/email-delivery"
 import { revalidatePath } from "next/cache"
 import { validateInput, taskCommentSchema } from "@/lib/validation"
@@ -10,9 +10,9 @@ import { validateInput, taskCommentSchema } from "@/lib/validation"
 
 export async function getTaskComments(taskId: string) {
   try {
-    await requireSession()
+    const session = await requireWorkspace()
     return await prisma.taskComment.findMany({
-      where: { taskId },
+      where: { taskId, task: { project: { workspaceId: session.workspaceId } } },
       include: {
         author: {
           select: { id: true, name: true, email: true, avatar: true },
@@ -27,11 +27,14 @@ export async function getTaskComments(taskId: string) {
 
 export async function addTaskComment(taskId: string, content: string) {
   try {
-    const session = await requireSession()
+    const session = await requireWorkspace()
 
     const parsed = validateInput(taskCommentSchema, { taskId, content })
     if (!parsed.success) return { success: false, error: parsed.error }
     const trimmed = parsed.data.content
+
+    const taskInWorkspace = await prisma.task.findFirst({ where: { id: taskId, project: { workspaceId: session.workspaceId } }, select: { id: true } })
+    if (!taskInWorkspace) return { success: false, error: "Task not found in the active workspace." }
 
     const comment = await prisma.taskComment.create({
       data: { taskId, authorId: session.id, content: trimmed },
@@ -43,8 +46,8 @@ export async function addTaskComment(taskId: string, content: string) {
     })
 
     // Notify task assignee if different from commenter
-    const task = await prisma.task.findUnique({
-      where: { id: taskId },
+    const task = await prisma.task.findFirst({
+      where: { id: taskId, project: { workspaceId: session.workspaceId } },
       select: { title: true, assigneeId: true, assignee: { select: { email: true, notificationPreference: { select: { emailEnabled: true } } } } },
     })
 
@@ -74,9 +77,9 @@ export async function addTaskComment(taskId: string, content: string) {
 
 export async function deleteTaskComment(commentId: string) {
   try {
-    const session = await requireSession()
-    const comment = await prisma.taskComment.findUnique({
-      where: { id: commentId },
+    const session = await requireWorkspace()
+    const comment = await prisma.taskComment.findFirst({
+      where: { id: commentId, task: { project: { workspaceId: session.workspaceId } } },
       select: { authorId: true },
     })
     if (!comment) return { success: false, error: "Comment not found." }
@@ -101,9 +104,9 @@ export async function sendTaskCollaborationInvite({
   emails: string[]
 }) {
   try {
-    const session = await requireSession()
-    const task = await prisma.task.findUnique({
-      where: { id: taskId },
+    const session = await requireWorkspace()
+    const task = await prisma.task.findFirst({
+      where: { id: taskId, project: { workspaceId: session.workspaceId } },
       select: { title: true, description: true, project: { select: { name: true } } },
     })
 

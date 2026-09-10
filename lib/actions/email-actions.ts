@@ -1,7 +1,7 @@
 "use server"
 
 import prisma from "@/lib/prisma"
-import { requireSession } from "@/lib/auth"
+import { requireWorkspace } from "@/lib/auth"
 import { sendExternalEmail } from "@/lib/email-delivery"
 import { getPermissionError, hasPermission } from "@/lib/rbac"
 import { revalidatePath } from "next/cache"
@@ -38,7 +38,7 @@ function buildInternalEmailHtml({
 
 // Send internal email
 export async function sendEmail(formData: FormData) {
-  const session = await requireSession()
+  const session = await requireWorkspace()
   if (!hasPermission(session.role, "use_email")) {
     return { error: getPermissionError("use_email") }
   }
@@ -49,6 +49,12 @@ export async function sendEmail(formData: FormData) {
   if (!toId || !subject?.trim() || !body?.trim()) {
     return { error: "All fields are required" }
   }
+
+  const recipientMembership = await prisma.workspaceMember.findUnique({
+    where: { workspaceId_userId: { workspaceId: session.workspaceId, userId: toId } },
+    select: { userId: true },
+  })
+  if (!recipientMembership) return { error: "Recipient is not a member of the active workspace." }
 
   const recipient = await prisma.user.findUnique({
     where: { id: toId },
@@ -69,7 +75,7 @@ export async function sendEmail(formData: FormData) {
   const cleanBody = body.trim()
 
   await prisma.internalEmail.create({
-    data: { fromId: session.id, toId, subject: cleanSubject, body: cleanBody },
+    data: { fromId: session.id, toId, subject: cleanSubject, body: cleanBody, workspaceId: session.workspaceId },
   })
 
   let externalWarning: string | null = null
@@ -101,10 +107,10 @@ export async function sendEmail(formData: FormData) {
 
 // Get inbox (emails received by current user)
 export async function getInbox() {
-  const session = await requireSession()
+  const session = await requireWorkspace()
   if (!hasPermission(session.role, "use_email")) return []
   return prisma.internalEmail.findMany({
-    where: { toId: session.id },
+    where: { toId: session.id, workspaceId: session.workspaceId },
     include: { from: { select: { name: true, email: true } } },
     orderBy: { createdAt: "desc" },
   })
@@ -112,10 +118,10 @@ export async function getInbox() {
 
 // Get sent emails
 export async function getSentEmails() {
-  const session = await requireSession()
+  const session = await requireWorkspace()
   if (!hasPermission(session.role, "use_email")) return []
   return prisma.internalEmail.findMany({
-    where: { fromId: session.id },
+    where: { fromId: session.id, workspaceId: session.workspaceId },
     include: { to: { select: { name: true, email: true } } },
     orderBy: { createdAt: "desc" },
   })
@@ -123,10 +129,10 @@ export async function getSentEmails() {
 
 // Mark email as read — NO revalidatePath: client state already reflects it
 export async function markEmailRead(emailId: string) {
-  const session = await requireSession()
+  const session = await requireWorkspace()
   if (!hasPermission(session.role, "use_email")) return
   await prisma.internalEmail.updateMany({
-    where: { id: emailId, toId: session.id },
+    where: { id: emailId, toId: session.id, workspaceId: session.workspaceId },
     data: { read: true },
   })
   // Intentionally no revalidatePath — prevents page remount that wipes UI state
@@ -134,20 +140,20 @@ export async function markEmailRead(emailId: string) {
 
 // Delete email — updates local state, no full page revalidation needed
 export async function deleteEmail(emailId: string) {
-  const session = await requireSession()
+  const session = await requireWorkspace()
   if (!hasPermission(session.role, "use_email")) return
   await prisma.internalEmail.deleteMany({
-    where: { id: emailId, OR: [{ fromId: session.id }, { toId: session.id }] },
+    where: { id: emailId, workspaceId: session.workspaceId, OR: [{ fromId: session.id }, { toId: session.id }] },
   })
   // Intentionally no revalidatePath — client removes it from state immediately
 }
 
 // Get all users to send email to
 export async function getEmailableUsers() {
-  const session = await requireSession()
+  const session = await requireWorkspace()
   if (!hasPermission(session.role, "use_email")) return []
   return prisma.user.findMany({
-    where: { id: { not: session.id } },
+    where: { id: { not: session.id }, workspaceMemberships: { some: { workspaceId: session.workspaceId } } },
     select: { id: true, name: true, email: true },
     orderBy: { name: "asc" },
   })

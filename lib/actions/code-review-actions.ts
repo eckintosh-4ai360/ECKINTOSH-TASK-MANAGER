@@ -1,7 +1,9 @@
 "use server"
 
-import { requirePermission } from "@/lib/auth"
+import { requireWorkspace } from "@/lib/auth"
 import { generateGroqJson } from "@/lib/ai/groq"
+import { hasPermission } from "@/lib/rbac"
+import { redirect } from "next/navigation"
 
 export type CodeReviewFinding = {
   severity: "high" | "medium" | "low"
@@ -159,7 +161,8 @@ export async function reviewRepositoryFileAction(input: {
   branch: string
   content: string
 }): Promise<{ success: true; review: CodeReviewResult } | { success: false; error: string }> {
-  await requirePermission("use_repository_workspace")
+  const session = await requireWorkspace()
+  if (!hasPermission(session.role, "use_repository_workspace")) redirect("/")
 
   const path = input.path.trim()
   const content = input.content

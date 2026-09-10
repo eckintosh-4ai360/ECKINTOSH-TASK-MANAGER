@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache"
 import prisma from "@/lib/prisma"
-import { requireSession } from "@/lib/auth"
+import { requireWorkspace } from "@/lib/auth"
 import { hasPermission, getPermissionError } from "@/lib/rbac"
 import { validateInput, createDeploymentSchema } from "@/lib/validation"
 
@@ -13,7 +13,7 @@ export async function createDeploymentAction(input: {
   status?: string
   notes?: string
 }) {
-  const session = await requireSession()
+  const session = await requireWorkspace()
   if (!hasPermission(session.role, "manage_projects")) {
     return { success: false, error: getPermissionError("manage_projects") }
   }
@@ -22,7 +22,7 @@ export async function createDeploymentAction(input: {
   if (!parsed.success) return { success: false, error: parsed.error }
   const validated = parsed.data
 
-  const project = await prisma.project.findUnique({ where: { id: validated.projectId }, select: { id: true } })
+  const project = await prisma.project.findFirst({ where: { id: validated.projectId, workspaceId: session.workspaceId }, select: { id: true } })
   if (!project) return { success: false, error: "Project not found." }
 
   const deployment = await prisma.deployment.create({

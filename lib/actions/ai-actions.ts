@@ -1,7 +1,7 @@
 "use server"
 
 import prisma from "@/lib/prisma"
-import { requireSession } from "@/lib/auth"
+import { requireWorkspace } from "@/lib/auth"
 import { sanitizeNoteHtml } from "@/lib/sanitize-html"
 import { createProject, createTask } from "@/lib/actions/project-actions"
 import { createCalendarEvent } from "@/lib/actions/calendar-actions"
@@ -21,10 +21,11 @@ import { marked } from "marked"
 
 export async function getAIWorkspaceContext() {
   try {
-    const session = await requireSession()
+    const session = await requireWorkspace()
 
     const [projects, tasks, calendarEvents, sprints, notes] = await Promise.all([
       prisma.project.findMany({
+        where: { workspaceId: session.workspaceId },
         select: {
           id: true,
           name: true,
@@ -37,6 +38,7 @@ export async function getAIWorkspaceContext() {
         take: 20,
       }),
       prisma.task.findMany({
+        where: { project: { workspaceId: session.workspaceId } },
         select: {
           id: true,
           title: true,
@@ -59,12 +61,14 @@ export async function getAIWorkspaceContext() {
           location: true,
         },
         where: {
+          workspaceId: session.workspaceId,
           startTime: { gte: new Date() },
         },
         orderBy: { startTime: "asc" },
         take: 15,
       }),
       prisma.sprint.findMany({
+        where: { project: { workspaceId: session.workspaceId } },
         select: {
           id: true,
           name: true,
@@ -79,6 +83,7 @@ export async function getAIWorkspaceContext() {
         take: 10,
       }),
       prisma.note.findMany({
+        where: { workspaceId: session.workspaceId },
         select: {
           id: true,
           title: true,
@@ -92,6 +97,7 @@ export async function getAIWorkspaceContext() {
     ])
 
     const teamMembers = await prisma.user.findMany({
+      where: { workspaceMemberships: { some: { workspaceId: session.workspaceId } } },
       select: { id: true, name: true, email: true, role: true },
       orderBy: { name: "asc" },
     })
@@ -162,7 +168,7 @@ export async function getAIWorkspaceContext() {
 // ─── Productivity Intelligence ───────────────────────────────────────────────
 
 export async function getAIProductivityIntelligence(): Promise<ProductivityIntelligence> {
-  const session = await requireSession()
+  const session = await requireWorkspace()
   const now = new Date()
   const recentWindow = new Date(now)
   recentWindow.setDate(recentWindow.getDate() - 45)
@@ -170,6 +176,7 @@ export async function getAIProductivityIntelligence(): Promise<ProductivityIntel
   const [tasks, calendarEvents, timeEntries, standups, githubWorkspace] = await Promise.all([
     prisma.task.findMany({
       where: {
+        project: { workspaceId: session.workspaceId },
         OR: [
           { status: { notIn: ["COMPLETED", "ARCHIVED"] } },
           { updatedAt: { gte: recentWindow } },
@@ -194,6 +201,7 @@ export async function getAIProductivityIntelligence(): Promise<ProductivityIntel
     }),
     prisma.calendarEvent.findMany({
       where: {
+        workspaceId: session.workspaceId,
         startTime: {
           gte: now,
         },
@@ -212,6 +220,7 @@ export async function getAIProductivityIntelligence(): Promise<ProductivityIntel
     prisma.timeEntry.findMany({
       where: {
         userId: session.id,
+        task: { project: { workspaceId: session.workspaceId } },
         startTime: { gte: recentWindow },
         // A still-running timer has no duration yet — exclude it rather than
         // report 0 minutes worked, which would skew the productivity signal.
@@ -236,6 +245,7 @@ export async function getAIProductivityIntelligence(): Promise<ProductivityIntel
     prisma.standup.findMany({
       where: {
         date: { gte: recentWindow },
+        workspaceId: session.workspaceId,
       },
       select: {
         id: true,
@@ -341,7 +351,7 @@ export async function aiParseTaskCapture(input: {
   projects: { id: string; name: string }[]
   defaultProjectId?: string | null
 }): Promise<{ success: true; draft: SmartTaskDraft } | { success: false; error: string }> {
-  await requireSession()
+  await requireWorkspace()
 
   const text = input.text.trim()
   if (!text) {

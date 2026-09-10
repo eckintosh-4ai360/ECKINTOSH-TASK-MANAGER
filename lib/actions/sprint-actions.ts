@@ -1,7 +1,7 @@
 "use server"
 
 import prisma from "@/lib/prisma"
-import { requireSession } from "@/lib/auth"
+import { requireWorkspace } from "@/lib/auth"
 import { createNotificationsForUsers, getWorkspaceRecipientIds } from "@/lib/notifications"
 import { getPermissionError, hasPermission } from "@/lib/rbac"
 import { revalidatePath } from "next/cache"
@@ -86,8 +86,9 @@ function getInitials(value: string) {
 export type SprintBoardItem = ReturnType<typeof serializeSprint>
 
 export async function getSprints() {
-  await requireSession()
+  const session = await requireWorkspace()
   const sprints = await prisma.sprint.findMany({
+    where: { project: { workspaceId: session.workspaceId } },
     include: {
       project: { select: { id: true, name: true, color: true } },
       tasks: {
@@ -108,9 +109,10 @@ export async function getSprints() {
 }
 
 export async function getSprintOptions(): Promise<SprintOption[]> {
-  await requireSession()
+  const session = await requireWorkspace()
 
   const sprints = await prisma.sprint.findMany({
+    where: { project: { workspaceId: session.workspaceId } },
     select: {
       id: true,
       name: true,
@@ -124,7 +126,7 @@ export async function getSprintOptions(): Promise<SprintOption[]> {
 }
 
 export async function createSprint(input: SprintInput) {
-  const session = await requireSession()
+  const session = await requireWorkspace()
   if (!hasPermission(session.role, "manage_sprints")) {
     return { success: false, error: getPermissionError("manage_sprints") }
   }
@@ -132,6 +134,9 @@ export async function createSprint(input: SprintInput) {
   const parsed = validateInput(createSprintSchema, input)
   if (!parsed.success) return { success: false, error: parsed.error }
   const validated = parsed.data
+
+  const project = await prisma.project.findFirst({ where: { id: validated.projectId, workspaceId: session.workspaceId }, select: { id: true } })
+  if (!project) return { success: false, error: "Project not found in the active workspace." }
 
   const sprint = await prisma.sprint.create({
     data: {
@@ -148,9 +153,10 @@ export async function createSprint(input: SprintInput) {
     },
   })
 
-  const recipients = await getWorkspaceRecipientIds(session.id)
+  const recipients = await getWorkspaceRecipientIds(session.workspaceId, session.id)
   await createNotificationsForUsers({
     userIds: recipients,
+    workspaceId: session.workspaceId,
     channel: "teamUpdates",
     title: "Sprint created",
     message: `${session.name} created ${sprint.name}.`,
@@ -168,7 +174,7 @@ export async function createSprint(input: SprintInput) {
 }
 
 export async function updateSprint(input: SprintInput & { id: string }) {
-  const session = await requireSession()
+  const session = await requireWorkspace()
   if (!hasPermission(session.role, "manage_sprints")) {
     return { success: false, error: getPermissionError("manage_sprints") }
   }
@@ -177,8 +183,12 @@ export async function updateSprint(input: SprintInput & { id: string }) {
     return { success: false, error: "Sprint name and project are required" }
   }
 
+  const existing = await prisma.sprint.findFirst({ where: { id: input.id, project: { workspaceId: session.workspaceId } }, select: { id: true } })
+  const project = await prisma.project.findFirst({ where: { id: input.projectId, workspaceId: session.workspaceId }, select: { id: true } })
+  if (!existing || !project) return { success: false, error: "Sprint or project not found in the active workspace." }
+
   const sprint = await prisma.sprint.update({
-    where: { id: input.id },
+    where: { id: existing.id },
     data: {
       name: input.name.trim(),
       goal: input.goal?.trim() || null,
@@ -193,9 +203,10 @@ export async function updateSprint(input: SprintInput & { id: string }) {
     },
   })
 
-  const recipients = await getWorkspaceRecipientIds(session.id)
+  const recipients = await getWorkspaceRecipientIds(session.workspaceId, session.id)
   await createNotificationsForUsers({
     userIds: recipients,
+    workspaceId: session.workspaceId,
     channel: "teamUpdates",
     title: "Sprint updated",
     message: `${session.name} updated ${sprint.name}.`,
@@ -215,23 +226,25 @@ export async function updateSprint(input: SprintInput & { id: string }) {
 }
 
 export async function deleteSprint(sprintId: string) {
-  const session = await requireSession()
+  const session = await requireWorkspace()
   if (!hasPermission(session.role, "manage_sprints")) {
     return { success: false, error: getPermissionError("manage_sprints") }
   }
 
-  const sprint = await prisma.sprint.findUnique({
-    where: { id: sprintId },
+  const sprint = await prisma.sprint.findFirst({
+    where: { id: sprintId, project: { workspaceId: session.workspaceId } },
     select: { name: true },
   })
+  if (!sprint) return { success: false, error: "Sprint not found in the active workspace." }
 
   await prisma.sprint.delete({
     where: { id: sprintId },
   })
 
-  const recipients = await getWorkspaceRecipientIds(session.id)
+  const recipients = await getWorkspaceRecipientIds(session.workspaceId, session.id)
   await createNotificationsForUsers({
     userIds: recipients,
+    workspaceId: session.workspaceId,
     channel: "teamUpdates",
     title: "Sprint removed",
     message: `${session.name} deleted ${sprint?.name ?? "a sprint"}.`,

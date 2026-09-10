@@ -1,9 +1,9 @@
 "use server"
 
 import prisma from "@/lib/prisma"
-import { requireSession } from "@/lib/auth"
+import { requireWorkspace } from "@/lib/auth"
 import { listGitHubCommits, parseGitHubRepositoryUrl, isGitHubConfigured } from "@/lib/github"
-import { getPusherServer, WORKSPACE_PRESENCE_CHANNEL } from "@/lib/pusher/server"
+import { getPusherServer, getWorkspacePresenceChannel } from "@/lib/pusher/server"
 
 export type TeamMemberActivity = {
   id: string
@@ -41,11 +41,12 @@ function getInitials(name?: string | null, email?: string): string {
 // Fetch today's GitHub commits across all connected repositories.
 // Returns an array of lowercase author identifiers (GitHub login or git author name).
 // Returns [] silently if GitHub is not configured or the API call fails.
-async function getTodaysCommitAuthors(startOfToday: Date): Promise<string[]> {
+async function getTodaysCommitAuthors(startOfToday: Date, workspaceId: string): Promise<string[]> {
   if (!isGitHubConfigured()) return []
 
   try {
     const repos = await prisma.repository.findMany({
+      where: { project: { workspaceId } },
       select: { url: true, defaultBranch: true },
     })
 
@@ -80,19 +81,20 @@ async function getTodaysCommitAuthors(startOfToday: Date): Promise<string[]> {
 }
 
 export async function getTeamActivityData(): Promise<TeamMemberActivity[]> {
-  await requireSession()
+  const session = await requireWorkspace()
 
   const startOfToday = new Date()
   startOfToday.setHours(0, 0, 0, 0)
 
   // ── Fetch all users ────────────────────────────────────────────────────────
   const users = await prisma.user.findMany({
+    where: { workspaceMemberships: { some: { workspaceId: session.workspaceId } } },
     select: { id: true, name: true, email: true, role: true, title: true },
     orderBy: { name: "asc" },
   })
 
   // ── Fetch today's commit author identifiers from GitHub (one call, shared) ─
-  const todaysAuthors = await getTodaysCommitAuthors(startOfToday)
+  const todaysAuthors = await getTodaysCommitAuthors(startOfToday, session.workspaceId)
 
   // ── Online presence via Pusher presence channel or local sockets ───────────
   const onlineUserIds = new Set<string>()
@@ -100,14 +102,14 @@ export async function getTeamActivityData(): Promise<TeamMemberActivity[]> {
   if (clientsMap) {
     for (const [userId, sockets] of clientsMap.entries()) {
       if (sockets && (sockets instanceof Set ? sockets.size > 0 : true)) {
-        onlineUserIds.add(userId)
+        onlineUserIds.add(userId.split(":").pop() ?? userId)
       }
     }
   } else {
     const pusher = getPusherServer()
     if (pusher) {
       try {
-        const res = await pusher.get({ path: `/channels/${WORKSPACE_PRESENCE_CHANNEL}/users` })
+        const res = await pusher.get({ path: `/channels/${getWorkspacePresenceChannel(session.workspaceId)}/users` })
         if (res.status === 200) {
           const body = (await res.json()) as { users: { id: string }[] }
           if (body?.users) {
@@ -132,6 +134,7 @@ export async function getTeamActivityData(): Promise<TeamMemberActivity[]> {
       const tasksCompletedToday = await prisma.task.count({
         where: {
           assigneeId: user.id,
+          project: { workspaceId: session.workspaceId },
           status: "COMPLETED",
           updatedAt: { gte: startOfToday },
         },
@@ -140,14 +143,14 @@ export async function getTeamActivityData(): Promise<TeamMemberActivity[]> {
       // Hours logged today from TimeEntry records
       const timeEntriesToday = await prisma.timeEntry.aggregate({
         _sum: { duration: true },
-        where: { userId: user.id, startTime: { gte: startOfToday } },
+        where: { userId: user.id, startTime: { gte: startOfToday }, task: { project: { workspaceId: session.workspaceId } } },
       })
       const minutesToday = timeEntriesToday._sum.duration ?? 0
       const hoursLogged = Math.round((minutesToday / 60) * 10) / 10
 
       // Active project — name of the project from the most recently updated task
       const latestTask = await prisma.task.findFirst({
-        where: { assigneeId: user.id },
+        where: { assigneeId: user.id, project: { workspaceId: session.workspaceId } },
         orderBy: { updatedAt: "desc" },
         select: { project: { select: { name: true } } },
       })

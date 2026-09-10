@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache"
 import prisma from "@/lib/prisma"
-import { requireSession } from "@/lib/auth"
+import { requireWorkspace } from "@/lib/auth"
 import { getPermissionError, hasPermission } from "@/lib/rbac"
 import {
   canWriteToGitHub,
@@ -85,9 +85,10 @@ function mapTrackedRepository(project: {
   }
 }
 
-async function getTrackedRepositories() {
+async function getTrackedRepositories(workspaceId: string) {
   const projects = await prisma.project.findMany({
     where: {
+      workspaceId,
       repository: {
         isNot: null,
       },
@@ -116,9 +117,9 @@ async function getTrackedRepositories() {
     .filter((repository): repository is TrackedRepository => Boolean(repository))
 }
 
-async function resolveTrackedRepository(projectId: string) {
+async function resolveTrackedRepository(projectId: string, workspaceId: string) {
   const repository = await prisma.project.findUnique({
-    where: { id: projectId },
+    where: { id: projectId, workspaceId },
     select: {
       id: true,
       name: true,
@@ -270,6 +271,9 @@ async function buildActivityStream(repositories: TrackedRepository[]) {
 }
 
 export async function syncProjectRepository(projectId: string, repositoryUrl?: string | null) {
+  const session = await requireWorkspace()
+  const project = await prisma.project.findFirst({ where: { id: projectId, workspaceId: session.workspaceId }, select: { id: true } })
+  if (!project) return { success: false, error: "Project not found in the active workspace." }
   const trimmedUrl = repositoryUrl?.trim() ?? ""
 
   if (!trimmedUrl) {
@@ -332,7 +336,7 @@ export async function getGitHubWorkspaceData(
   projectId?: string | null,
   branch?: string | null,
 ): Promise<GitHubWorkspaceData> {
-  const session = await requireSession()
+  const session = await requireWorkspace()
   if (!hasPermission(session.role, "use_repository_workspace")) {
     return {
       configured: isGitHubConfigured(),
@@ -356,7 +360,7 @@ export async function getGitHubWorkspaceData(
   // everyone" (no shared fallback token configured either).
   const needsGitHubConnection = !ownConnection && !canWriteToGitHub()
 
-  const repositories = await getTrackedRepositories()
+  const repositories = await getTrackedRepositories(session.workspaceId)
   if (repositories.length === 0) {
     return {
       configured: isGitHubConfigured(),
@@ -408,13 +412,13 @@ export async function getGitHubWorkspaceData(
 }
 
 export async function getRepositoryDirectoryAction(projectId: string, path = "", branch?: string | null) {
-  const session = await requireSession()
+  const session = await requireWorkspace()
   if (!hasPermission(session.role, "use_repository_workspace")) {
     return { success: false, error: getPermissionError("use_repository_workspace") }
   }
 
   try {
-    const { tracked, parsed } = await resolveTrackedRepository(projectId)
+    const { tracked, parsed } = await resolveTrackedRepository(projectId, session.workspaceId)
     const directory = await getGitHubDirectory(
       parsed.owner,
       parsed.repo,
@@ -435,13 +439,13 @@ export async function getRepositoryDirectoryAction(projectId: string, path = "",
 }
 
 export async function getRepositoryFileAction(projectId: string, path: string, branch?: string | null) {
-  const session = await requireSession()
+  const session = await requireWorkspace()
   if (!hasPermission(session.role, "use_repository_workspace")) {
     return { success: false, error: getPermissionError("use_repository_workspace") }
   }
 
   try {
-    const { tracked, parsed } = await resolveTrackedRepository(projectId)
+    const { tracked, parsed } = await resolveTrackedRepository(projectId, session.workspaceId)
     const file = await getGitHubFile(
       parsed.owner,
       parsed.repo,
@@ -477,7 +481,7 @@ export async function saveRepositoryFileAction(input: {
   branch: string
   sha?: string
 }) {
-  const session = await requireSession()
+  const session = await requireWorkspace()
   if (!hasPermission(session.role, "use_repository_workspace")) {
     return { success: false, error: getPermissionError("use_repository_workspace") }
   }
@@ -489,7 +493,7 @@ export async function saveRepositoryFileAction(input: {
   }
 
   try {
-    const { parsed } = await resolveTrackedRepository(input.projectId)
+    const { parsed } = await resolveTrackedRepository(input.projectId, session.workspaceId)
     const response = await updateGitHubFile({
       token: actor.token,
       owner: parsed.owner,
@@ -523,7 +527,7 @@ export async function createRepositoryBranchAction(input: {
   branchName: string
   sourceBranch?: string | null
 }) {
-  const session = await requireSession()
+  const session = await requireWorkspace()
   if (!hasPermission(session.role, "use_repository_workspace")) {
     return { success: false, error: getPermissionError("use_repository_workspace") }
   }
@@ -540,7 +544,7 @@ export async function createRepositoryBranchAction(input: {
   }
 
   try {
-    const { tracked, parsed } = await resolveTrackedRepository(input.projectId)
+    const { tracked, parsed } = await resolveTrackedRepository(input.projectId, session.workspaceId)
     const sourceBranch = input.sourceBranch || tracked.defaultBranch
     const branches = await listGitHubBranches(parsed.owner, parsed.repo)
     const source = branches.find((branch) => branch.name === sourceBranch)
@@ -586,7 +590,7 @@ export async function createRepositoryPullRequestAction(input: {
   baseBranch: string
   body?: string
 }) {
-  const session = await requireSession()
+  const session = await requireWorkspace()
   if (!hasPermission(session.role, "use_repository_workspace")) {
     return { success: false, error: getPermissionError("use_repository_workspace") }
   }
@@ -598,7 +602,7 @@ export async function createRepositoryPullRequestAction(input: {
   }
 
   try {
-    const { parsed } = await resolveTrackedRepository(input.projectId)
+    const { parsed } = await resolveTrackedRepository(input.projectId, session.workspaceId)
     const pullRequest = await createGitHubPullRequest({
       token: actor.token,
       owner: parsed.owner,
@@ -626,7 +630,7 @@ export async function mergeRepositoryPullRequestAction(input: {
   pullNumber: number
   mergeMethod?: "merge" | "squash" | "rebase"
 }) {
-  const session = await requireSession()
+  const session = await requireWorkspace()
   if (!hasPermission(session.role, "merge_pull_requests")) {
     return { success: false, error: getPermissionError("merge_pull_requests") }
   }
@@ -638,7 +642,7 @@ export async function mergeRepositoryPullRequestAction(input: {
   }
 
   try {
-    const { parsed } = await resolveTrackedRepository(input.projectId)
+    const { parsed } = await resolveTrackedRepository(input.projectId, session.workspaceId)
     const mergeResult = await mergeGitHubPullRequest({
       token: actor.token,
       owner: parsed.owner,

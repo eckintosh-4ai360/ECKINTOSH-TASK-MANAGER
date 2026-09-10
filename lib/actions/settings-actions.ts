@@ -24,7 +24,7 @@ import {
   type PushSubscriptionInput,
   upsertPushSubscription,
 } from "@/lib/push"
-import { createSession, requireSession } from "@/lib/auth"
+import { createSession, requireSession, requireWorkspace } from "@/lib/auth"
 import { hasPermission } from "@/lib/rbac"
 import { SESSION_COOKIE_NAME } from "@/lib/session"
 
@@ -150,7 +150,7 @@ async function getOrCreateNotificationPreference(userId: string) {
 }
 
 export async function getSettingsPageData(): Promise<SettingsPageData> {
-  const session = await requireSession()
+  const session = await requireWorkspace()
 
   const now = new Date()
   const sevenDaysFromNow = new Date(now)
@@ -185,7 +185,7 @@ export async function getSettingsPageData(): Promise<SettingsPageData> {
         }),
         getOrCreateNotificationPreference(session.id),
         prisma.notification.findMany({
-          where: { userId: session.id },
+          where: { userId: session.id, workspaceId: session.workspaceId },
           orderBy: { createdAt: "desc" },
           take: 6,
           select: {
@@ -199,11 +199,12 @@ export async function getSettingsPageData(): Promise<SettingsPageData> {
           },
         }),
         prisma.notification.count({
-          where: { userId: session.id, read: false },
+          where: { userId: session.id, workspaceId: session.workspaceId, read: false },
         }),
         prisma.task.findMany({
           where: {
             assigneeId: session.id,
+            project: { workspaceId: session.workspaceId },
             status: { in: [...ACTIVE_TASK_STATUSES] },
           },
           orderBy: [{ dueDate: "asc" }, { updatedAt: "desc" }],
@@ -225,12 +226,14 @@ export async function getSettingsPageData(): Promise<SettingsPageData> {
         prisma.task.count({
           where: {
             assigneeId: session.id,
+            project: { workspaceId: session.workspaceId },
             status: { in: [...ACTIVE_TASK_STATUSES] },
           },
         }),
         prisma.task.count({
           where: {
             assigneeId: session.id,
+            project: { workspaceId: session.workspaceId },
             status: { in: [...ACTIVE_TASK_STATUSES] },
             dueDate: {
               gte: now,
@@ -241,6 +244,7 @@ export async function getSettingsPageData(): Promise<SettingsPageData> {
         prisma.task.count({
           where: {
             assigneeId: session.id,
+            project: { workspaceId: session.workspaceId },
             status: { in: [...ACTIVE_TASK_STATUSES] },
             dueDate: { lt: now },
           },
@@ -417,7 +421,7 @@ export async function deletePushSubscriptionAction(endpoint: string) {
 }
 
 export async function createTestReminderAction() {
-  const session = await requireSession()
+  const session = await requireWorkspace()
   const preferences = preferencesFromRecord(await getOrCreateNotificationPreference(session.id))
 
   if (!preferences.taskReminders) {
@@ -427,6 +431,7 @@ export async function createTestReminderAction() {
   const notification = await prisma.notification.create({
     data: {
       userId: session.id,
+      workspaceId: session.workspaceId,
       title: "Test reminder triggered",
       message: `Reminder pipeline checked with ${preferences.reminderLeadTime} lead time.`,
       type: "info",
@@ -454,6 +459,7 @@ export async function createTestReminderAction() {
       data: {
         fromId: session.id,
         toId: session.id,
+        workspaceId: session.workspaceId,
         subject: "Task reminder test",
         body: `Reminder pipeline checked with ${preferences.reminderLeadTime} lead time.`,
       },
@@ -491,7 +497,7 @@ export async function createTestReminderAction() {
   }
 
   const unreadNotifications = await prisma.notification.count({
-    where: { userId: session.id, read: false },
+    where: { userId: session.id, workspaceId: session.workspaceId, read: false },
   })
 
   revalidatePath("/settings")
@@ -509,18 +515,19 @@ export async function createTestReminderAction() {
 }
 
 export async function markNotificationReadAction(notificationId: string, read: boolean) {
-  const session = await requireSession()
+  const session = await requireWorkspace()
 
   const notification = await prisma.notification.updateMany({
     where: {
       id: notificationId,
       userId: session.id,
+      workspaceId: session.workspaceId,
     },
     data: { read },
   })
 
   const unreadNotifications = await prisma.notification.count({
-    where: { userId: session.id, read: false },
+    where: { userId: session.id, workspaceId: session.workspaceId, read: false },
   })
 
   revalidatePath("/settings")
@@ -532,11 +539,12 @@ export async function markNotificationReadAction(notificationId: string, read: b
 }
 
 export async function markAllNotificationsReadAction() {
-  const session = await requireSession()
+  const session = await requireWorkspace()
 
   await prisma.notification.updateMany({
     where: {
       userId: session.id,
+      workspaceId: session.workspaceId,
       read: false,
     },
     data: { read: true },
@@ -572,9 +580,10 @@ export async function deleteOwnAccountAction() {
 }
 
 export async function createSettingsTestNotificationAction() {
-  const session = await requireSession()
+  const session = await requireWorkspace()
 
   await createNotificationForUser(session.id, {
+    workspaceId: session.workspaceId,
     channel: "system",
     title: "Notification center checked in",
     message: "The settings page generated an in-app notification successfully.",
