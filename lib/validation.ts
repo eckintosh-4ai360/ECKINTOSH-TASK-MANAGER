@@ -1,28 +1,24 @@
 import { z } from "zod"
 
-/**
- * Zod schemas for the highest-risk server actions — the ones that take
- * admin-privileged input (user/role/email-credential management) or write
- * raw strings into the database from a form (projects, tasks, sprints,
- * calendar events, standups, notes, comments, invites, deployments, support
- * tickets). Every action wired to one of these gets a clear, single-string
- * error instead of an opaque Prisma failure or a silently-stored garbage
- * value (e.g. updateTask used to do `status: (input.status as any) || "TODO"`
- * — any string at all would pass through uncast).
- *
- * Not exhaustive: read-only getters and lower-risk actions weren't in scope
- * for this pass.
- */
+// Zod schemas for the highest-risk server actions — the ones that take
+// admin-privileged input (user/role/email-credential management) or write
+// raw strings into the database from a form (projects, tasks, sprints,
+// calendar events, standups, notes, comments, invites, deployments, support
+// tickets). Every action wired to one of these gets a clear, single-string
+// error instead of an opaque Prisma failure or a silently-stored garbage
+// value (e.g. updateTask used to do `status: (input.status as any) || "TODO"`
+// — any string at all would pass through uncast).
+//
+// Not exhaustive: read-only getters and lower-risk actions weren't in scope
+// for this pass.
 
 // ─── Shared helper ────────────────────────────────────────────────────────────
 
 export type ValidationResult<T> = { success: true; data: T } | { success: false; error: string }
 
-/**
- * Runs a schema and collapses its result into the single-string error shape
- * every action here already returns on failure, so wiring this in is a
- * drop-in rather than a shape change for callers.
- */
+// Runs a schema and collapses its result into the single-string error shape
+// every action here already returns on failure, so wiring this in is a
+// drop-in rather than a shape change for callers.
 export function validateInput<S extends z.ZodTypeAny>(
   schema: S,
   input: unknown,

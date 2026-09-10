@@ -22,7 +22,7 @@ export type DeploymentItem = {
 
 interface DeploymentFeedProps {
   deployments: DeploymentItem[]
-  /** Admins can log a deployment that wasn't picked up from a GitHub push. */
+    // Admins can log a deployment that wasn't picked up from a GitHub push.
   canLog?: boolean
   projects?: Array<{ id: string; name: string }>
 }

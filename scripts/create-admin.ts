@@ -5,14 +5,12 @@ import bcrypt from "bcryptjs"
 import pg from "pg"
 import { getDatabaseSslOptions, normalizeDatabaseUrl } from "../lib/db-ssl"
 
-/**
- * Bootstraps (or promotes) an admin account from the command line.
- *
- * This replaces the old GET /api/setup-admin route, which was reachable by
- * anyone who knew — or guessed — the default token.
- *
- *   npx tsx scripts/create-admin.ts admin@example.com "Strong Password" "Admin Name"
- */
+// Bootstraps (or promotes) an admin account from the command line.
+//
+// This replaces the old GET /api/setup-admin route, which was reachable by
+// anyone who knew — or guessed — the default token.
+//
+//   npx tsx scripts/create-admin.ts admin@example.com "Strong Password" "Admin Name"
 
 const MIN_PASSWORD_LENGTH = 12
 

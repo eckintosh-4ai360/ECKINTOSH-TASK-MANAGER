@@ -1,16 +1,14 @@
 import prisma from "@/lib/prisma"
 
-/**
- * Two layers of brute-force defence:
- *
- *  1. Per-account lockout persisted on the user row, so it survives restarts
- *     and applies no matter which IP the attempts come from.
- *  2. An in-process sliding window keyed by IP, which catches spraying across
- *     many accounts before it ever reaches the database.
- *
- * The in-memory half is per-instance. On multi-instance deployments the
- * database lockout is the one that actually holds, which is why it exists.
- */
+// Two layers of brute-force defence:
+//
+//  1. Per-account lockout persisted on the user row, so it survives restarts
+//     and applies no matter which IP the attempts come from.
+//  2. An in-process sliding window keyed by IP, which catches spraying across
+//     many accounts before it ever reaches the database.
+//
+// The in-memory half is per-instance. On multi-instance deployments the
+// database lockout is the one that actually holds, which is why it exists.
 
 export const MAX_FAILED_ATTEMPTS = 5
 export const LOCKOUT_MINUTES = 15

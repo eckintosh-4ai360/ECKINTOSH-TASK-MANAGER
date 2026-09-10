@@ -35,6 +35,8 @@ model User {
   githubConnectedAt DateTime?
 
   sentInvitations   Invitation[]
+  ownedWorkspaces   Workspace[]             @relation("WorkspaceCreator")
+  workspaceMemberships WorkspaceMember[]
   supportTickets    SupportTicket[]
   emailVerification EmailVerification?
 
@@ -65,6 +67,56 @@ enum UserRole {
   GUEST
 }
 
+enum WorkspaceRole {
+  OWNER
+  ADMIN
+  MEMBER
+  VIEWER
+}
+
+model Workspace {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  description String?
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  createdBy       User              @relation("WorkspaceCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  members         WorkspaceMember[]
+  projects        Project[]
+  teams           Team[]
+  calendarEvents  CalendarEvent[]
+  notes           Note[]
+  whiteboards     Whiteboard[]
+  messages        Message[]
+  internalEmails  InternalEmail[]
+  invitations     Invitation[]
+  notifications   Notification[]
+  supportTickets  SupportTicket[]
+  standups        Standup[]
+
+  @@index([createdById])
+  @@map("workspaces")
+}
+
+model WorkspaceMember {
+  id          String        @id @default(cuid())
+  workspaceId String
+  userId      String
+  role        WorkspaceRole @default(MEMBER)
+  joinedAt    DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+  @@index([userId])
+  @@map("workspace_members")
+}
+
 // ─── Project ─────────────────────────────────────────────────────────────────
 
 model Project {
@@ -80,6 +132,8 @@ model Project {
   progress    Int       @default(0)
   owner       User      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   ownerId     String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspaceId String
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
@@ -91,6 +145,7 @@ model Project {
   repository  Repository?
   deployments Deployment[]
 
+  @@index([workspaceId, createdAt])
   @@map("projects")
 }
 
@@ -209,6 +264,8 @@ model Standup {
   userId       String
   project      Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
   projectId    String?
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspaceId  String
   didYesterday String
   doingToday   String
   blockers     String?
@@ -263,6 +320,8 @@ model Team {
   updatedAt   DateTime @updatedAt
 
   members TeamMember[]
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@map("teams")
 }
@@ -292,6 +351,8 @@ model CalendarEvent {
   color       String?
   location    String?
   projectId   String?
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -309,6 +370,8 @@ model Note {
   archived  Boolean  @default(false)
   owner     User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   ownerId   String
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -324,6 +387,8 @@ model Whiteboard {
   thumbnail String? // base64 PNG thumbnail preview
   owner     User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   ownerId   String
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -377,6 +442,8 @@ model Notification {
   id        String   @id @default(cuid())
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId    String
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   title     String
   message   String
   type      String   @default("info") // info | success | warning | error | deploy | sprint
@@ -385,6 +452,7 @@ model Notification {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@index([workspaceId, userId, read])
   @@map("notifications")
 }
 
@@ -448,6 +516,7 @@ model Message {
   content    String?
   senderId   String
   receiverId String
+  workspaceId String
   read       Boolean  @default(false)
   edited     Boolean  @default(false)
   replyToId  String?
@@ -461,7 +530,9 @@ model Message {
   receiver User      @relation("MessageReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
   replyTo  Message?  @relation("MessageReplies", fields: [replyToId], references: [id], onDelete: SetNull)
   replies  Message[] @relation("MessageReplies")
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
+  @@index([workspaceId, senderId, receiverId, createdAt])
   @@map("messages")
 }
 
@@ -473,12 +544,15 @@ model InternalEmail {
   body      String
   fromId    String
   toId      String
+  workspaceId String
   read      Boolean  @default(false)
   createdAt DateTime @default(now())
 
   from User @relation("EmailFrom", fields: [fromId], references: [id], onDelete: Cascade)
   to   User @relation("EmailTo", fields: [toId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
+  @@index([workspaceId, toId, createdAt])
   @@map("internal_emails")
 }
 
@@ -492,6 +566,8 @@ model Invitation {
   id          String    @id @default(cuid())
   email       String
   role        UserRole  @default(USER)
+  workspaceRole WorkspaceRole @default(MEMBER)
+  workspaceId String
   tokenHash   String    @unique
   message     String?
   invitedById String
@@ -500,8 +576,10 @@ model Invitation {
   createdAt   DateTime  @default(now())
 
   invitedBy User @relation(fields: [invitedById], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@index([email])
+  @@index([workspaceId, email])
   @@map("invitations")
 }
 
@@ -537,6 +615,8 @@ model SupportTicket {
   id        String   @id @default(cuid())
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId    String
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   category  String // bug | feature | question | security | billing | performance
   priority  String   @default("medium") // low | medium | high | critical
   subject   String
@@ -546,6 +626,7 @@ model SupportTicket {
   updatedAt DateTime @updatedAt
 
   @@index([userId])
+  @@index([workspaceId, createdAt])
   @@map("support_tickets")
 }
 

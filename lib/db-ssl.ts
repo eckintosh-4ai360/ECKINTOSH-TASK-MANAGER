@@ -1,19 +1,17 @@
 import fs from "node:fs"
 import type { ConnectionOptions } from "node:tls"
 
-/**
- * TLS options for the Postgres pool.
- *
- * Certificate verification is ON by default. Managed providers (Neon, Supabase,
- * RDS with the public bundle) all present certificates that chain to a public
- * root, so this "just works" — an unverified TLS session is encrypted but not
- * authenticated, which leaves the connection open to an active MITM.
- *
- * Escape hatches, in order of preference:
- *   DATABASE_CA_CERT      — PEM contents of a private CA to trust
- *   DATABASE_CA_CERT_PATH — path to that PEM file
- *   DATABASE_SSL_NO_VERIFY=true — disable verification (refused in production)
- */
+// TLS options for the Postgres pool.
+//
+// Certificate verification is ON by default. Managed providers (Neon, Supabase,
+// RDS with the public bundle) all present certificates that chain to a public
+// root, so this "just works" — an unverified TLS session is encrypted but not
+// authenticated, which leaves the connection open to an active MITM.
+//
+// Escape hatches, in order of preference:
+//   DATABASE_CA_CERT      — PEM contents of a private CA to trust
+//   DATABASE_CA_CERT_PATH — path to that PEM file
+//   DATABASE_SSL_NO_VERIFY=true — disable verification (refused in production)
 export function getDatabaseSslOptions(): ConnectionOptions | false {
   if (process.env.DATABASE_SSL === "false") return false
 
@@ -45,10 +43,8 @@ export function getDatabaseSslOptions(): ConnectionOptions | false {
   return { rejectUnauthorized: true }
 }
 
-/**
- * The pg driver takes its TLS config from the `ssl` option, so libpq-style
- * query params in the URL only confuse it. Strip them.
- */
+// The pg driver takes its TLS config from the `ssl` option, so libpq-style
+// query params in the URL only confuse it. Strip them.
 export function normalizeDatabaseUrl(url: string) {
   return url
     .replace(/[?&]sslmode=[^&]*/g, "")

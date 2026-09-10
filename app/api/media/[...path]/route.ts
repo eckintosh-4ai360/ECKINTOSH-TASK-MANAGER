@@ -17,14 +17,12 @@ import {
 
 export const runtime = "nodejs"
 
-/**
- * Authenticated read path for chat attachments.
- *
- * These files used to sit in public/, which meant anyone holding a URL could
- * fetch them, forever, with no session. Now every read is checked: you must be
- * signed in, and you must be a party to the message the file was sent in (or
- * be the person who uploaded it, for files not yet sent).
- */
+// Authenticated read path for chat attachments.
+//
+// These files used to sit in public/, which meant anyone holding a URL could
+// fetch them, forever, with no session. Now every read is checked: you must be
+// signed in, and you must be a party to the message the file was sent in (or
+// be the person who uploaded it, for files not yet sent).
 export async function GET(request: NextRequest, context: { params: Promise<{ path: string[] }> }) {
   const session = await getSession()
   if (!session) {
@@ -104,10 +102,8 @@ async function serveFromDisk(segments: string[], mimeType: string, disposition: 
   return new NextResponse(stream, { status: 200, headers })
 }
 
-/**
- * The uploader always may. Otherwise the file must belong to a message that
- * this user sent or received.
- */
+// The uploader always may. Otherwise the file must belong to a message that
+// this user sent or received.
 async function canAccess(userId: string, key: string) {
   const [scope, ownerId] = key.split("/")
 

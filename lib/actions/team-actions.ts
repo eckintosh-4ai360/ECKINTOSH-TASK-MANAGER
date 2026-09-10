@@ -38,11 +38,9 @@ function getInitials(name?: string | null, email?: string): string {
   return email ? email.slice(0, 2).toUpperCase() : "US"
 }
 
-/**
- * Fetch today's GitHub commits across all connected repositories.
- * Returns an array of lowercase author identifiers (GitHub login or git author name).
- * Returns [] silently if GitHub is not configured or the API call fails.
- */
+// Fetch today's GitHub commits across all connected repositories.
+// Returns an array of lowercase author identifiers (GitHub login or git author name).
+// Returns [] silently if GitHub is not configured or the API call fails.
 async function getTodaysCommitAuthors(startOfToday: Date): Promise<string[]> {
   if (!isGitHubConfigured()) return []
 

@@ -1,11 +1,9 @@
-/**
- * Generates the PWA / favicon asset set into public/ with no image
- * dependencies — a minimal RGBA PNG encoder (zlib + CRC32) plus signed-distance
- * field drawing for the rounded tile and the checkmark.
- *
- * Run with: node scripts/generate-icons.mjs
- * Re-run only when the mark or the brand colours change; the output is committed.
- */
+// Generates the PWA / favicon asset set into public/ with no image
+// dependencies — a minimal RGBA PNG encoder (zlib + CRC32) plus signed-distance
+// field drawing for the rounded tile and the checkmark.
+//
+// Run with: node scripts/generate-icons.mjs
+// Re-run only when the mark or the brand colours change; the output is committed.
 import { deflateSync } from "node:zlib"
 import { writeFileSync } from "node:fs"
 import { fileURLToPath } from "node:url"
@@ -36,7 +34,7 @@ function chunk(type, data) {
   return Buffer.concat([length, body, crc])
 }
 
-/** `pixels` is a size*size*4 RGBA byte array. */
+// `pixels` is a size*size*4 RGBA byte array.
 function encodePng(size, pixels) {
   const ihdr = Buffer.alloc(13)
   ihdr.writeUInt32BE(size, 0)
@@ -69,13 +67,13 @@ const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v)
 const mix = (a, b, t) => a + (b - a) * t
 const mixRgb = (a, b, t) => [mix(a[0], b[0], t), mix(a[1], b[1], t), mix(a[2], b[2], t)]
 
-/** Smooth 0→1 ramp used to antialias every edge over roughly one pixel. */
+// Smooth 0→1 ramp used to antialias every edge over roughly one pixel.
 function smoothstep(edge0, edge1, x) {
   const t = clamp01((x - edge0) / (edge1 - edge0))
   return t * t * (3 - 2 * t)
 }
 
-/** Signed distance to a rounded box centred at the origin (negative = inside). */
+// Signed distance to a rounded box centred at the origin (negative = inside).
 function sdRoundedBox(px, py, halfW, halfH, radius) {
   const qx = Math.abs(px) - halfW + radius
   const qy = Math.abs(py) - halfH + radius
@@ -83,7 +81,7 @@ function sdRoundedBox(px, py, halfW, halfH, radius) {
   return outside + Math.min(Math.max(qx, qy), 0) - radius
 }
 
-/** Signed distance to the segment a→b. */
+// Signed distance to the segment a→b.
 function sdSegment(px, py, ax, ay, bx, by) {
   const pax = px - ax
   const pay = py - ay
@@ -102,12 +100,10 @@ const CYAN_DEEP = [0, 138, 190]
 // (the inner 80% of the tile) so Android can crop to a circle without clipping.
 const CHECK = { ax: 0.29, ay: 0.53, bx: 0.44, by: 0.67, cx: 0.73, cy: 0.35 }
 
-/**
- * @param {number} size      output edge length in pixels
- * @param {object} [options]
- * @param {boolean} [options.fullBleed]  square tile (for maskable + apple-icon)
- * @param {boolean} [options.light]      lighter tile for light-scheme favicons
- */
+// @param {number} size      output edge length in pixels
+// @param {object} [options]
+// @param {boolean} [options.fullBleed]  square tile (for maskable + apple-icon)
+// @param {boolean} [options.light]      lighter tile for light-scheme favicons
 function drawIcon(size, { fullBleed = false, light = false } = {}) {
   const pixels = new Uint8Array(size * size * 4)
   const px = 1 / size // one pixel, in unit coordinates

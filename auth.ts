@@ -30,12 +30,10 @@ if (!githubClientId || !githubClientSecret) {
   )
 }
 
-/**
- * `repo` is requested so that repository writes made in the workspace are
- * attributed to the person who made them, using their own token, instead of
- * everyone sharing one machine account. Set GITHUB_OAUTH_SCOPES to override —
- * e.g. "read:user user:email" for a deployment that never writes to GitHub.
- */
+// `repo` is requested so that repository writes made in the workspace are
+// attributed to the person who made them, using their own token, instead of
+// everyone sharing one machine account. Set GITHUB_OAUTH_SCOPES to override —
+// e.g. "read:user user:email" for a deployment that never writes to GitHub.
 const githubScopes = process.env.GITHUB_OAUTH_SCOPES ?? "read:user user:email repo"
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
@@ -101,7 +99,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           : {}
 
         if (!existing) {
-          await prisma.user.create({
+          const createdUser = await prisma.user.create({
             data: {
               email,
               name: user.name ?? ghLogin ?? "Developer",
@@ -117,7 +115,27 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             },
           })
 
-          if (invitation) await markInvitationAccepted(invitation.id)
+          if (invitation) {
+            await prisma.workspaceMember.create({
+              data: {
+                workspaceId: invitation.workspaceId,
+                userId: createdUser.id,
+                role: invitation.workspaceRole,
+              },
+            })
+            await markInvitationAccepted(invitation.id)
+          } else if (decision.reason === "bootstrap") {
+            const workspace = await prisma.workspace.create({
+              data: {
+                name: `${createdUser.name ?? "Main"} Workspace`,
+                slug: `workspace-${createdUser.id}`,
+                createdById: createdUser.id,
+                members: { create: { userId: createdUser.id, role: "OWNER" } },
+              },
+              select: { id: true },
+            })
+            console.log("[auth] Bootstrap workspace created:", workspace.id)
+          }
 
           console.log(`[auth] New user provisioned (${decision.reason}):`, email)
         } else {

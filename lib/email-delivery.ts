@@ -73,7 +73,7 @@ function getTransporter(config: EmailDeliveryConfig) {
   return cachedTransporter
 }
 
-/** Call after saving or clearing settings so the next send re-reads them. */
+// Call after saving or clearing settings so the next send re-reads them.
 export function resetEmailTransport() {
   cachedTransporter?.close()
   cachedTransporter = null
@@ -105,10 +105,8 @@ function getEnvConfig(): EmailDeliveryConfig | null {
   }
 }
 
-/**
- * Admin-managed settings win; environment variables are the fallback so an
- * existing deployment keeps working before anyone opens the settings page.
- */
+// Admin-managed settings win; environment variables are the fallback so an
+// existing deployment keeps working before anyone opens the settings page.
 export async function getEmailDeliveryConfig(): Promise<EmailDeliveryConfig | null> {
   try {
     const record = await prisma.emailSetting.findUnique({ where: { id: EMAIL_SETTINGS_ID } })
@@ -165,7 +163,7 @@ export async function sendExternalEmail(payload: ExternalEmailPayload): Promise<
   return sendWithConfig(config, payload)
 }
 
-/** Used by the settings page to test credentials before they are saved. */
+// Used by the settings page to test credentials before they are saved.
 export async function sendWithConfig(
   config: EmailDeliveryConfig,
   payload: ExternalEmailPayload,
@@ -204,10 +202,8 @@ export async function verifyEmailConfig(config: EmailDeliveryConfig) {
   }
 }
 
-/**
- * Nodemailer's raw errors are terse. Gmail in particular fails in two very
- * common, very fixable ways, so name them explicitly.
- */
+// Nodemailer's raw errors are terse. Gmail in particular fails in two very
+// common, very fixable ways, so name them explicitly.
 function describeSmtpError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error)
   const code = (error as { code?: string })?.code

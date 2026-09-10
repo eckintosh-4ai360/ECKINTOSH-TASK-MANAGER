@@ -31,7 +31,7 @@ type Feedback = { type: "success" | "error" | "warning"; text: string } | null
 
 type EmailDeliverySettingsProps = {
   settings: EmailSettingsView | null
-  /** True when delivery currently comes from SMTP_* env vars instead of this form. */
+    // True when delivery currently comes from SMTP_* env vars instead of this form.
   configuredFromEnvironment: boolean
   adminEmail: string
 }

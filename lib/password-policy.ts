@@ -1,7 +1,5 @@
-/**
- * Server-side password rules. The form's `minLength` is a hint to the browser,
- * not a control — anything that sets a password must call validatePassword.
- */
+// Server-side password rules. The form's `minLength` is a hint to the browser,
+// not a control — anything that sets a password must call validatePassword.
 
 export const MIN_PASSWORD_LENGTH = 12
 export const MAX_PASSWORD_LENGTH = 200

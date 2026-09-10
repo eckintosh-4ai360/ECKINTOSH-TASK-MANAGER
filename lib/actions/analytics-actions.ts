@@ -60,7 +60,7 @@ export type AnalyticsData = {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-/** Returns the first moment of the month N months ago (0 = this month). */
+// Returns the first moment of the month N months ago (0 = this month).
 function monthStart(offset: number): Date {
   const d = new Date()
   d.setDate(1)
@@ -69,7 +69,7 @@ function monthStart(offset: number): Date {
   return d
 }
 
-/** Returns the last moment of the month N months ago (0 = this month). */
+// Returns the last moment of the month N months ago (0 = this month).
 function monthEnd(offset: number): Date {
   const d = monthStart(offset - 1) // start of next month
   d.setMilliseconds(d.getMilliseconds() - 1)

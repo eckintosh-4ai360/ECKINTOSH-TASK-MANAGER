@@ -22,14 +22,12 @@ export async function createSession(user: SessionUser) {
   cookieStore.set(SESSION_COOKIE_NAME, token, getSessionCookieOptions())
 }
 
-/**
- * Resolves the caller's identity, then re-reads the authoritative record.
- *
- * The JWT carries the role, but a cookie minted a week ago must not keep
- * granting access the admin has since revoked. Re-reading means a demotion or
- * deletion takes effect on the very next request. React.cache() collapses this
- * to one query per request, so the cost is a single indexed lookup.
- */
+// Resolves the caller's identity, then re-reads the authoritative record.
+//
+// The JWT carries the role, but a cookie minted a week ago must not keep
+// granting access the admin has since revoked. Re-reading means a demotion or
+// deletion takes effect on the very next request. React.cache() collapses this
+// to one query per request, so the cost is a single indexed lookup.
 export const getSession = cache(async (): Promise<SessionUser | null> => {
   try {
     let identity: { id?: string; email: string } | null = null

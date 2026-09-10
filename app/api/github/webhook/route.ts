@@ -103,8 +103,8 @@ async function findProjectRepository(repositoryUrl: string | null) {
   })
 }
 
-/** Which environment (if any) a push to this branch represents. Feature
- * branches aren't deploys, so pushes to them don't create a Deployment row. */
+// Which environment (if any) a push to this branch represents. Feature
+// branches aren't deploys, so pushes to them don't create a Deployment row.
 function resolveDeploymentEnvironment(branchName: string, defaultBranch: string) {
   if (branchName === defaultBranch) return "production"
   if (["staging", "stage"].includes(branchName)) return "staging"
@@ -112,8 +112,8 @@ function resolveDeploymentEnvironment(branchName: string, defaultBranch: string)
   return null
 }
 
-/** Best-effort match of the GitHub actor to a workspace user; falls back to
- * the project owner so the row always has a valid deployedById. */
+// Best-effort match of the GitHub actor to a workspace user; falls back to
+// the project owner so the row always has a valid deployedById.
 async function resolveDeployedById(githubLogin: string | undefined, fallbackUserId: string) {
   if (githubLogin) {
     const match = await prisma.user.findFirst({ where: { githubLogin }, select: { id: true } })

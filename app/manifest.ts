@@ -1,14 +1,12 @@
 import type { MetadataRoute } from "next"
 
-/**
- * Web app manifest, served at /manifest.webmanifest and linked automatically
- * by Next from the root layout.
- *
- * This is what makes push reach a phone. Android/Chrome will deliver Web Push
- * to the installed or plain browser tab, but iOS (16.4+) only grants
- * `Notification.requestPermission()` to a site that has been added to the Home
- * Screen — which requires this manifest with `display: "standalone"`.
- */
+// Web app manifest, served at /manifest.webmanifest and linked automatically
+// by Next from the root layout.
+//
+// This is what makes push reach a phone. Android/Chrome will deliver Web Push
+// to the installed or plain browser tab, but iOS (16.4+) only grants
+// `Notification.requestPermission()` to a site that has been added to the Home
+// Screen — which requires this manifest with `display: "standalone"`.
 export default function manifest(): MetadataRoute.Manifest {
   return {
     name: "Spagad – SRAD",

@@ -13,12 +13,10 @@ export async function getInvitationAction(token: string): Promise<InvitationView
   return findInvitationByToken(token)
 }
 
-/**
- * Sets a password and creates the account for an invited email — the
- * credential-login counterpart to accepting via "Continue with GitHub"
- * (handled in auth.ts's signIn callback instead, since that path never
- * touches this action).
- */
+// Sets a password and creates the account for an invited email — the
+// credential-login counterpart to accepting via "Continue with GitHub"
+// (handled in auth.ts's signIn callback instead, since that path never
+// touches this action).
 export async function acceptInvitationAction(formData: FormData) {
   const token = formData.get("token") as string | null
   const name = (formData.get("name") as string | null)?.trim()
@@ -38,9 +36,14 @@ export async function acceptInvitationAction(formData: FormData) {
 
   const existing = await prisma.user.findUnique({ where: { email: invitation.email } })
   if (existing) {
+    await prisma.workspaceMember.upsert({
+      where: { workspaceId_userId: { workspaceId: invitation.workspaceId, userId: existing.id } },
+      update: { role: invitation.workspaceRole },
+      create: { workspaceId: invitation.workspaceId, userId: existing.id, role: invitation.workspaceRole },
+    })
     // They must already have joined some other way — just consume the invite.
     await markInvitationAccepted(invitation.id)
-    return { error: "An account already exists for this email. Try signing in instead." }
+    return { error: "This account has been added to the workspace. Sign in to continue." }
   }
 
   const hashed = await bcrypt.hash(password, 12)
@@ -52,6 +55,14 @@ export async function acceptInvitationAction(formData: FormData) {
       password: hashed,
       role: invitation.role,
       title: "Team member",
+    },
+  })
+
+  await prisma.workspaceMember.create({
+    data: {
+      workspaceId: invitation.workspaceId,
+      userId: user.id,
+      role: invitation.workspaceRole,
     },
   })
 

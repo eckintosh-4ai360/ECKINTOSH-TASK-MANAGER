@@ -1,15 +1,13 @@
 import crypto from "node:crypto"
 import { getSessionSecretValue } from "@/lib/session"
 
-/**
- * AES-256-GCM encryption for secrets that have to be stored in the database
- * and read back in plaintext later — SMTP app passwords, specifically.
- *
- * The key comes from SECRETS_ENCRYPTION_KEY when set, otherwise it is derived
- * from the session secret (which production already refuses to boot without).
- * Rotating either value makes existing ciphertexts undecryptable, and the admin
- * has to re-enter the password — that is intentional and safe.
- */
+// AES-256-GCM encryption for secrets that have to be stored in the database
+// and read back in plaintext later — SMTP app passwords, specifically.
+//
+// The key comes from SECRETS_ENCRYPTION_KEY when set, otherwise it is derived
+// from the session secret (which production already refuses to boot without).
+// Rotating either value makes existing ciphertexts undecryptable, and the admin
+// has to re-enter the password — that is intentional and safe.
 
 const ALGORITHM = "aes-256-gcm"
 const KEY_LENGTH = 32
@@ -36,7 +34,7 @@ export function encryptSecret(plaintext: string) {
   return [PREFIX, iv.toString("base64"), authTag.toString("base64"), encrypted.toString("base64")].join(":")
 }
 
-/** Returns null when the payload is malformed or was encrypted under a different key. */
+// Returns null when the payload is malformed or was encrypted under a different key.
 export function decryptSecret(payload: string): string | null {
   try {
     const [version, ivPart, tagPart, dataPart] = payload.split(":")

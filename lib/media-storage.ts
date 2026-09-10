@@ -1,17 +1,15 @@
 import path from "node:path"
 
-/**
- * Chat attachments are private. They live OUTSIDE public/ so Next never serves
- * them statically, and are read back through /api/media/[...path], which checks
- * the session and that the caller is a party to the message.
- *
- * On Vercel (BLOB_READ_WRITE_TOKEN set) files are stored in Vercel Blob with
- * `access: "private"` — the SDK's own private-object mode, not "public but the
- * URL is hard to guess." The blob's real URL is never handed to the client;
- * only our own /api/media key is. Everywhere else, files sit on local disk
- * outside public/. Override the local root with MEDIA_STORAGE_DIR on hosts
- * with a mounted volume.
- */
+// Chat attachments are private. They live OUTSIDE public/ so Next never serves
+// them statically, and are read back through /api/media/[...path], which checks
+// the session and that the caller is a party to the message.
+//
+// On Vercel (BLOB_READ_WRITE_TOKEN set) files are stored in Vercel Blob with
+// `access: "private"` — the SDK's own private-object mode, not "public but the
+// URL is hard to guess." The blob's real URL is never handed to the client;
+// only our own /api/media key is. Everywhere else, files sit on local disk
+// outside public/. Override the local root with MEDIA_STORAGE_DIR on hosts
+// with a mounted volume.
 export const MEDIA_ROOT = process.env.MEDIA_STORAGE_DIR
   ? path.resolve(process.env.MEDIA_STORAGE_DIR)
   : path.join(process.cwd(), "storage", "uploads")
@@ -22,10 +20,8 @@ export function isBlobStorageEnabled() {
   return Boolean(process.env.BLOB_READ_WRITE_TOKEN)
 }
 
-/**
- * SVG is deliberately absent: the browser executes script inside an SVG served
- * as image/svg+xml, which would be stored XSS on our own origin.
- */
+// SVG is deliberately absent: the browser executes script inside an SVG served
+// as image/svg+xml, which would be stored XSS on our own origin.
 export const MEDIA_TYPES: Record<string, { kind: string; ext: string }> = {
   "image/jpeg": { kind: "image", ext: "jpg" },
   "image/jpg": { kind: "image", ext: "jpg" },
@@ -55,7 +51,7 @@ export const MEDIA_TYPES: Record<string, { kind: string; ext: string }> = {
   "application/x-zip-compressed": { kind: "document", ext: "zip" },
 }
 
-/** Types safe to render inline. Everything else is forced to download. */
+// Types safe to render inline. Everything else is forced to download.
 const INLINE_KINDS = new Set(["image", "video", "audio"])
 
 export function isInlineRenderable(mimeType: string) {
@@ -73,10 +69,8 @@ export function lookupMimeByExtension(ext: string) {
   return "application/octet-stream"
 }
 
-/**
- * Rejects traversal, absolute paths, NUL bytes, and path separators hiding
- * inside a single segment — checked before the key touches disk or Blob.
- */
+// Rejects traversal, absolute paths, NUL bytes, and path separators hiding
+// inside a single segment — checked before the key touches disk or Blob.
 export function isSafeKeySegments(segments: string[]) {
   if (segments.length === 0) return false
 
@@ -88,12 +82,10 @@ export function isSafeKeySegments(segments: string[]) {
   return true
 }
 
-/**
- * Resolves a stored-media URL to an absolute local-disk path, refusing
- * anything that escapes MEDIA_ROOT. Returns null when the segments are unsafe.
- * Only used for the local-disk storage backend — Blob-backed reads go through
- * readBlobObject() with the raw (already-validated) key instead.
- */
+// Resolves a stored-media URL to an absolute local-disk path, refusing
+// anything that escapes MEDIA_ROOT. Returns null when the segments are unsafe.
+// Only used for the local-disk storage backend — Blob-backed reads go through
+// readBlobObject() with the raw (already-validated) key instead.
 export function resolveMediaPath(segments: string[]) {
   if (!isSafeKeySegments(segments)) return null
 
@@ -106,7 +98,7 @@ export function resolveMediaPath(segments: string[]) {
   return resolved
 }
 
-/** Storage key (`chat/<userId>/<file>`) for a media URL, or null if not ours. */
+// Storage key (`chat/<userId>/<file>`) for a media URL, or null if not ours.
 export function mediaUrlToKey(url: string) {
   if (!url.startsWith(`${MEDIA_URL_PREFIX}/`)) return null
   return url.slice(MEDIA_URL_PREFIX.length + 1)
@@ -116,11 +108,9 @@ export function keyToMediaUrl(key: string) {
   return `${MEDIA_URL_PREFIX}/${key}`
 }
 
-/**
- * Reads a private blob's content server-side. Never returns or forwards the
- * blob's own URL — only the caller of this function sees it, and it's used
- * once to open the fetch stream.
- */
+// Reads a private blob's content server-side. Never returns or forwards the
+// blob's own URL — only the caller of this function sees it, and it's used
+// once to open the fetch stream.
 export async function readBlobObject(key: string) {
   const { get } = await import("@vercel/blob")
   return get(key, { access: "private" })

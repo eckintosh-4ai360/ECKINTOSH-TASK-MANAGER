@@ -93,11 +93,9 @@ import { getSharedGitHubToken, sharedWriteTokenEnabled } from "@/lib/github-iden
 
 type GitHubRequestInit = RequestInit & {
   tokenRequired?: boolean
-  /**
-   * Credentials for this specific call. Write operations must always pass the
-   * acting user's token so commits, branches, and merges are attributed to the
-   * person who made them (see lib/github-identity.ts).
-   */
+    // Credentials for this specific call. Write operations must always pass the
+  // acting user's token so commits, branches, and merges are attributed to the
+  // person who made them (see lib/github-identity.ts).
   token?: string | null
 }
 
@@ -109,11 +107,9 @@ export function isGitHubConfigured() {
   return Boolean(getSharedGitHubToken())
 }
 
-/**
- * Whether the shared machine-account token may be used as a write fallback.
- * Off unless GITHUB_ALLOW_SHARED_WRITE_TOKEN=true — otherwise writes require
- * the acting user's own connection. Mirrors resolveWriteToken()'s fallback.
- */
+// Whether the shared machine-account token may be used as a write fallback.
+// Off unless GITHUB_ALLOW_SHARED_WRITE_TOKEN=true — otherwise writes require
+// the acting user's own connection. Mirrors resolveWriteToken()'s fallback.
 export function canWriteToGitHub() {
   return sharedWriteTokenEnabled() && Boolean(getSharedGitHubToken())
 }
@@ -266,7 +262,7 @@ export async function updateGitHubFile(params: {
     name: string
     email: string
   }
-  /** The acting user's OAuth token. */
+    // The acting user's OAuth token.
   token: string
 }) {
   const safePath = params.path
@@ -311,7 +307,7 @@ export async function createGitHubBranch(params: {
   repo: string
   branch: string
   sha: string
-  /** The acting user's OAuth token. */
+    // The acting user's OAuth token.
   token: string
 }) {
   return githubRequest<{
@@ -345,7 +341,7 @@ export async function createGitHubPullRequest(params: {
   head: string
   base: string
   body?: string
-  /** The acting user's OAuth token. */
+    // The acting user's OAuth token.
   token: string
 }) {
   return githubRequest<GitHubPullRequest>(
@@ -374,7 +370,7 @@ export async function mergeGitHubPullRequest(params: {
   commitTitle?: string
   commitMessage?: string
   mergeMethod?: "merge" | "squash" | "rebase"
-  /** The acting user's OAuth token. */
+    // The acting user's OAuth token.
   token: string
 }) {
   return githubRequest<{

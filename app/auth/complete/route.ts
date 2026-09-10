@@ -18,17 +18,15 @@ function getSafeReturnTo(request: Request) {
   return returnTo
 }
 
-/**
- * GET /auth/complete
- *
- * Bridge route handler that fires after GitHub OAuth finishes.
- * It reads the NextAuth session, looks up the DB user, mints a
- * custom JWT cookie (`spagad_session`), then redirects to /.
- *
- * Why a Route Handler instead of a page.tsx?
- * Next.js App Router forbids setting cookies from Server Components.
- * Route Handlers (GET/POST) are explicitly allowed to modify cookies.
- */
+// GET /auth/complete
+//
+// Bridge route handler that fires after GitHub OAuth finishes.
+// It reads the NextAuth session, looks up the DB user, mints a
+// custom JWT cookie (`spagad_session`), then redirects to /.
+//
+// Why a Route Handler instead of a page.tsx?
+// Next.js App Router forbids setting cookies from Server Components.
+// Route Handlers (GET/POST) are explicitly allowed to modify cookies.
 export async function GET(request: Request) {
   console.log("[auth/complete] Bridge route hit — reading NextAuth session…")
   const returnTo = getSafeReturnTo(request)

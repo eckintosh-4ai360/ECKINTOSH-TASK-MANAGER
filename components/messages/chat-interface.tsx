@@ -635,7 +635,7 @@ export function ChatInterface({ currentUserId, currentUserName }: ChatInterfaceP
           </div>
         </div>
       ) : (
-        /* No chat selected */
+                // No chat selected
         <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground gap-4 bg-background">
           <div className="w-24 h-24 rounded-3xl border border-border/60 bg-card flex items-center justify-center">
             <MessageSquare className="w-12 h-12 text-primary/30" />

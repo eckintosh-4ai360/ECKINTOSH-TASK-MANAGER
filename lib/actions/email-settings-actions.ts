@@ -24,7 +24,7 @@ export type EmailSettingsInput = {
   port: number
   secure: boolean
   username: string
-  /** Omit or leave blank to keep the password already on file. */
+    // Omit or leave blank to keep the password already on file.
   password?: string
   fromEmail: string
   fromName: string

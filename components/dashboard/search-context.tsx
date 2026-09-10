@@ -5,9 +5,9 @@ import { createContext, useContext, useState, useCallback, type ReactNode } from
 interface SearchContextValue {
   query: string
   setQuery: (q: string) => void
-  /** Returns true if the search query matches any of the provided fields */
+    // Returns true if the search query matches any of the provided fields
   matches: (...fields: (string | null | undefined)[]) => boolean
-  /** True when there's an active search */
+    // True when there's an active search
   isSearching: boolean
 }
 

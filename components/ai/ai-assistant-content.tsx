@@ -369,7 +369,7 @@ export function AIAssistantContent({
         {/* ── Messages Area ───────────────────────────────────────────────── */}
         <div className="flex-1 overflow-y-auto p-6">
           {isEmpty ? (
-            /* Welcome Screen */
+                        // Welcome Screen
             <div className="flex flex-col items-center justify-center h-full text-center gap-6 pb-4">
               {/* Icon */}
               <div className="relative">
@@ -416,7 +416,7 @@ export function AIAssistantContent({
               </div>
             </div>
           ) : (
-            /* Conversation */
+                        // Conversation
             <div className="space-y-4">
               {messages.map((message) => (
                 <div

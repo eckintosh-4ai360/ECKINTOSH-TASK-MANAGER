@@ -2,11 +2,9 @@ import crypto from "node:crypto"
 import prisma from "@/lib/prisma"
 import { sendExternalEmail } from "@/lib/email-delivery"
 
-/**
- * Plain module (not "use server") — issueVerificationOtp is called on behalf
- * of a user who isn't the current session (freshly admin-created, or mid
- * invitation-acceptance), so it can't be a directly callable action.
- */
+// Plain module (not "use server") — issueVerificationOtp is called on behalf
+// of a user who isn't the current session (freshly admin-created, or mid
+// invitation-acceptance), so it can't be a directly callable action.
 
 export const OTP_TTL_MINUTES = 15
 export const OTP_MAX_ATTEMPTS = 5

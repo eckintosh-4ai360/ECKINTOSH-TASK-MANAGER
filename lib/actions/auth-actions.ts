@@ -5,7 +5,7 @@ import { headers } from "next/headers"
 import { redirect } from "next/navigation"
 import { revalidatePath } from "next/cache"
 import prisma from "@/lib/prisma"
-import { createSession, requireAdmin } from "@/lib/auth"
+import { createSession, requireAdmin, requireWorkspace } from "@/lib/auth"
 import { validatePassword } from "@/lib/password-policy"
 import { issueVerificationOtp } from "@/lib/email-verification"
 import { validateInput, createUserSchema, updateUserRoleSchema } from "@/lib/validation"
@@ -91,7 +91,7 @@ export async function loginAction(formData: FormData) {
 
 // ─── Admin: Create User ───────────────────────────────────────────────────────
 export async function createUserAction(formData: FormData) {
-  await requireAdmin()
+  const admin = await requireWorkspace()
 
   const parsed = validateInput(createUserSchema, {
     name: (formData.get("name") as string | null)?.trim(),
@@ -118,6 +118,14 @@ export async function createUserAction(formData: FormData) {
       email,
       password: hashed,
       role,
+    },
+  })
+
+  await prisma.workspaceMember.create({
+    data: {
+      workspaceId: admin.workspaceId,
+      userId: user.id,
+      role: role === "ADMIN" ? "ADMIN" : role === "GUEST" ? "VIEWER" : "MEMBER",
     },
   })
 

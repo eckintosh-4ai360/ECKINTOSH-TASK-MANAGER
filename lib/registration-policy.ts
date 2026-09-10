@@ -1,16 +1,14 @@
-/**
- * Who is allowed to obtain an account through GitHub OAuth.
- *
- * The default is CLOSED: only people who already have a user record can sign
- * in. An admin creates the record first (Admin → Users), then the person signs
- * in with GitHub and the two are linked by email address.
- *
- * Two optional env vars open it up for teams that want self-serve onboarding:
- *   SIGNUP_ALLOWED_DOMAINS  — comma-separated, e.g. "acme.com,acme.dev"
- *   SIGNUP_ALLOWED_EMAILS   — comma-separated exact addresses
- *
- * SIGNUP_MODE=open disables the gate entirely (not recommended).
- */
+// Who is allowed to obtain an account through GitHub OAuth.
+//
+// The default is CLOSED: only people who already have a user record can sign
+// in. An admin creates the record first (Admin → Users), then the person signs
+// in with GitHub and the two are linked by email address.
+//
+// Two optional env vars open it up for teams that want self-serve onboarding:
+//   SIGNUP_ALLOWED_DOMAINS  — comma-separated, e.g. "acme.com,acme.dev"
+//   SIGNUP_ALLOWED_EMAILS   — comma-separated exact addresses
+//
+// SIGNUP_MODE=open disables the gate entirely (not recommended).
 
 export type RegistrationDecision =
   | { allowed: true; reason: "existing-user" | "allowlisted" | "open-mode" | "bootstrap" }
@@ -45,11 +43,9 @@ export function isEmailAllowlisted(email: string) {
   return false
 }
 
-/**
- * @param email          the address GitHub gave us
- * @param userExists     whether a user record already exists for it
- * @param workspaceEmpty whether the workspace has no users at all yet
- */
+// @param email          the address GitHub gave us
+// @param userExists     whether a user record already exists for it
+// @param workspaceEmpty whether the workspace has no users at all yet
 export function decideRegistration(
   email: string,
   userExists: boolean,

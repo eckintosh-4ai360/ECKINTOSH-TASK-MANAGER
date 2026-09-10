@@ -1,14 +1,12 @@
 import prisma from "@/lib/prisma"
 import { decryptSecret } from "@/lib/secure-store"
 
-/**
- * Resolves the GitHub token that a given user's writes should run under.
- *
- * Every write is attributed to the person who made it. The shared
- * GITHUB_ACCESS_TOKEN is a read-only convenience by default; allowing it to
- * perform writes means everyone's commits and merges come from one machine
- * account, so that has to be opted into explicitly.
- */
+// Resolves the GitHub token that a given user's writes should run under.
+//
+// Every write is attributed to the person who made it. The shared
+// GITHUB_ACCESS_TOKEN is a read-only convenience by default; allowing it to
+// perform writes means everyone's commits and merges come from one machine
+// account, so that has to be opted into explicitly.
 
 export type ActorToken =
   | { ok: true; token: string; source: "user" | "shared" }
@@ -45,7 +43,7 @@ export async function getUserGitHubToken(userId: string) {
   return { token, scopes: user.githubScopes, login: user.githubLogin }
 }
 
-/** Token for a write operation. Prefers the actor's own credentials. */
+// Token for a write operation. Prefers the actor's own credentials.
 export async function resolveWriteToken(userId: string): Promise<ActorToken> {
   const identity = await getUserGitHubToken(userId)
 
@@ -73,7 +71,7 @@ export async function resolveWriteToken(userId: string): Promise<ActorToken> {
   }
 }
 
-/** Token for a read operation. Falls back to the shared token. */
+// Token for a read operation. Falls back to the shared token.
 export async function resolveReadToken(userId: string) {
   const identity = await getUserGitHubToken(userId)
   return identity?.token ?? getSharedGitHubToken()

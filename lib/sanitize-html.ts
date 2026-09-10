@@ -1,14 +1,12 @@
 import sanitizeHtml from "sanitize-html"
 
-/**
- * Note bodies are stored as HTML (TipTap writes it, and aiCreateNote runs
- * LLM-produced markdown through marked). Both paths end up in
- * dangerouslySetInnerHTML, so both have to be sanitized — model output is
- * untrusted input like any other.
- *
- * Using `sanitize-html` ensures fast, reliable server-side & SSR execution
- * without depending on `jsdom` or ESM-incompatible modules on Vercel.
- */
+// Note bodies are stored as HTML (TipTap writes it, and aiCreateNote runs
+// LLM-produced markdown through marked). Both paths end up in
+// dangerouslySetInnerHTML, so both have to be sanitized — model output is
+// untrusted input like any other.
+//
+// Using `sanitize-html` ensures fast, reliable server-side & SSR execution
+// without depending on `jsdom` or ESM-incompatible modules on Vercel.
 
 const ALLOWED_TAGS = [
   "p", "br", "hr", "div", "span",
@@ -63,7 +61,7 @@ export function sanitizeNoteHtml(html: string): string {
   return clean
 }
 
-/** Plain-text preview, e.g. for note list snippets. */
+// Plain-text preview, e.g. for note list snippets.
 export function stripHtml(html: string): string {
   if (!html) return ""
   return sanitizeHtml(html, {

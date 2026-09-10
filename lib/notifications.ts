@@ -69,12 +69,10 @@ function buildNotificationEmailHtml({
   `
 }
 
-/**
- * @param defaultWhenMissing what to assume for a user with no preference row.
- *   Opt-out channels (email, team updates, task reminders) default to on, the
- *   same as the schema. Push defaults to off: it is opt-in, and a user who has
- *   never opened settings has no subscription to send to anyway.
- */
+// @param defaultWhenMissing what to assume for a user with no preference row.
+//   Opt-out channels (email, team updates, task reminders) default to on, the
+//   same as the schema. Push defaults to off: it is opt-in, and a user who has
+//   never opened settings has no subscription to send to anyway.
 async function filterRecipientsByPreference(
   userIds: string[],
   preferenceField?: PreferenceField,
@@ -101,14 +99,12 @@ async function filterRecipientsByPreference(
   })
 }
 
-/**
- * Fans a notification out to every browser/phone the recipients have subscribed
- * from, for those who have push switched on.
- *
- * Best-effort by design: a push failure must never take down the in-app record
- * or the email, so everything here is caught and logged. Stale endpoints are
- * pruned inside lib/push.ts.
- */
+// Fans a notification out to every browser/phone the recipients have subscribed
+// from, for those who have push switched on.
+//
+// Best-effort by design: a push failure must never take down the in-app record
+// or the email, so everything here is caught and logged. Stale endpoints are
+// pruned inside lib/push.ts.
 async function deliverPushNotifications(
   userIds: string[],
   { title, message, link, channel }: { title: string; message: string; link?: string | null; channel: NotificationChannel },

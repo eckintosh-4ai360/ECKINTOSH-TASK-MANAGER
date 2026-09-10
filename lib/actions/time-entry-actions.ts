@@ -6,7 +6,7 @@ import { requireSession } from "@/lib/auth"
 
 const MAX_NOTE_LENGTH = 500
 
-/** The entry your own timer is running on, if any — endTime is null while active. */
+// The entry your own timer is running on, if any — endTime is null while active.
 export async function getActiveTimeEntry() {
   const session = await requireSession()
 
@@ -38,11 +38,9 @@ export async function getTaskTimeEntries(taskId: string) {
   })
 }
 
-/**
- * Starts a timer on a task. Only one timer runs per user at a time — an
- * existing one is stopped first, exactly as if the user had clicked "stop"
- * themselves, so no time is silently lost when switching tasks.
- */
+// Starts a timer on a task. Only one timer runs per user at a time — an
+// existing one is stopped first, exactly as if the user had clicked "stop"
+// themselves, so no time is silently lost when switching tasks.
 export async function startTimeEntry(taskId: string) {
   const session = await requireSession()
 
@@ -95,7 +93,7 @@ export async function stopTimeEntry(notes?: string) {
   return { success: true, entry: updated }
 }
 
-/** For logging time after the fact, without running a live timer. */
+// For logging time after the fact, without running a live timer.
 export async function logManualTimeEntry(input: {
   taskId: string
   durationMinutes: number

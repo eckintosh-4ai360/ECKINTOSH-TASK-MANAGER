@@ -2,18 +2,16 @@ import prisma from "@/lib/prisma"
 import { createNotificationForUser } from "@/lib/notifications"
 import type { SettingsReminderLeadTime } from "@/lib/settings"
 
-/**
- * Core sweep run by the cron endpoint (app/api/cron/reminders/route.ts).
- * Plain module, not a server action — it has no caller identity, it runs on
- * a schedule.
- *
- * Four jobs, each independent and individually toggleable per user:
- *   1. "Due soon" reminders — lead time before a task's due date.
- *   2. Overdue escalation — nudges the assignee and notifies the project owner.
- *   3. Daily digest — a once-per-24h summary.
- *   4. (Quiet hours) — a per-user window where sends are deferred, not lost;
- *      an unsent reminder just gets picked up on the next run.
- */
+// Core sweep run by the cron endpoint (app/api/cron/reminders/route.ts).
+// Plain module, not a server action — it has no caller identity, it runs on
+// a schedule.
+//
+// Four jobs, each independent and individually toggleable per user:
+//   1. "Due soon" reminders — lead time before a task's due date.
+//   2. Overdue escalation — nudges the assignee and notifies the project owner.
+//   3. Daily digest — a once-per-24h summary.
+//   4. (Quiet hours) — a per-user window where sends are deferred, not lost;
+//      an unsent reminder just gets picked up on the next run.
 
 const LEAD_TIME_MS: Record<SettingsReminderLeadTime, number> = {
   "15m": 15 * 60_000,
@@ -24,8 +22,8 @@ const LEAD_TIME_MS: Record<SettingsReminderLeadTime, number> = {
 
 const ACTIVE_STATUSES = ["BACKLOG", "TODO", "IN_PROGRESS", "IN_REVIEW"] as const
 const DIGEST_INTERVAL_MS = 24 * 60 * 60_000
-/** No configurable lead time reaches further out than this, so nothing due
- *  beyond it can qualify — worth bounding, since the sweep now runs often. */
+// No configurable lead time reaches further out than this, so nothing due
+//  beyond it can qualify — worth bounding, since the sweep now runs often.
 const MAX_LEAD_TIME_MS = Math.max(...Object.values(LEAD_TIME_MS))
 
 export type ReminderSweepSummary = {
@@ -35,7 +33,7 @@ export type ReminderSweepSummary = {
   skippedQuietHours: number
 }
 
-/** Current local time, as minutes since midnight, for a given IANA timezone. */
+// Current local time, as minutes since midnight, for a given IANA timezone.
 function localMinutesOfDay(timezone: string, at: Date) {
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: timezone,
@@ -54,7 +52,7 @@ function parseHHMM(value: string) {
   return (h ?? 0) * 60 + (m ?? 0)
 }
 
-/** Handles windows that wrap past midnight, e.g. 22:00 → 08:00. */
+// Handles windows that wrap past midnight, e.g. 22:00 → 08:00.
 function isWithinQuietHours(pref: { quietHoursEnabled: boolean; quietHoursStart: string; quietHoursEnd: string }, timezone: string, now: Date) {
   if (!pref.quietHoursEnabled) return false
 
@@ -67,11 +65,9 @@ function isWithinQuietHours(pref: { quietHoursEnabled: boolean; quietHoursStart:
   return current >= start || current < end
 }
 
-/**
- * One query for every candidate's existing reminder of a given kind, instead of
- * a findUnique per task. The sweep is expected to run on a short interval, so
- * an N+1 here would be paid over and over against a mostly unchanging set.
- */
+// One query for every candidate's existing reminder of a given kind, instead of
+// a findUnique per task. The sweep is expected to run on a short interval, so
+// an N+1 here would be paid over and over against a mostly unchanging set.
 async function loadReminders(kind: string, tasks: { id: string }[]) {
   if (tasks.length === 0) return new Map<string, { sent: boolean; dueTime: Date }>()
 

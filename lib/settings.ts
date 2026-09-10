@@ -63,7 +63,7 @@ export type SettingsReminderSummary = {
 
 export type SettingsEmailProvider = "gmail" | "smtp"
 
-/** Admin-facing view of the stored SMTP settings. Never carries the password. */
+// Admin-facing view of the stored SMTP settings. Never carries the password.
 export type EmailSettingsView = {
   provider: SettingsEmailProvider
   host: string
@@ -74,7 +74,7 @@ export type EmailSettingsView = {
   fromName: string
   enabled: boolean
   hasPassword: boolean
-  /** False when the encryption key changed and the password must be re-entered. */
+    // False when the encryption key changed and the password must be re-entered.
   passwordReadable: boolean
   lastTestedAt: string | null
   lastTestStatus: string | null
@@ -91,7 +91,7 @@ export type SettingsPageData = {
   reminderTasks: SettingsReminderTask[]
   reminderSummary: SettingsReminderSummary
   externalEmailConfigured: boolean
-  /** True when delivery comes from SMTP_* env vars rather than the settings page. */
+    // True when delivery comes from SMTP_* env vars rather than the settings page.
   emailConfigFromEnvironment: boolean
   emailSettings: EmailSettingsView | null
   pushDeliveryConfigured: boolean

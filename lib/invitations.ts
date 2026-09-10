@@ -2,13 +2,11 @@ import crypto from "node:crypto"
 import prisma from "@/lib/prisma"
 import type { AppRole } from "@/lib/rbac"
 
-/**
- * Token-based workspace invitations.
- *
- * The raw token only ever exists in the emailed link. The database stores a
- * SHA-256 hash of it, the same way a password reset token would be handled —
- * a leaked database row is not by itself enough to accept the invite.
- */
+// Token-based workspace invitations.
+//
+// The raw token only ever exists in the emailed link. The database stores a
+// SHA-256 hash of it, the same way a password reset token would be handled —
+// a leaked database row is not by itself enough to accept the invite.
 
 export const INVITE_TTL_DAYS = 7
 
@@ -29,11 +27,9 @@ export function generateInviteToken() {
   return crypto.randomBytes(32).toString("base64url")
 }
 
-/**
- * Creates (or replaces) a pending invitation for an email address. Replacing
- * rather than stacking means re-inviting someone always issues a fresh link
- * and invalidates whatever was sent before.
- */
+// Creates (or replaces) a pending invitation for an email address. Replacing
+// rather than stacking means re-inviting someone always issues a fresh link
+// and invalidates whatever was sent before.
 export async function createInvitation(params: {
   email: string
   role: AppRole
@@ -60,7 +56,7 @@ export async function createInvitation(params: {
   return token
 }
 
-/** Looks up a pending, unexpired invitation by the raw token from the link. */
+// Looks up a pending, unexpired invitation by the raw token from the link.
 export async function findInvitationByToken(token: string): Promise<InvitationView | null> {
   if (!token) return null
 
@@ -89,7 +85,7 @@ export async function findInvitationByToken(token: string): Promise<InvitationVi
   }
 }
 
-/** Looks up a pending, unexpired invitation by email — used during GitHub sign-in. */
+// Looks up a pending, unexpired invitation by email — used during GitHub sign-in.
 export async function findPendingInvitationByEmail(email: string) {
   const normalized = email.trim().toLowerCase()
 
