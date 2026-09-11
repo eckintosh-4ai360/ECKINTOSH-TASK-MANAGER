@@ -2,7 +2,8 @@
 
 import { useRouter } from "next/navigation"
 import { useTransition } from "react"
-import { ChevronsUpDown, Loader2 } from "lucide-react"
+import Link from "next/link"
+import { ChevronsUpDown, Loader2, Settings2 } from "lucide-react"
 import { switchWorkspaceAction } from "@/lib/actions/workspace-actions"
 import { cn } from "@/lib/utils"
 import type { WorkspaceOption } from "@/lib/workspace"
@@ -50,6 +51,13 @@ export function WorkspaceSwitcher({
       ) : (
         <ChevronsUpDown className="pointer-events-none absolute right-2 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
       )}
+      <Link
+        href="/workspaces"
+        className="mt-2 flex items-center justify-between rounded-md px-2 py-1.5 text-[11px] font-medium text-muted-foreground transition hover:bg-primary/10 hover:text-primary"
+      >
+        <span>Manage workspaces</span>
+        <Settings2 className="h-3.5 w-3.5" />
+      </Link>
     </div>
   )
 }

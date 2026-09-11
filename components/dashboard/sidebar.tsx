@@ -21,6 +21,7 @@ import {
   ScrollText,
   Bot,
   PenLine,
+  Building2,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useState } from "react"
@@ -61,6 +62,7 @@ const commsItems: NavItem[] = [
 ]
 
 const systemItems: NavItem[] = [
+  { icon: Building2, label: "Workspaces", href: "/workspaces" },
   { icon: ShieldCheck, label: "Admin", href: "/admin/users" },
   { icon: ScrollText, label: "Audit Log", href: "/admin/audit-logs" },
   { icon: User, label: "Profile", href: "/profile" },
@@ -138,6 +140,7 @@ export function Sidebar({ role, workspaces = [], activeWorkspaceId }: { role: Ap
   })
 
   const visibleSystemItems = systemItems.filter((item) => {
+    if (item.href === "/workspaces") return role !== "GUEST"
     if (item.href === "/admin/users" || item.href === "/admin/audit-logs") return hasPermission(role, "manage_users")
     return true
   })
