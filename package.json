@@ -73,7 +73,7 @@
     "groq-sdk": "^1.2.0",
     "input-otp": "1.4.1",
     "jose": "^6.2.12",
-    "lucide-react": "^0.454.0",
+    "lucide-react": "^1.42.0",
     "marked": "^18.0.4",
     "monaco-editor": "^0.53.0",
     "next": "^16.3.4",
