@@ -9,6 +9,55 @@ interface MarkdownPreviewProps {
   onContentChange?: (newContent: string) => void
 }
 
+type TableAlignment = "left" | "center" | "right"
+
+function splitMarkdownTableRow(line: string): string[] | null {
+  const trimmed = line.trim()
+  if (!trimmed.includes("|")) return null
+
+  const row = trimmed.startsWith("|") ? trimmed.slice(1) : trimmed
+  const normalizedRow = row.endsWith("|") ? row.slice(0, -1) : row
+  const cells: string[] = []
+  let cell = ""
+
+  for (let index = 0; index < normalizedRow.length; index += 1) {
+    const character = normalizedRow[index]
+
+    if (character === "\\" && normalizedRow[index + 1] === "|") {
+      cell += "|"
+      index += 1
+    } else if (character === "|") {
+      cells.push(cell.trim())
+      cell = ""
+    } else {
+      cell += character
+    }
+  }
+
+  cells.push(cell.trim())
+  return cells.length >= 2 ? cells : null
+}
+
+function isMarkdownTableSeparator(line: string): boolean {
+  const cells = splitMarkdownTableRow(line)
+  return Boolean(cells?.every((cell) => /^:?-{3,}:?$/.test(cell)))
+}
+
+function getTableAlignment(separator: string): TableAlignment {
+  const isLeftAligned = separator.startsWith(":")
+  const isRightAligned = separator.endsWith(":")
+
+  if (isLeftAligned && isRightAligned) return "center"
+  if (isRightAligned) return "right"
+  return "left"
+}
+
+function tableAlignmentClass(alignment: TableAlignment): string {
+  if (alignment === "center") return "text-center"
+  if (alignment === "right") return "text-right"
+  return "text-left"
+}
+
 export function MarkdownPreview({ content, onContentChange }: MarkdownPreviewProps) {
   if (!content) {
     return <p className="text-sm italic text-muted-foreground">Empty note. Type some markdown to begin...</p>
@@ -173,14 +222,82 @@ export function MarkdownPreview({ content, onContentChange }: MarkdownPreviewPro
       continue
     }
 
-    // 2. Horizontal Rule
+    // 2. GitHub-style tables. A table is identified by a header row followed
+    // by a separator row, so ordinary prose containing a pipe stays untouched.
+    const headerCells = splitMarkdownTableRow(line)
+    const separatorLine = lines[idx + 1]
+    const separatorCells = separatorLine ? splitMarkdownTableRow(separatorLine) : null
+
+    if (
+      headerCells &&
+      separatorLine &&
+      separatorCells &&
+      headerCells.length === separatorCells.length &&
+      isMarkdownTableSeparator(separatorLine)
+    ) {
+      commitList(String(idx))
+
+      const rows: string[][] = []
+      let rowIndex = idx + 2
+      while (rowIndex < lines.length) {
+        const rowCells = splitMarkdownTableRow(lines[rowIndex])
+        if (!rowCells || rowCells.length !== headerCells.length) break
+        rows.push(rowCells)
+        rowIndex += 1
+      }
+
+      renderedElements.push(
+        <div key={`table-${idx}`} className="my-3 max-w-full overflow-x-auto rounded-xl border border-border/50 bg-background/30 shadow-sm">
+          <table className="w-full min-w-[360px] border-collapse text-left text-sm">
+            <thead className="bg-primary/10">
+              <tr className="border-b border-border/60">
+                {headerCells.map((cell, columnIndex) => (
+                  <th
+                    key={`table-head-${idx}-${columnIndex}`}
+                    scope="col"
+                    className={cn(
+                      "px-3 py-2.5 text-[11px] font-bold uppercase tracking-wide text-foreground/80",
+                      tableAlignmentClass(getTableAlignment(separatorCells[columnIndex]))
+                    )}
+                  >
+                    {parseInline(cell)}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border/30">
+              {rows.map((row, rowIndex) => (
+                <tr key={`table-row-${idx}-${rowIndex}`} className="transition-colors hover:bg-primary/5">
+                  {row.map((cell, columnIndex) => (
+                    <td
+                      key={`table-cell-${idx}-${rowIndex}-${columnIndex}`}
+                      className={cn(
+                        "px-3 py-2 align-top leading-5 text-foreground/90",
+                        tableAlignmentClass(getTableAlignment(separatorCells[columnIndex]))
+                      )}
+                    >
+                      {parseInline(cell)}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )
+
+      idx = rowIndex - 1
+      continue
+    }
+
+    // 3. Horizontal Rule
     if (line.trim() === "---" || line.trim() === "***") {
       commitList(String(idx))
       renderedElements.push(<hr key={`hr-${idx}`} className="border-t border-border/40 my-4" />)
       continue
     }
 
-    // 3. Headings
+    // 4. Headings
     if (line.startsWith("# ")) {
       commitList(String(idx))
       renderedElements.push(
@@ -209,7 +326,7 @@ export function MarkdownPreview({ content, onContentChange }: MarkdownPreviewPro
       continue
     }
 
-    // 4. Blockquotes
+    // 5. Blockquotes
     if (line.startsWith("> ")) {
       commitList(String(idx))
       renderedElements.push(
@@ -220,7 +337,7 @@ export function MarkdownPreview({ content, onContentChange }: MarkdownPreviewPro
       continue
     }
 
-    // 5. Interactive Checklists (- [ ] or - [x])
+    // 6. Interactive Checklists (- [ ] or - [x])
     const checklistMatch = line.match(/^(\s*)-\s+\[\s*([xX\s])\s*\]\s+(.+)$/)
     if (checklistMatch) {
       commitList(String(idx))
@@ -263,7 +380,7 @@ export function MarkdownPreview({ content, onContentChange }: MarkdownPreviewPro
       continue
     }
 
-    // 6. Unordered lists (- item or * item)
+    // 7. Unordered lists (- item or * item)
     const ulMatch = line.match(/^(\s*)[\-\*]\s+(.+)$/)
     if (ulMatch) {
       const text = ulMatch[2]
@@ -284,7 +401,7 @@ export function MarkdownPreview({ content, onContentChange }: MarkdownPreviewPro
       continue
     }
 
-    // 7. Ordered lists (1. item)
+    // 8. Ordered lists (1. item)
     const olMatch = line.match(/^(\s*)\d+\.\s+(.+)$/)
     if (olMatch) {
       const text = olMatch[2]
@@ -305,7 +422,7 @@ export function MarkdownPreview({ content, onContentChange }: MarkdownPreviewPro
       continue
     }
 
-    // 8. Plain paragraph or blank lines
+    // 9. Plain paragraph or blank lines
     if (line.trim() === "") {
       commitList(String(idx))
       renderedElements.push(<div key={`space-${idx}`} className="h-2" />)
@@ -358,7 +475,7 @@ function CodeBlockContainer({ code, language }: { code: string; language: string
           )}
         </button>
       </div>
-      <div className="overflow-x-auto p-3 leading-5 text-emerald-400/90 whitespace-pre scrollbar-thin">
+      <div className="overflow-x-auto p-3 leading-5 text-emerald-400/90 whitespace-pre">
         {code}
       </div>
     </div>
