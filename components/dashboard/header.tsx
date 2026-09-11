@@ -11,6 +11,7 @@ import { useTheme } from "@/components/theme-provider"
 import { cn } from "@/lib/utils"
 import type { ReactNode } from "react"
 import type { AppRole } from "@/lib/rbac"
+import type { WorkspaceOption } from "@/lib/workspace"
 
 interface HeaderProps {
   title: string
@@ -22,6 +23,8 @@ interface HeaderProps {
     email: string
     role: AppRole
   }
+  workspaces?: WorkspaceOption[]
+  activeWorkspaceId?: string
 }
 
 const ROLE_COLORS: Record<string, string> = {
@@ -30,7 +33,7 @@ const ROLE_COLORS: Record<string, string> = {
   GUEST: "text-muted-foreground bg-muted border-border",
 }
 
-export function Header({ title, description, actions, user }: HeaderProps) {
+export function Header({ title, description, actions, user, workspaces = [], activeWorkspaceId }: HeaderProps) {
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const [mounted, setMounted] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
@@ -87,7 +90,7 @@ export function Header({ title, description, actions, user }: HeaderProps) {
     <header className="relative z-30 space-y-4 md:space-y-5 animate-slide-in-up">
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-3 flex-1">
-          <MobileNav role={role} />
+          <MobileNav role={role} workspaces={workspaces} activeWorkspaceId={activeWorkspaceId} />
           <div className="relative flex-1 max-w-md">
             <Search className={cn(
               "absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 transition-colors duration-200",

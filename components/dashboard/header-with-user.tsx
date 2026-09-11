@@ -1,5 +1,6 @@
 import { requireSession } from "@/lib/auth"
 import { Header } from "./header"
+import { getWorkspaceOptionsForUser } from "@/lib/workspace"
 import type { ReactNode } from "react"
 
 interface Props {
@@ -11,6 +12,7 @@ interface Props {
 // Server component wrapper — fetches the session and passes user to the client Header
 export async function HeaderWithUser({ title, description, actions }: Props) {
   const session = await requireSession()
+  const workspaces = await getWorkspaceOptionsForUser(session.id)
   const user = {
     id: session.id,
     name: session.name ?? "",
@@ -24,6 +26,8 @@ export async function HeaderWithUser({ title, description, actions }: Props) {
       description={description}
       actions={actions}
       user={user}
+      workspaces={workspaces}
+      activeWorkspaceId={session.workspaceId}
     />
   )
 }
