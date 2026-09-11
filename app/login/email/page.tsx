@@ -1,7 +1,9 @@
 "use client"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { loginAction } from "@/lib/actions/auth-actions"
+import { completeMfaLoginAction } from "@/lib/actions/security-actions"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -11,6 +13,9 @@ import Link from "next/link"
 export default function EmailLoginPage() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [mfaRequired, setMfaRequired] = useState(false)
+  const [mfaCode, setMfaCode] = useState("")
+  const router = useRouter()
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -18,10 +23,29 @@ export default function EmailLoginPage() {
     setLoading(true)
     const formData = new FormData(e.currentTarget)
     const result = await loginAction(formData)
+    if (result?.mfaRequired) {
+      setMfaRequired(true)
+      setLoading(false)
+      return
+    }
     if (result?.error) {
       setError(result.error)
       setLoading(false)
     }
+  }
+
+  async function handleMfaSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setError(null)
+    setLoading(true)
+    const result = await completeMfaLoginAction(mfaCode)
+    if (!result.success) {
+      setError(result.error)
+      setLoading(false)
+      return
+    }
+    router.replace("/")
+    router.refresh()
   }
 
   return (
@@ -48,14 +72,50 @@ export default function EmailLoginPage() {
             <p className="text-xs text-muted-foreground mt-0.5">SRAD – Rapid Application Development</p>
           </div>
 
-          <h2 className="text-sm font-semibold text-foreground mb-5">Sign in with email</h2>
+          <h2 className="text-sm font-semibold text-foreground mb-2">{mfaRequired ? "Verify your identity" : "Sign in with email"}</h2>
+          {mfaRequired && <p className="text-xs text-muted-foreground mb-5">Enter a code from your authenticator app or one of your recovery codes.</p>}
 
+          {mfaRequired ? (
+          <form onSubmit={handleMfaSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="mfa-code" className="text-xs text-muted-foreground flex items-center gap-2">
+                <Lock className="w-3.5 h-3.5 text-primary" /> Authenticator or recovery code
+              </Label>
+              <Input
+                id="mfa-code"
+                value={mfaCode}
+                onChange={(event) => setMfaCode(event.target.value)}
+                placeholder="123456 or ABCDE-12345"
+                autoComplete="one-time-code"
+                autoFocus
+                required
+                className="glass border-border/50 focus:border-primary/50 h-11"
+              />
+            </div>
+            {error && (
+              <div className="flex items-center gap-2 text-sm text-destructive bg-destructive/10 border border-destructive/30 rounded-lg px-3 py-2.5">
+                <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                <span>{error}</span>
+              </div>
+            )}
+            <Button type="submit" disabled={loading} className="w-full h-11 bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 shadow-lg shadow-primary/20 font-medium">
+              {loading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Verifying...</> : "Verify & Sign In"}
+            </Button>
+            <button type="button" onClick={() => { setMfaRequired(false); setError(null); setMfaCode("") }} className="w-full text-xs text-muted-foreground hover:text-primary transition-colors">
+              Use a different account
+            </button>
+          </form>
+          ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="email" className="text-xs text-muted-foreground flex items-center gap-2">
                 <Mail className="w-3.5 h-3.5 text-primary" /> Email Address
               </Label>
               <Input id="email" name="email" type="email" placeholder="admin@spagad.dev" autoComplete="email" required className="glass border-border/50 focus:border-primary/50 h-11" />
+            </div>
+
+            <div className="text-right">
+              <Link href="/forgot-password" className="text-xs text-primary hover:underline">Forgot password?</Link>
             </div>
 
             <div className="space-y-2">
@@ -76,10 +136,11 @@ export default function EmailLoginPage() {
               {loading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Signing in...</> : "Sign In"}
             </Button>
           </form>
+          )}
 
-          <p className="text-center text-xs text-muted-foreground mt-6 opacity-70">
+          {!mfaRequired && <p className="text-center text-xs text-muted-foreground mt-6 opacity-70">
             Contact your administrator if you don&apos;t have an account.
-          </p>
+          </p>}
         </div>
 
         <p className="text-center text-[10px] text-muted-foreground/50 mt-4">

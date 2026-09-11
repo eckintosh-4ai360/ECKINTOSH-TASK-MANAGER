@@ -25,6 +25,15 @@ model User {
   failedLoginAttempts Int       @default(0)
   lockedUntil         DateTime?
   lastLoginAt         DateTime?
+  passwordChangedAt   DateTime?
+  sessionVersion      Int       @default(0)
+
+  // TOTP MFA material is encrypted with lib/secure-store.ts. Recovery codes
+  // are individually hashed and are shown only once when MFA is enabled.
+  mfaSecretCipher       String?
+  mfaEnabledAt          DateTime?
+  mfaLastVerifiedAt     DateTime?
+  mfaRecoveryCodeHashes String[] @default([])
 
   // Per-user GitHub identity. The OAuth token is encrypted at rest
   // (lib/secure-store.ts) so repository writes act as the person who made
@@ -39,6 +48,10 @@ model User {
   workspaceMemberships WorkspaceMember[]
   supportTickets    SupportTicket[]
   emailVerification EmailVerification?
+  passwordResetTokens PasswordResetToken[]
+  mfaLoginChallenges  MfaLoginChallenge[]
+  mfaEnrollment       MfaEnrollment?
+  auditLogs           AuditLog[]             @relation("AuditActor")
 
   projects               Project[]
   projectMembers         ProjectMember[]
@@ -96,6 +109,7 @@ model Workspace {
   notifications   Notification[]
   supportTickets  SupportTicket[]
   standups        Standup[]
+  auditLogs       AuditLog[]
 
   @@index([createdById])
   @@map("workspaces")
@@ -115,6 +129,76 @@ model WorkspaceMember {
   @@unique([workspaceId, userId])
   @@index([userId])
   @@map("workspace_members")
+}
+
+// Security events are intentionally append-only at the application layer.
+// `actorEmail` preserves useful evidence when an attempted login has no user.
+model AuditLog {
+  id          String    @id @default(cuid())
+  workspaceId String?
+  actorUserId String?
+  actorEmail  String?
+  action      String
+  targetType  String?
+  targetId    String?
+  ip          String?
+  userAgent   String?
+  metadata    Json?
+  createdAt   DateTime  @default(now())
+
+  workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  actor     User?      @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, createdAt])
+  @@index([actorUserId, createdAt])
+  @@index([action, createdAt])
+  @@map("audit_logs")
+}
+
+model PasswordResetToken {
+  id          String    @id @default(cuid())
+  userId      String
+  tokenHash   String    @unique
+  expiresAt   DateTime
+  usedAt      DateTime?
+  requestedIp String?
+  createdAt   DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@map("password_reset_tokens")
+}
+
+// A short-lived staging record prevents a partially configured authenticator
+// from becoming active before the user proves possession of its TOTP secret.
+model MfaEnrollment {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  secretCipher String
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("mfa_enrollments")
+}
+
+model MfaLoginChallenge {
+  id          String    @id @default(cuid())
+  userId      String
+  tokenHash   String    @unique
+  expiresAt   DateTime
+  attempts    Int       @default(0)
+  usedAt      DateTime?
+  requestedIp String?
+  createdAt   DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@map("mfa_login_challenges")
 }
 
 // ─── Project ─────────────────────────────────────────────────────────────────

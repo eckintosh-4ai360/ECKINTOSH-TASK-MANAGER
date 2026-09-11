@@ -8,6 +8,7 @@ import { validatePassword } from "@/lib/password-policy"
 import { findInvitationByToken, markInvitationAccepted } from "@/lib/invitations"
 import type { InvitationView } from "@/lib/invitations"
 import { issueVerificationOtp } from "@/lib/email-verification"
+import { recordRequestAuditEvent } from "@/lib/audit"
 
 export async function getInvitationAction(token: string): Promise<InvitationView | null> {
   return findInvitationByToken(token)
@@ -72,12 +73,21 @@ export async function acceptInvitationAction(formData: FormData) {
   // evidence — but not proof they, not just someone forwarding the link, hold
   // it. Still require the OTP step rather than treating that as verification.
   await issueVerificationOtp(user.id, user.email, user.name ?? "there")
+  await recordRequestAuditEvent({
+    action: "workspace.invitation_accepted",
+    actorUserId: user.id,
+    actorEmail: user.email,
+    workspaceId: invitation.workspaceId,
+    targetType: "invitation",
+    targetId: invitation.id,
+  })
 
   await createSession({
     id: user.id,
     email: user.email,
     name: user.name ?? "User",
     role: user.role as "ADMIN" | "USER" | "GUEST",
+    sessionVersion: user.sessionVersion,
   })
 
   redirect("/")

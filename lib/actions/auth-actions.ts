@@ -1,7 +1,7 @@
 "use server"
 
 import bcrypt from "bcryptjs"
-import { headers } from "next/headers"
+import { cookies, headers } from "next/headers"
 import { redirect } from "next/navigation"
 import { revalidatePath } from "next/cache"
 import prisma from "@/lib/prisma"
@@ -10,6 +10,8 @@ import { validatePassword } from "@/lib/password-policy"
 import { issueVerificationOtp } from "@/lib/email-verification"
 import { validateInput, createUserSchema, updateUserRoleSchema } from "@/lib/validation"
 import { hasPermission } from "@/lib/rbac"
+import { recordRequestAuditEvent } from "@/lib/audit"
+import { createOpaqueToken, hashOpaqueToken, MFA_CHALLENGE_COOKIE, MFA_CHALLENGE_TTL_MINUTES } from "@/lib/mfa"
 import {
   clearIpAttempts,
   describeLockout,
@@ -47,11 +49,13 @@ export async function loginAction(formData: FormData) {
   const password = formData.get("password") as string | null
 
   if (!email || !password) {
+    await recordRequestAuditEvent({ action: "auth.login_failed", actorEmail: email, metadata: { reason: "missing_credentials" } })
     return { error: "Email and password are required" }
   }
 
   const ip = await getClientIp()
   if (!recordIpAttempt(ip)) {
+    await recordRequestAuditEvent({ action: "auth.login_rate_limited", actorEmail: email })
     return { error: "Too many sign-in attempts from this network. Please wait a minute and try again." }
   }
 
@@ -60,10 +64,12 @@ export async function loginAction(formData: FormData) {
   if (!user || !user.password) {
     // Burn the same time a real comparison would take.
     await bcrypt.compare(password, DUMMY_HASH)
+    await recordRequestAuditEvent({ action: "auth.login_failed", actorEmail: email, metadata: { reason: "invalid_credentials" } })
     return { error: GENERIC_LOGIN_ERROR }
   }
 
   if (isLocked(user)) {
+    await recordRequestAuditEvent({ action: "auth.login_locked", actorUserId: user.id, actorEmail: user.email })
     return { error: describeLockout(user.lockedUntil!) }
   }
 
@@ -73,10 +79,32 @@ export async function loginAction(formData: FormData) {
     const outcome = await registerFailedAttempt(user.id, user.failedLoginAttempts)
 
     if (outcome.locked) {
+      await recordRequestAuditEvent({ action: "auth.login_locked", actorUserId: user.id, actorEmail: user.email, metadata: { reason: "failed_password" } })
       return { error: `Too many failed sign-in attempts. This account is locked for 15 minutes.` }
     }
 
+    await recordRequestAuditEvent({ action: "auth.login_failed", actorUserId: user.id, actorEmail: user.email, metadata: { reason: "invalid_credentials" } })
     return { error: GENERIC_LOGIN_ERROR }
+  }
+
+  if (user.mfaEnabledAt && user.mfaSecretCipher) {
+    const token = createOpaqueToken()
+    const expiresAt = new Date(Date.now() + MFA_CHALLENGE_TTL_MINUTES * 60_000)
+    await prisma.$transaction([
+      prisma.mfaLoginChallenge.deleteMany({ where: { userId: user.id, usedAt: null } }),
+      prisma.mfaLoginChallenge.create({ data: { userId: user.id, tokenHash: hashOpaqueToken(token), expiresAt, requestedIp: ip } }),
+    ])
+
+    const cookieStore = await cookies()
+    cookieStore.set(MFA_CHALLENGE_COOKIE, token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      expires: expiresAt,
+      path: "/",
+    })
+    await recordRequestAuditEvent({ action: "auth.mfa_challenge_issued", actorUserId: user.id, actorEmail: user.email })
+    return { mfaRequired: true as const }
   }
 
   await registerSuccessfulLogin(user.id)
@@ -87,7 +115,10 @@ export async function loginAction(formData: FormData) {
     email: user.email,
     name: user.name ?? "User",
     role: user.role as "ADMIN" | "USER" | "GUEST",
+    sessionVersion: user.sessionVersion,
   })
+
+  await recordRequestAuditEvent({ action: "auth.login_succeeded", actorUserId: user.id, actorEmail: user.email })
 
   redirect("/")
 }
@@ -138,6 +169,16 @@ export async function createUserAction(formData: FormData) {
     },
   })
 
+  await recordRequestAuditEvent({
+    action: "workspace.member_created",
+    actorUserId: admin.id,
+    actorEmail: admin.email,
+    workspaceId: admin.workspaceId,
+    targetType: "user",
+    targetId: user.id,
+    metadata: { role },
+  })
+
   // Credential accounts haven't proven control of the address the way GitHub
   // OAuth does, so send them a code to verify it.
   await issueVerificationOtp(user.id, user.email, user.name ?? "there")
@@ -164,6 +205,7 @@ export async function getUsers() {
     },
     orderBy: { createdAt: "desc" },
   })
+
   return users.map(({ workspaceMemberships, ...user }) => ({
     ...user,
     role: workspaceMemberships[0]?.role === "VIEWER" ? "GUEST" : workspaceMemberships[0]?.role === "MEMBER" ? "USER" : "ADMIN",
@@ -201,6 +243,16 @@ export async function updateUserRoleAction(userId: string, role: string) {
     data: { role: validated.role === "ADMIN" ? "ADMIN" : validated.role === "GUEST" ? "VIEWER" : "MEMBER" },
   })
 
+  await recordRequestAuditEvent({
+    action: "workspace.member_role_changed",
+    actorUserId: admin.id,
+    actorEmail: admin.email,
+    workspaceId: admin.workspaceId,
+    targetType: "user",
+    targetId: validated.userId,
+    metadata: { role: validated.role },
+  })
+
   // getSession() re-reads the role on every request, so this takes effect on
   // the target's next page load rather than when their cookie expires.
   revalidatePath("/admin/users")
@@ -223,6 +275,14 @@ export async function unlockUserAction(userId: string): Promise<{ success: true 
   }
 
   revalidatePath("/admin/users")
+  await recordRequestAuditEvent({
+    action: "workspace.member_unlocked",
+    actorUserId: admin.id,
+    actorEmail: admin.email,
+    workspaceId: admin.workspaceId,
+    targetType: "user",
+    targetId: userId,
+  })
   return { success: true }
 }
 
@@ -244,6 +304,14 @@ export async function deleteUserAction(userId: string) {
   }
 
   await prisma.workspaceMember.delete({ where: { workspaceId_userId: { workspaceId: admin.workspaceId, userId } } })
+  await recordRequestAuditEvent({
+    action: "workspace.member_removed",
+    actorUserId: admin.id,
+    actorEmail: admin.email,
+    workspaceId: admin.workspaceId,
+    targetType: "user",
+    targetId: userId,
+  })
   revalidatePath("/admin/users")
   return { success: true }
 }

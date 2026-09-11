@@ -353,6 +353,7 @@ export async function updateProfileAction(formData: FormData) {
       title: true,
       timezone: true,
       createdAt: true,
+      sessionVersion: true,
     },
   })
 
@@ -361,6 +362,7 @@ export async function updateProfileAction(formData: FormData) {
     email: updatedUser.email,
     name: updatedUser.name ?? "User",
     role: updatedUser.role,
+    sessionVersion: updatedUser.sessionVersion,
   })
 
   revalidatePath("/")

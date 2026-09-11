@@ -14,6 +14,7 @@ export interface SessionUser {
   email: string
   name: string
   role: AppRole
+  sessionVersion?: number
   workspaceId?: string
   workspaceName?: string
   workspaceSlug?: string

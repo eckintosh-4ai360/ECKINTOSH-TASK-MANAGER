@@ -18,6 +18,7 @@ import {
   Zap,
   GitBranch,
   ClipboardList,
+  ScrollText,
   Bot,
   PenLine,
 } from "lucide-react"
@@ -61,6 +62,7 @@ const commsItems: NavItem[] = [
 
 const systemItems: NavItem[] = [
   { icon: ShieldCheck, label: "Admin", href: "/admin/users" },
+  { icon: ScrollText, label: "Audit Log", href: "/admin/audit-logs" },
   { icon: User, label: "Profile", href: "/profile" },
   { icon: Settings, label: "Settings", href: "/settings" },
   { icon: HelpCircle, label: "Help", href: "/help" },
@@ -136,7 +138,7 @@ export function Sidebar({ role, workspaces = [], activeWorkspaceId }: { role: Ap
   })
 
   const visibleSystemItems = systemItems.filter((item) => {
-    if (item.href === "/admin/users") return hasPermission(role, "manage_users")
+    if (item.href === "/admin/users" || item.href === "/admin/audit-logs") return hasPermission(role, "manage_users")
     return true
   })
 

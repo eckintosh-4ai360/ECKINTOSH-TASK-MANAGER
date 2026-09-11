@@ -32,13 +32,17 @@ export async function createSession(user: SessionUser) {
 export const getSession = cache(async (): Promise<SessionUser | null> => {
   try {
     let identity: { id?: string; email: string } | null = null
+    let credentialSession: SessionUser | null = null
 
     const cookieStore = await cookies()
     const token = cookieStore.get(SESSION_COOKIE_NAME)?.value
 
     if (token) {
       const claimed = await verifySessionToken(token)
-      if (claimed) identity = { id: claimed.id, email: claimed.email }
+      if (claimed) {
+        credentialSession = claimed
+        identity = { id: claimed.id, email: claimed.email }
+      }
     }
 
     if (!identity) {
@@ -52,11 +56,16 @@ export const getSession = cache(async (): Promise<SessionUser | null> => {
     const dbUser = await prisma.user.findUnique({
       // Match on id when we have it so an email change doesn't orphan a session.
       where: identity.id ? { id: identity.id } : { email: identity.email },
-      select: { id: true, email: true, name: true, role: true },
+      select: { id: true, email: true, name: true, role: true, sessionVersion: true },
     })
 
     // Deleted user — the signed cookie is still valid, the account is not.
     if (!dbUser) return null
+
+    // Credential sessions carry a monotonically increasing version. Password
+    // resets and security changes increment it, immediately invalidating all
+    // previously issued custom cookies.
+    if (token && credentialSession?.sessionVersion !== dbUser.sessionVersion) return null
 
     const membership = await getActiveWorkspaceMembership(dbUser.id, await getSelectedWorkspaceId())
     const workspaceRole = membership?.role as WorkspaceRole | undefined
@@ -66,6 +75,7 @@ export const getSession = cache(async (): Promise<SessionUser | null> => {
       email: dbUser.email,
       name: dbUser.name ?? "User",
       role: membership ? effectiveWorkspaceRole(dbUser.role, workspaceRole!) : dbUser.role,
+      sessionVersion: dbUser.sessionVersion,
       ...(membership
         ? {
             workspaceId: membership.workspaceId,
