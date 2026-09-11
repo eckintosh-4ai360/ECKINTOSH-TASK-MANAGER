@@ -148,6 +148,13 @@ function getPublicAppUrl() {
 
   if (configuredUrl) return configuredUrl.replace(/\/+$/, "")
 
+  const productionDomain = process.env.VERCEL_PROJECT_PRODUCTION_URL?.trim()
+  if (productionDomain) {
+    return productionDomain.startsWith("http")
+      ? productionDomain.replace(/\/+$/, "")
+      : `https://${productionDomain.replace(/\/+$/, "")}`
+  }
+
   if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`
 
   return "http://localhost:3000"

@@ -298,6 +298,9 @@ want plain Next.js without the native WebSocket listener.
    ```
    https://your-domain.vercel.app/api/auth/callback/github
    ```
+   Preview deployments are supported through Auth.js's redirect proxy. Keep
+   Vercel's `VERCEL_PROJECT_PRODUCTION_URL` system variable exposed, or set
+   `AUTH_REDIRECT_PROXY_URL` to `https://your-domain.vercel.app/api/auth`.
 6. Run `npm run db:migrate` from a trusted release job against the production database, then redeploy.
 
 Vercel is the serverless deployment: API routes, scheduled jobs, and Pusher events run there. Do not use `npm run start:node` or expect `ws://.../ws` to work on Vercel. Uploads should use Vercel Blob rather than local disk.

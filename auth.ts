@@ -36,6 +36,27 @@ if (!githubClientId || !githubClientSecret) {
 // e.g. "read:user user:email" for a deployment that never writes to GitHub.
 const githubScopes = process.env.GITHUB_OAUTH_SCOPES ?? "read:user user:email repo"
 
+// GitHub OAuth apps require one exact callback URL. On Vercel, preview
+// deployments have unique hosts, so use Auth.js's redirect proxy through the
+// stable production domain when Vercel exposes it. The proxy preserves the
+// original preview host in the encrypted OAuth state and sends the user back
+// to that deployment after GitHub approves the request.
+function getAuthRedirectProxyUrl() {
+  const configured = process.env.AUTH_REDIRECT_PROXY_URL?.trim()
+  if (configured) return configured.replace(/\/+$/, "")
+
+  const productionDomain = process.env.VERCEL_PROJECT_PRODUCTION_URL?.trim()
+  if (!productionDomain) return undefined
+
+  const origin = productionDomain.startsWith("http")
+    ? productionDomain
+    : `https://${productionDomain}`
+
+  return `${origin.replace(/\/+$/, "")}/api/auth`
+}
+
+const authRedirectProxyUrl = getAuthRedirectProxyUrl()
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
   secret: authSecret,
   providers: githubClientId && githubClientSecret ? [
@@ -48,6 +69,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   session: {
     strategy: "jwt",
   },
+  redirectProxyUrl: authRedirectProxyUrl,
   trustHost: true,
   callbacks: {
     async signIn({ user, profile, account }) {
