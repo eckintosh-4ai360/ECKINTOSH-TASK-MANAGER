@@ -1,22 +1,17 @@
 import { cookies } from "next/headers"
 import prisma from "@/lib/prisma"
-import type { AppRole } from "@/lib/rbac"
+import { effectiveWorkspaceRole, type WorkspaceRole } from "@/lib/workspace-roles"
 
 export const WORKSPACE_COOKIE_NAME = "spagad_workspace"
 
-export type WorkspaceRole = "OWNER" | "ADMIN" | "MEMBER" | "VIEWER"
+export { effectiveWorkspaceRole }
+export type { WorkspaceRole }
 
 export type WorkspaceOption = {
   id: string
   name: string
   slug: string
   role: WorkspaceRole
-}
-
-export function effectiveWorkspaceRole(globalRole: AppRole, workspaceRole: WorkspaceRole): AppRole {
-  if (globalRole === "ADMIN" || workspaceRole === "OWNER" || workspaceRole === "ADMIN") return "ADMIN"
-  if (globalRole === "GUEST" || workspaceRole === "VIEWER") return "GUEST"
-  return "USER"
 }
 
 export async function getWorkspaceOptionsForUser(userId: string): Promise<WorkspaceOption[]> {

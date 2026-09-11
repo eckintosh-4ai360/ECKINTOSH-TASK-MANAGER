@@ -16,8 +16,11 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
 ENV NEXT_TELEMETRY_DISABLED=1
-ARG NEXT_PUBLIC_REALTIME_TRANSPORT=websocket
-ENV NEXT_PUBLIC_REALTIME_TRANSPORT=$NEXT_PUBLIC_REALTIME_TRANSPORT
+# This image always runs the custom Node server, so compile the browser bundle
+# for the native WebSocket transport as well. Public env vars are inlined into
+# the Next.js bundle at build time; changing this only at container runtime is
+# too late.
+ENV NEXT_PUBLIC_REALTIME_TRANSPORT=websocket
 RUN npx prisma generate
 RUN npm run build
 
@@ -52,7 +55,7 @@ USER nextjs
 EXPOSE 3000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-  CMD node -e "fetch('http://127.0.0.1:3000').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"
+  CMD node -e "fetch('http://127.0.0.1:3000/login').then((response) => process.exit(response.status < 500 ? 0 : 1)).catch(() => process.exit(1))"
 
 # Docker owns the native WebSocket process. Apply migrations at container start,
 # then serve Next.js and /ws from one listener.

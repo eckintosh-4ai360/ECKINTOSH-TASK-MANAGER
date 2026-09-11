@@ -8,11 +8,18 @@ import { PrismaPg } from "@prisma/adapter-pg"
 import pg from "pg"
 import { hasPermission } from "@/lib/rbac"
 import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/session"
-import { effectiveWorkspaceRole, type WorkspaceRole } from "@/lib/workspace"
+import { effectiveWorkspaceRole, type WorkspaceRole } from "@/lib/workspace-roles"
 import { getDatabaseSslOptions, normalizeDatabaseUrl } from "@/lib/db-ssl"
 
 const { Pool } = pg
 const dev = process.env.NODE_ENV !== "production"
+// The custom development server owns /ws, so make local development useful
+// even when the developer has copied an env file that omits the transport.
+// Vercel never executes this file and Docker sets the value at image build
+// time, so this fallback cannot accidentally change either deployment.
+if (dev && !process.env.NEXT_PUBLIC_REALTIME_TRANSPORT) {
+  process.env.NEXT_PUBLIC_REALTIME_TRANSPORT = "websocket"
+}
 // Vercel never runs this file. Docker uses it as the single HTTP + WebSocket
 // process, so bind to all interfaces inside the container.
 const hostname = process.env.WS_HOST ?? "0.0.0.0"

@@ -53,7 +53,7 @@ Replace the placeholders below with your actual screenshot paths:
 
 ### 💬 Real-time Messaging
 
-- Direct messages powered by a **native WebSocket server** (no third-party service)
+- Direct messages use **Pusher Channels on Vercel** and the **native WebSocket server on Docker/self-hosted deployments**
 - Rich message features: **replies**, **edits**, **deletes**, and **media attachments** (image, video, audio, document)
 - Live **online presence** indicators
 
@@ -133,7 +133,7 @@ Replace the placeholders below with your actual screenshot paths:
 | **Database**           | PostgreSQL via [Neon](https://neon.tech/) (serverless)             |
 | **ORM**                | [Prisma 7](https://www.prisma.io/)                                 |
 | **Auth**               | [NextAuth.js v5](https://authjs.dev/) (GitHub OAuth + Credentials) |
-| **Real-time**          | Native WebSocket (`ws`) server                                     |
+| **Real-time**          | Pusher Channels on Vercel; native WebSocket (`ws`) on Docker       |
 | **Styling**            | [Tailwind CSS v4](https://tailwindcss.com/)                        |
 | **UI Components**      | [Radix UI](https://www.radix-ui.com/) + shadcn/ui                  |
 | **Rich Text**          | [TipTap](https://tiptap.dev/)                                      |
@@ -263,7 +263,11 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-The custom server also starts a **WebSocket endpoint** at `ws://localhost:3000/ws` for real-time messaging.
+`npm run dev` runs the custom Node server and exposes `ws://localhost:3000/ws`.
+The custom server defaults to native WebSockets locally; set
+`NEXT_PUBLIC_REALTIME_TRANSPORT=websocket` explicitly in `.env` if you want
+to make that choice clear. Use `npm run dev:next` only when you intentionally
+want plain Next.js without the native WebSocket listener.
 
 ---
 
@@ -271,9 +275,11 @@ The custom server also starts a **WebSocket endpoint** at `ws://localhost:3000/w
 
 | Script                    | Description                                         |
 | ------------------------- | --------------------------------------------------- |
-| `npm run dev`             | Start the dev server (Next.js + WebSocket)          |
+| `npm run dev`             | Start the custom Next.js + native WebSocket development server |
+| `npm run dev:next`        | Start plain Next.js without the native WebSocket listener      |
 | `npm run build`           | Build for production (runs `prisma generate` first) |
-| `npm start`               | Start the production server                         |
+| `npm start`               | Start plain Next.js production server (no native `/ws`) |
+| `npm run start:node`      | Start self-hosted Next.js + native WebSocket server     |
 | `npm run lint`            | Run ESLint                                          |
 | `npm run typecheck`       | Run the TypeScript compiler without emitting files  |
 | `npm test`                | Run the security and authorization test suite        |
@@ -287,7 +293,7 @@ The custom server also starts a **WebSocket endpoint** at `ws://localhost:3000/w
 1. Push your code to GitHub.
 2. Import the repository into [Vercel](https://vercel.com/).
 3. Add **all environment variables** from `.env.example` in the Vercel dashboard under **Settings → Environment Variables** (select the **Production** scope).
-4. Set `NEXT_PUBLIC_REALTIME_TRANSPORT=pusher` and configure the Pusher server/client variables. Vercel Functions cannot host the native `/ws` listener.
+4. Set `NEXT_PUBLIC_REALTIME_TRANSPORT=pusher` and configure the Pusher server/client variables **before the Vercel build**. Vercel Functions cannot host the native `/ws` listener.
 5. Set your GitHub OAuth App's **Authorization callback URL** to:
    ```
    https://your-domain.vercel.app/api/auth/callback/github
@@ -300,14 +306,22 @@ Vercel is the serverless deployment: API routes, scheduled jobs, and Pusher even
 
 ### 🐳 Docker with native WebSocket
 
-The included `Dockerfile` runs migrations and starts `server.ts`, which serves Next.js and the native WebSocket endpoint from the same process:
+The included `Dockerfile` builds the browser bundle for `websocket`, runs migrations,
+and starts `server.ts`, which serves Next.js and `/ws` from the same process. The
+image intentionally does not accept a Pusher transport override: use Vercel for
+the serverless/Pusher deployment.
 
 ```bash
 docker build -t spagad-task-manager .
 docker run --env-file .env -p 3000:3000 spagad-task-manager
 ```
 
-Set `NEXT_PUBLIC_REALTIME_TRANSPORT=websocket` for this deployment. Put a reverse proxy/load balancer in front of the container that supports HTTP connection upgrades for `/ws`. Run one WebSocket-capable instance or add a shared broker/sticky routing strategy before horizontal scaling. Persist `MEDIA_STORAGE_DIR` on a volume, or configure object storage; container filesystems are not durable.
+The Dockerfile already compiles `NEXT_PUBLIC_REALTIME_TRANSPORT=websocket`;
+the runtime env file supplies secrets and database settings. Put a reverse
+proxy/load balancer in front of the container that supports HTTP connection
+upgrades for `/ws`. Run one WebSocket-capable instance or add a shared broker/
+sticky routing strategy before horizontal scaling. Persist `MEDIA_STORAGE_DIR`
+on a volume, or configure object storage; container filesystems are not durable.
 
 ---
 
