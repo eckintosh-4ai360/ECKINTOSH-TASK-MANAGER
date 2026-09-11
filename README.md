@@ -292,15 +292,18 @@ want plain Next.js without the native WebSocket listener.
 
 1. Push your code to GitHub.
 2. Import the repository into [Vercel](https://vercel.com/).
-3. Add **all environment variables** from `.env.example` in the Vercel dashboard under **Settings → Environment Variables** (select the **Production** scope).
+3. Add **all environment variables** from `.env.example` in the Vercel dashboard under **Settings → Environment Variables**. Select both the **Production** and **Preview** scopes for the authentication variables.
 4. Set `NEXT_PUBLIC_REALTIME_TRANSPORT=pusher` and configure the Pusher server/client variables **before the Vercel build**. Vercel Functions cannot host the native `/ws` listener.
 5. Set your GitHub OAuth App's **Authorization callback URL** to:
    ```
    https://your-domain.vercel.app/api/auth/callback/github
    ```
-   Preview deployments are supported through Auth.js's redirect proxy. Keep
-   Vercel's `VERCEL_PROJECT_PRODUCTION_URL` system variable exposed, or set
-   `AUTH_REDIRECT_PROXY_URL` to `https://your-domain.vercel.app/api/auth`.
+   Do not enter a generated preview URL here. GitHub must use this one stable
+   production callback exactly. To enable preview sign-in, either turn on
+   **Automatically expose System Environment Variables** in Vercel, or set
+   `AUTH_REDIRECT_PROXY_URL` to `https://your-domain.vercel.app/api/auth` in
+   both Production and Preview. Also set `NEXT_PUBLIC_APP_URL` and `AUTH_URL`
+   to `https://your-domain.vercel.app` in both scopes as a fallback.
 6. Run `npm run db:migrate` from a trusted release job against the production database, then redeploy.
 
 Vercel is the serverless deployment: API routes, scheduled jobs, and Pusher events run there. Do not use `npm run start:node` or expect `ws://.../ws` to work on Vercel. Uploads should use Vercel Blob rather than local disk.

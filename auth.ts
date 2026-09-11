@@ -41,18 +41,44 @@ const githubScopes = process.env.GITHUB_OAUTH_SCOPES ?? "read:user user:email re
 // stable production domain when Vercel exposes it. The proxy preserves the
 // original preview host in the encrypted OAuth state and sends the user back
 // to that deployment after GitHub approves the request.
+function toAuthBaseUrl(value: string) {
+  const origin = value.startsWith("http") ? value : `https://${value}`
+
+  try {
+    return `${new URL(origin).origin}/api/auth`
+  } catch {
+    console.warn("[auth] Ignoring invalid OAuth redirect proxy URL.")
+    return undefined
+  }
+}
+
+function isLocalUrl(value: string) {
+  try {
+    const hostname = new URL(value.startsWith("http") ? value : `https://${value}`).hostname
+    return hostname === "localhost" || hostname === "127.0.0.1"
+  } catch {
+    return false
+  }
+}
+
 function getAuthRedirectProxyUrl() {
   const configured = process.env.AUTH_REDIRECT_PROXY_URL?.trim()
   if (configured) return configured.replace(/\/+$/, "")
 
   const productionDomain = process.env.VERCEL_PROJECT_PRODUCTION_URL?.trim()
-  if (!productionDomain) return undefined
+  if (productionDomain) return toAuthBaseUrl(productionDomain)
 
-  const origin = productionDomain.startsWith("http")
-    ? productionDomain
-    : `https://${productionDomain}`
+  // This fallback covers Vercel projects where system environment variables
+  // are not automatically exposed. Set NEXT_PUBLIC_APP_URL (or AUTH_URL) to
+  // the stable production URL in both Production and Preview environments.
+  const canonicalUrl = (
+    process.env.NEXT_PUBLIC_APP_URL
+    ?? process.env.AUTH_URL
+    ?? process.env.NEXTAUTH_URL
+  )?.trim()
 
-  return `${origin.replace(/\/+$/, "")}/api/auth`
+  if (!canonicalUrl || isLocalUrl(canonicalUrl)) return undefined
+  return toAuthBaseUrl(canonicalUrl)
 }
 
 const authRedirectProxyUrl = getAuthRedirectProxyUrl()
