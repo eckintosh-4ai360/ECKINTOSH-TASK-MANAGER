@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Mail, MessageCircle, MoreHorizontal, CheckCircle2, Clock } from "lucide-react"
+import { AlertTriangle, Mail, MessageCircle, MoreHorizontal, CheckCircle2, Clock } from "lucide-react"
 
 export type TeamMember = {
   name: string
@@ -16,13 +16,71 @@ export type TeamMember = {
   initials: string
 }
 
-interface TeamContentProps {
-  teamMembers: TeamMember[]
+export type PendingInvitation = {
+  id: string
+  email: string
+  workspaceRole: string
+  invitedBy: string
+  createdAt: string
+  expiresAt: string
 }
 
-export function TeamContent({ teamMembers }: TeamContentProps) {
+interface TeamContentProps {
+  teamMembers: TeamMember[]
+  pendingInvitations: PendingInvitation[]
+}
+
+function formatDate(value: string) {
+  return new Intl.DateTimeFormat("en", { month: "short", day: "numeric", year: "numeric" }).format(new Date(value))
+}
+
+function roleLabel(role: string) {
+  return role === "ADMIN" ? "Admin" : role === "VIEWER" ? "Viewer" : "Member"
+}
+
+export function TeamContent({ teamMembers, pendingInvitations }: TeamContentProps) {
   return (
     <div className="space-y-6 animate-fade-in">
+      {pendingInvitations.length > 0 && (
+        <section className="glass-card rounded-xl border border-amber-400/20 overflow-hidden">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between px-5 py-4 border-b border-border/40">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-amber-400/10 border border-amber-400/20 flex items-center justify-center">
+                <Mail className="w-4 h-4 text-amber-400" />
+              </div>
+              <div>
+                <h2 className="font-semibold text-foreground">Pending invitations</h2>
+                <p className="text-xs text-muted-foreground">These people have not joined this workspace yet.</p>
+              </div>
+            </div>
+            <span className="self-start sm:self-auto rounded-full border border-amber-400/30 bg-amber-400/10 px-2.5 py-1 text-xs font-semibold text-amber-400">
+              {pendingInvitations.length} pending
+            </span>
+          </div>
+
+          <div className="divide-y divide-border/30">
+            {pendingInvitations.map((invitation) => {
+              const expired = new Date(invitation.expiresAt).getTime() <= Date.now()
+
+              return (
+                <div key={invitation.id} className="flex flex-col gap-3 px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-foreground">{invitation.email}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {roleLabel(invitation.workspaceRole)} · Invited by {invitation.invitedBy} · Sent {formatDate(invitation.createdAt)}
+                    </p>
+                  </div>
+                  <div className={expired ? "flex items-center gap-1.5 text-xs text-destructive" : "flex items-center gap-1.5 text-xs text-muted-foreground"}>
+                    {expired ? <AlertTriangle className="w-3.5 h-3.5" /> : <Clock className="w-3.5 h-3.5" />}
+                    {expired ? "Expired — resend invitation" : `Expires ${formatDate(invitation.expiresAt)}`}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </section>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {teamMembers.map((member, index) => (
           <div

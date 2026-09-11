@@ -1,5 +1,5 @@
 import { HeaderWithUser as Header } from "@/components/dashboard/header-with-user"
-import { TeamContent, TeamMember } from "@/components/team/team-content"
+import { TeamContent, TeamMember, PendingInvitation } from "@/components/team/team-content"
 import { Button } from "@/components/ui/button"
 import { AddMemberModal } from "@/components/modals/add-member-modal"
 import { requireWorkspace } from "@/lib/auth"
@@ -10,15 +10,31 @@ export default async function TeamPage() {
   const session = await requireWorkspace()
   const canManageTeam = hasPermission(session.role, "manage_team")
 
-  const users = await prisma.user.findMany({
-    where: { workspaceMemberships: { some: { workspaceId: session.workspaceId } } },
-    include: {
-      tasks: { where: { project: { workspaceId: session.workspaceId } } },
-    },
-    orderBy: {
-      name: 'asc'
-    }
-  })
+  const [users, invitations] = await Promise.all([
+    prisma.user.findMany({
+      where: { workspaceMemberships: { some: { workspaceId: session.workspaceId } } },
+      include: {
+        tasks: { where: { project: { workspaceId: session.workspaceId } } },
+      },
+      orderBy: {
+        name: 'asc'
+      }
+    }),
+    canManageTeam
+      ? prisma.invitation.findMany({
+          where: { workspaceId: session.workspaceId, acceptedAt: null },
+          select: {
+            id: true,
+            email: true,
+            workspaceRole: true,
+            createdAt: true,
+            expiresAt: true,
+            invitedBy: { select: { name: true, email: true } },
+          },
+          orderBy: { createdAt: "desc" },
+        })
+      : Promise.resolve([]),
+  ])
 
   const teamMembers: TeamMember[] = users.map((user) => {
     const totalTasks = user.tasks.length
@@ -43,6 +59,15 @@ export default async function TeamPage() {
     }
   })
 
+  const pendingInvitations: PendingInvitation[] = invitations.map((invitation) => ({
+    id: invitation.id,
+    email: invitation.email,
+    workspaceRole: invitation.workspaceRole,
+    invitedBy: invitation.invitedBy.name ?? invitation.invitedBy.email,
+    createdAt: invitation.createdAt.toISOString(),
+    expiresAt: invitation.expiresAt.toISOString(),
+  }))
+
   return (
     <>
       <Header
@@ -58,7 +83,7 @@ export default async function TeamPage() {
       />
 
       <div className="mt-6">
-        <TeamContent teamMembers={teamMembers} />
+        <TeamContent teamMembers={teamMembers} pendingInvitations={pendingInvitations} />
       </div>
     </>
   )

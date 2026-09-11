@@ -1,5 +1,6 @@
 "use server"
 
+import { revalidatePath } from "next/cache"
 import prisma from "@/lib/prisma"
 import { requireWorkspace } from "@/lib/auth"
 import { hasPermission } from "@/lib/rbac"
@@ -122,6 +123,8 @@ export async function sendWorkspaceInvites({
       const reason = failureReasons[0]
       parts.push(`${failed} failed to send${reason ? `: ${reason}` : ""}`)
     }
+
+    revalidatePath("/team")
 
     return {
       success: sent > 0 || skipped > 0,

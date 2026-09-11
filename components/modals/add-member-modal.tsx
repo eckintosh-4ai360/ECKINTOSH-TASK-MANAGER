@@ -1,36 +1,54 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useTransition } from "react"
+import { useRouter } from "next/navigation"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { UserPlus, Mail, Briefcase, Shield } from "lucide-react"
+import { Eye, Loader2, Mail, Shield, UserPlus, Users } from "lucide-react"
+import { toast } from "sonner"
+import { sendWorkspaceInvites } from "@/lib/actions/workspace-invite-actions"
 
 interface AddMemberModalProps {
   children: React.ReactNode
 }
 
 export function AddMemberModal({ children }: AddMemberModalProps) {
+  const router = useRouter()
   const [open, setOpen] = useState(false)
-  const [formData, setFormData] = useState({
-    name: "",
-    email: "",
-    role: "",
-    team: "",
-    accessLevel: "",
-  })
+  const [email, setEmail] = useState("")
+  const [accessLevel, setAccessLevel] = useState("member")
+  const [isPending, startTransition] = useTransition()
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    console.log("Member invited:", formData)
-    setOpen(false)
-    setFormData({ name: "", email: "", role: "", team: "", accessLevel: "" })
+  const handleSubmit = (event: React.FormEvent) => {
+    event.preventDefault()
+    const normalizedEmail = email.trim().toLowerCase()
+
+    if (!normalizedEmail) {
+      toast.error("Enter an email address.")
+      return
+    }
+
+    startTransition(async () => {
+      const result = await sendWorkspaceInvites({ emails: [normalizedEmail], role: accessLevel })
+
+      if (!result.success) {
+        toast.error(result.error ?? result.message ?? "The invitation could not be sent.")
+        return
+      }
+
+      toast.success(result.message ?? "Invitation sent.")
+      setEmail("")
+      setAccessLevel("member")
+      setOpen(false)
+      router.refresh()
+    })
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={(nextOpen) => !isPending && setOpen(nextOpen)}>
       <DialogTrigger asChild>{children}</DialogTrigger>
       <DialogContent className="glass-card border-primary/20 sm:max-w-[500px]">
         <DialogHeader>
@@ -44,20 +62,6 @@ export function AddMemberModal({ children }: AddMemberModalProps) {
 
         <form onSubmit={handleSubmit} className="space-y-5 mt-4">
           <div className="space-y-2">
-            <Label htmlFor="member-name" className="text-sm text-muted-foreground">
-              Full Name
-            </Label>
-            <Input
-              id="member-name"
-              placeholder="Enter full name..."
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              className="glass border-border/50 focus:border-primary/50 h-11"
-              required
-            />
-          </div>
-
-          <div className="space-y-2">
             <Label htmlFor="member-email" className="text-sm text-muted-foreground flex items-center gap-2">
               <Mail className="w-3.5 h-3.5 text-primary" />
               Email Address
@@ -66,75 +70,35 @@ export function AddMemberModal({ children }: AddMemberModalProps) {
               id="member-email"
               type="email"
               placeholder="email@example.com"
-              value={formData.email}
-              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
               className="glass border-border/50 focus:border-primary/50 h-11"
               required
+              disabled={isPending}
             />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label className="text-sm text-muted-foreground flex items-center gap-2">
-                <Briefcase className="w-3.5 h-3.5 text-primary" />
-                Role
-              </Label>
-              <Select value={formData.role} onValueChange={(value) => setFormData({ ...formData, role: value })}>
-                <SelectTrigger className="glass border-border/50 focus:border-primary/50 h-11">
-                  <SelectValue placeholder="Select role" />
-                </SelectTrigger>
-                <SelectContent className="glass-card border-primary/20">
-                  <SelectItem value="designer">Designer</SelectItem>
-                  <SelectItem value="developer">Developer</SelectItem>
-                  <SelectItem value="manager">Project Manager</SelectItem>
-                  <SelectItem value="qa">QA Engineer</SelectItem>
-                  <SelectItem value="analyst">Business Analyst</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label className="text-sm text-muted-foreground">
-                Team
-              </Label>
-              <Select value={formData.team} onValueChange={(value) => setFormData({ ...formData, team: value })}>
-                <SelectTrigger className="glass border-border/50 focus:border-primary/50 h-11">
-                  <SelectValue placeholder="Select team" />
-                </SelectTrigger>
-                <SelectContent className="glass-card border-primary/20">
-                  <SelectItem value="frontend">Frontend</SelectItem>
-                  <SelectItem value="backend">Backend</SelectItem>
-                  <SelectItem value="design">Design</SelectItem>
-                  <SelectItem value="qa">Quality Assurance</SelectItem>
-                  <SelectItem value="devops">DevOps</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
           </div>
 
           <div className="space-y-2">
             <Label className="text-sm text-muted-foreground flex items-center gap-2">
               <Shield className="w-3.5 h-3.5 text-primary" />
-              Access Level
+              Workspace Access
             </Label>
-            <Select
-              value={formData.accessLevel}
-              onValueChange={(value) => setFormData({ ...formData, accessLevel: value })}
-            >
+            <Select value={accessLevel} onValueChange={setAccessLevel} disabled={isPending}>
               <SelectTrigger className="glass border-border/50 focus:border-primary/50 h-11">
-                <SelectValue placeholder="Select access level" />
+                <SelectValue />
               </SelectTrigger>
               <SelectContent className="glass-card border-primary/20">
-                <SelectItem value="admin">Admin - Full access</SelectItem>
-                <SelectItem value="editor">Editor - Can edit projects</SelectItem>
-                <SelectItem value="viewer">Viewer - Read only access</SelectItem>
+                <SelectItem value="member"><span className="flex items-center gap-2"><Users className="w-3.5 h-3.5" /> Member — can work in the workspace</span></SelectItem>
+                <SelectItem value="viewer"><span className="flex items-center gap-2"><Eye className="w-3.5 h-3.5" /> Viewer — read-only access</span></SelectItem>
+                <SelectItem value="admin"><span className="flex items-center gap-2"><Shield className="w-3.5 h-3.5" /> Admin — full workspace access</span></SelectItem>
               </SelectContent>
             </Select>
           </div>
 
           <div className="glass rounded-lg p-4 border border-primary/10">
             <p className="text-xs text-muted-foreground">
-              An invitation email will be sent to the provided email address. The user will need to accept the invitation to join the workspace.
+              The recipient will receive a secure invitation link and choose their name and password when joining.
+              Pending invitations appear on this Teams page until accepted or expired.
             </p>
           </div>
 
@@ -144,15 +108,17 @@ export function AddMemberModal({ children }: AddMemberModalProps) {
               variant="outline"
               className="flex-1 glass border-border/50 hover:border-primary/30 hover:bg-primary/5"
               onClick={() => setOpen(false)}
+              disabled={isPending}
             >
               Cancel
             </Button>
             <Button
               type="submit"
               className="flex-1 bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 shadow-lg shadow-primary/20"
+              disabled={isPending}
             >
-              <UserPlus className="w-4 h-4 mr-2" />
-              Send Invitation
+              {isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Mail className="w-4 h-4 mr-2" />}
+              {isPending ? "Sending…" : "Send Invitation"}
             </Button>
           </div>
         </form>
