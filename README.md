@@ -110,7 +110,8 @@ Replace the placeholders below with your actual screenshot paths:
 
 ### 🔐 Authentication
 
-- **GitHub OAuth** via NextAuth.js v5 with JWT sessions
+- **Google OAuth** via NextAuth.js v5 with JWT sessions
+- Optional GitHub connection for repository writes, branches, and pull requests
 - Custom credential-based login with **bcrypt** password hashing
 - Email verification with **OTP** support
 - Workspace invitations and workspace-scoped authorization
@@ -132,7 +133,7 @@ Replace the placeholders below with your actual screenshot paths:
 | **Runtime**            | React 19                                                           |
 | **Database**           | PostgreSQL via [Neon](https://neon.tech/) (serverless)             |
 | **ORM**                | [Prisma 7](https://www.prisma.io/)                                 |
-| **Auth**               | [NextAuth.js v5](https://authjs.dev/) (GitHub OAuth + Credentials) |
+| **Auth**               | [NextAuth.js v5](https://authjs.dev/) (Google OAuth + Credentials) |
 | **Real-time**          | Pusher Channels on Vercel; native WebSocket (`ws`) on Docker       |
 | **Styling**            | [Tailwind CSS v4](https://tailwindcss.com/)                        |
 | **UI Components**      | [Radix UI](https://www.radix-ui.com/) + shadcn/ui                  |
@@ -155,7 +156,8 @@ Replace the placeholders below with your actual screenshot paths:
 
 - **Node.js** 18+ and **npm** 10+
 - A **PostgreSQL** database (recommended: [Neon](https://neon.tech/) for serverless)
-- A **GitHub OAuth App** ([create one here](https://github.com/settings/developers))
+- A **Google OAuth Web client** ([create one here](https://console.cloud.google.com/auth/clients))
+- Optional: a **GitHub OAuth App** for repository write access
 - Optional: a Gmail account with an [App Password](https://myaccount.google.com/apppasswords), or any SMTP server, for outbound email
 
 ---
@@ -196,7 +198,11 @@ JWT_SECRET=""             # Secret for custom JWT sessions
 AUTH_SECRET=""            # NextAuth.js secret (required in production)
 AUTH_URL="http://localhost:3000"
 
-# ─── GitHub OAuth ─────────────────────────────────────────────────────────────
+# ─── Google OAuth (primary sign-in) ────────────────────────────────────────────
+AUTH_GOOGLE_ID=""         # Google OAuth Web Client ID
+AUTH_GOOGLE_SECRET=""     # Google OAuth Web Client Secret
+
+# ─── GitHub OAuth (optional repository connection) ─────────────────────────────
 GITHUB_ID=""              # GitHub OAuth App Client ID
 GITHUB_SECRET=""          # GitHub OAuth App Client Secret
 
@@ -294,17 +300,22 @@ want plain Next.js without the native WebSocket listener.
 2. Import the repository into [Vercel](https://vercel.com/).
 3. Add **all environment variables** from `.env.example` in the Vercel dashboard under **Settings → Environment Variables**. Select both the **Production** and **Preview** scopes for the authentication variables.
 4. Set `NEXT_PUBLIC_REALTIME_TRANSPORT=pusher` and configure the Pusher server/client variables **before the Vercel build**. Vercel Functions cannot host the native `/ws` listener.
-5. Set your GitHub OAuth App's **Authorization callback URL** to:
+5. In Google Cloud Console, create a **Web application** OAuth client and set its **Authorized redirect URI** to:
    ```
-   https://your-domain.vercel.app/api/auth/callback/github
+   https://your-domain.vercel.app/api/auth/callback/google
    ```
-   Do not enter a generated preview URL here. GitHub must use this one stable
+   Do not enter a generated preview URL here. Google must use this one stable
    production callback exactly. To enable preview sign-in, either turn on
    **Automatically expose System Environment Variables** in Vercel, or set
    `AUTH_REDIRECT_PROXY_URL` to `https://your-domain.vercel.app/api/auth` in
    both Production and Preview. Also set `NEXT_PUBLIC_APP_URL` and `AUTH_URL`
-   to `https://your-domain.vercel.app` in both scopes as a fallback.
-6. Run `npm run db:migrate` from a trusted release job against the production database, then redeploy.
+   to `https://your-domain.vercel.app` in both scopes as a fallback. Save the
+   Google Client ID as `AUTH_GOOGLE_ID` and its secret as `AUTH_GOOGLE_SECRET`
+   in both scopes.
+6. Optional: configure a GitHub OAuth App with callback URL
+   `https://your-domain.vercel.app/api/auth/callback/github`. GitHub is used
+   only when a repository contributor connects it from Code Workspace.
+7. Run `npm run db:migrate` from a trusted release job against the production database, then redeploy.
 
 Vercel is the serverless deployment: API routes, scheduled jobs, and Pusher events run there. Do not use `npm run start:node` or expect `ws://.../ws` to work on Vercel. Uploads should use Vercel Blob rather than local disk.
 

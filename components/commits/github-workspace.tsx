@@ -503,7 +503,7 @@ export function GitHubWorkspace({ initialData, canMergePullRequests }: GitHubWor
               {workspace.writeEnabled
                 ? "File edits and PR actions can be sent to GitHub from here."
                 : workspace.needsGitHubConnection
-                  ? "Connect your own GitHub account so commits, branches, and pull requests you make here are attributed to you."
+                  ? "Connect your GitHub account to enable commits, branches, and pull requests. Use the same email as your Spagad account."
                   : "Connect a write-enabled GitHub token to push code or manage pull requests."}
             </p>
             {workspace.needsGitHubConnection && (

@@ -5,7 +5,7 @@ import { signIn } from "next-auth/react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Github, Lock, AlertCircle, Loader2, User, Mail } from "lucide-react"
+import { Chrome, Lock, AlertCircle, Loader2, User, Mail } from "lucide-react"
 import { acceptInvitationAction } from "@/lib/actions/invitation-actions"
 
 type InviteAcceptFormProps = {
@@ -16,7 +16,7 @@ type InviteAcceptFormProps = {
 export function InviteAcceptForm({ token, email }: InviteAcceptFormProps) {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
-  const [githubLoading, setGithubLoading] = useState(false)
+  const [googleLoading, setGoogleLoading] = useState(false)
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -33,16 +33,16 @@ export function InviteAcceptForm({ token, email }: InviteAcceptFormProps) {
     // On success the action redirects — no further state update needed.
   }
 
-  async function handleGitHub() {
+  async function handleGoogle() {
     setError(null)
-    setGithubLoading(true)
+    setGoogleLoading(true)
     try {
-      // auth.ts's signIn callback matches this GitHub email against the same
+      // auth.ts's signIn callback matches this Google email against the same
       // invitation record and assigns the role from it.
-      await signIn("github", { redirectTo: "/auth/complete?returnTo=/" })
+      await signIn("google", { redirectTo: "/auth/complete?returnTo=/" })
     } catch {
-      setError("GitHub sign-in failed. Please try again.")
-      setGithubLoading(false)
+      setError("Google sign-in failed. Please try again.")
+      setGoogleLoading(false)
     }
   }
 
@@ -51,12 +51,12 @@ export function InviteAcceptForm({ token, email }: InviteAcceptFormProps) {
       <Button
         type="button"
         variant="outline"
-        onClick={handleGitHub}
-        disabled={githubLoading || loading}
+        onClick={handleGoogle}
+        disabled={googleLoading || loading}
         className="w-full h-11 glass border-border/50 hover:border-primary/50 font-medium"
       >
-        {githubLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Github className="w-4 h-4 mr-2" />}
-        Continue with GitHub
+        {googleLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Chrome className="w-4 h-4 mr-2 text-[#4285F4]" />}
+        Continue with Google
       </Button>
 
       <div className="flex items-center gap-3">
@@ -117,7 +117,7 @@ export function InviteAcceptForm({ token, email }: InviteAcceptFormProps) {
 
         <Button
           type="submit"
-          disabled={loading || githubLoading}
+          disabled={loading || googleLoading}
           className="w-full h-11 bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 shadow-lg shadow-primary/20 font-medium"
         >
           {loading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Creating account...</> : "Create account & join"}

@@ -1,9 +1,23 @@
 import NextAuth from "next-auth"
 import GitHub from "next-auth/providers/github"
+import Google from "next-auth/providers/google"
+import { cookies } from "next/headers"
 import prisma from "@/lib/prisma"
 import { decideRegistration } from "@/lib/registration-policy"
 import { findPendingInvitationByEmail, markInvitationAccepted } from "@/lib/invitations"
 import { encryptSecret } from "@/lib/secure-store"
+import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/session"
+
+const googleClientId =
+  process.env.AUTH_GOOGLE_ID
+  ?? process.env.GOOGLE_ID
+  ?? process.env.AUTH_GOOGLE_CLIENT_ID
+  ?? process.env.GOOGLE_CLIENT_ID
+const googleClientSecret =
+  process.env.AUTH_GOOGLE_SECRET
+  ?? process.env.GOOGLE_SECRET
+  ?? process.env.AUTH_GOOGLE_CLIENT_SECRET
+  ?? process.env.GOOGLE_CLIENT_SECRET
 
 const githubClientId =
   process.env.AUTH_GITHUB_ID
@@ -24,11 +38,19 @@ if (!authSecret) {
   console.warn("[auth] Missing AUTH_SECRET/NEXTAUTH_SECRET/JWT_SECRET. OAuth sessions may fail in production.")
 }
 
-if (!githubClientId || !githubClientSecret) {
+if (!googleClientId || !googleClientSecret) {
   console.warn(
-    "[auth] Missing GitHub OAuth env vars. Set AUTH_GITHUB_ID/AUTH_GITHUB_SECRET, GITHUB_ID/GITHUB_SECRET, or *_CLIENT_ID/*_CLIENT_SECRET equivalents."
+    "[auth] Google sign-in is unavailable. Set AUTH_GOOGLE_ID/AUTH_GOOGLE_SECRET (recommended), GOOGLE_ID/GOOGLE_SECRET, or *_CLIENT_ID/*_CLIENT_SECRET equivalents."
   )
 }
+
+if (!githubClientId || !githubClientSecret) {
+  console.warn(
+    "[auth] GitHub repository connection is unavailable. Set AUTH_GITHUB_ID/AUTH_GITHUB_SECRET, GITHUB_ID/GITHUB_SECRET, or *_CLIENT_ID/*_CLIENT_SECRET equivalents."
+  )
+}
+
+const googleScopes = process.env.GOOGLE_OAUTH_SCOPES ?? "openid email profile"
 
 // `repo` is requested so that repository writes made in the workspace are
 // attributed to the person who made them, using their own token, instead of
@@ -83,15 +105,35 @@ function getAuthRedirectProxyUrl() {
 
 const authRedirectProxyUrl = getAuthRedirectProxyUrl()
 
+async function getExistingCredentialEmail() {
+  const token = (await cookies()).get(SESSION_COOKIE_NAME)?.value
+  if (!token) return null
+
+  return (await verifySessionToken(token))?.email.toLowerCase() ?? null
+}
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
   secret: authSecret,
-  providers: githubClientId && githubClientSecret ? [
-    GitHub({
-      clientId: githubClientId,
-      clientSecret: githubClientSecret,
-      authorization: { params: { scope: githubScopes } },
-    }),
-  ] : [],
+  providers: [
+    ...(googleClientId && googleClientSecret
+      ? [
+          Google({
+            clientId: googleClientId,
+            clientSecret: googleClientSecret,
+            authorization: { params: { scope: googleScopes } },
+          }),
+        ]
+      : []),
+    ...(githubClientId && githubClientSecret
+      ? [
+          GitHub({
+            clientId: githubClientId,
+            clientSecret: githubClientSecret,
+            authorization: { params: { scope: githubScopes } },
+          }),
+        ]
+      : []),
+  ],
   session: {
     strategy: "jwt",
   },
@@ -99,13 +141,16 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   trustHost: true,
   callbacks: {
     async signIn({ user, profile, account }) {
-      // GitHub may not send email if it's set to private;
-      // fall back to the profile email or a generated noreply address.
+      const isGitHubConnection = account?.provider === "github"
+      const providerName = isGitHubConnection ? "GitHub" : "Google"
+
+      // GitHub may not send email if it is set to private. Google always
+      // provides an email for the scopes we request.
       const ghLogin = (profile as any)?.login as string | undefined
       const email =
         user.email
         ?? (profile as any)?.email
-        ?? (ghLogin ? `${ghLogin}@users.noreply.github.com` : null)
+        ?? (isGitHubConnection && ghLogin ? `${ghLogin}@users.noreply.github.com` : null)
 
 
       if (!email) {
@@ -117,13 +162,22 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       user.email = email
 
       try {
+        // GitHub is an optional repository connection, not the account login.
+        // Do not let a different GitHub email switch an authenticated user's
+        // Spagad account while they connect repository access.
+        const credentialEmail = isGitHubConnection ? await getExistingCredentialEmail() : null
+        if (credentialEmail && credentialEmail !== email.toLowerCase()) {
+          console.warn("[auth] GitHub connection denied because provider email does not match the signed-in account.")
+          return "/commits?github=connection_email_mismatch"
+        }
+
         const existing = await prisma.user.findUnique({ where: { email } })
 
         // A pending invitation is as good as an admin-created record — it was
         // an admin who created the invitation, just ahead of the account.
         const invitation = existing ? null : await findPendingInvitationByEmail(email)
 
-        // Anyone with a GitHub account could otherwise provision themselves a
+        // An OAuth account could otherwise provision itself as a
         // USER role here, which carries messaging, email, and repository
         // workspace access. Gate it.
         const workspaceEmpty = existing ? false : (await prisma.user.count()) === 0
@@ -136,8 +190,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           return "/login?error=not_a_member"
         }
 
-        // Store the caller's own OAuth token so repository writes act as them.
-        const githubIdentity = account?.access_token
+        // Store GitHub tokens only when the user explicitly connects GitHub.
+        // Google is used solely for identity and must never grant repository
+        // access or overwrite a previously connected GitHub account.
+        const githubIdentity = isGitHubConnection && account?.access_token
           ? {
               githubLogin: ghLogin ?? null,
               githubTokenCipher: encryptSecret(account.access_token),
@@ -185,7 +241,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             console.log("[auth] Bootstrap workspace created:", workspace.id)
           }
 
-          console.log(`[auth] New user provisioned (${decision.reason}):`, email)
+          console.log(`[auth] New ${providerName} user provisioned (${decision.reason}):`, email)
         } else {
           await prisma.user.update({
             where: { email },
@@ -197,7 +253,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
               ...githubIdentity,
             },
           })
-          console.log("[auth] Existing user updated:", email)
+          console.log(`[auth] Existing user signed in through ${providerName}:`, email)
         }
       } catch (err) {
         console.error("[auth] Error provisioning user:", err)

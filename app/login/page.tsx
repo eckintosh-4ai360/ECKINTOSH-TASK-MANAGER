@@ -3,15 +3,15 @@
 import { signIn } from "next-auth/react"
 import { useState, Suspense } from "react"
 import { useSearchParams } from "next/navigation"
-import { GitBranch, Github, Loader2, AlertCircle, Code2, Zap, Users, Rocket } from "lucide-react"
+import { GitBranch, Chrome, Loader2, AlertCircle, Code2, Zap, Users, Rocket } from "lucide-react"
 
 const AUTH_ERROR_MESSAGES: Record<string, string> = {
-  Configuration: "GitHub sign-in is not configured for this deployment yet.",
+  Configuration: "Google sign-in is not configured for this deployment yet.",
   AccessDenied: "Access was denied during sign-in.",
-  OAuthSignin: "GitHub sign-in could not be started.",
-  OAuthCallback: "GitHub sign-in could not be completed.",
-  session_error: "The sign-in session could not be read after GitHub login.",
-  no_session: "GitHub login finished, but no authenticated session was available.",
+  OAuthSignin: "OAuth sign-in could not be started.",
+  OAuthCallback: "OAuth sign-in could not be completed.",
+  session_error: "The sign-in session could not be read after OAuth login.",
+  no_session: "OAuth login finished, but no authenticated session was available.",
   db_error: "Sign-in succeeded, but the app could not reach the database.",
   user_not_found: "Sign-in succeeded, but the user record could not be found.",
   session_reset: "Saved browser session cleared. Please sign in again.",
@@ -25,11 +25,11 @@ function LoginForm() {
   const authError = searchParams.get("error")
   const displayError = error ?? (authError ? AUTH_ERROR_MESSAGES[authError] ?? "Sign-in failed. Please try again." : null)
 
-  async function handleGitHubSignIn() {
+  async function handleGoogleSignIn() {
     setLoading(true)
     setError(null)
     try {
-      await signIn("github", { redirectTo: "/auth/complete?returnTo=/" })
+      await signIn("google", { redirectTo: "/auth/complete?returnTo=/" })
     } catch {
       setError("Sign-in failed. Please try again.")
       setLoading(false)
@@ -51,25 +51,25 @@ function LoginForm() {
 
       <div className="mb-8">
         <h2 className="text-xl font-bold text-foreground mb-1">Welcome back</h2>
-        <p className="text-sm text-muted-foreground">Sign in with your GitHub account to access your workspace.</p>
+        <p className="text-sm text-muted-foreground">Sign in to access your workspace.</p>
       </div>
 
-      {/* GitHub OAuth button */}
+      {/* Primary OAuth sign-in */}
       <button
-        id="github-signin-btn"
-        onClick={handleGitHubSignIn}
+        id="google-signin-btn"
+        onClick={handleGoogleSignIn}
         disabled={loading}
-        className="w-full h-12 flex items-center justify-center gap-3 rounded-xl bg-[#24292e] hover:bg-[#2f363d] border border-white/10 text-white font-semibold text-sm transition-all duration-200 hover:scale-[1.02] hover:shadow-xl hover:shadow-black/30 disabled:opacity-60 disabled:cursor-not-allowed disabled:scale-100 group"
+        className="w-full h-12 flex items-center justify-center gap-3 rounded-xl bg-white hover:bg-slate-100 border border-white/10 text-slate-900 font-semibold text-sm transition-all duration-200 hover:scale-[1.02] hover:shadow-xl hover:shadow-black/30 disabled:opacity-60 disabled:cursor-not-allowed disabled:scale-100 group"
       >
         {loading ? (
           <>
             <Loader2 className="w-5 h-5 animate-spin" />
-            Connecting to GitHub...
+            Connecting to Google...
           </>
         ) : (
           <>
-            <Github className="w-5 h-5 group-hover:scale-110 transition-transform" />
-            Continue with GitHub
+            <Chrome className="w-5 h-5 text-[#4285F4] group-hover:scale-110 transition-transform" />
+            Continue with Google
           </>
         )}
       </button>
@@ -100,8 +100,7 @@ function LoginForm() {
       {/* Info */}
       <div className="mt-6 p-3 rounded-xl bg-primary/5 border border-primary/10">
         <p className="text-[11px] text-muted-foreground leading-relaxed">
-          <span className="text-primary font-semibold">First time?</span> Your account will be created automatically using your GitHub profile. Contact{" "}
-          <span className="text-primary">admin@spagad.dev</span> to be granted admin access.
+          <span className="text-primary font-semibold">First time?</span> Use the Google address that received your invitation. GitHub is only needed later if you use repository features.
         </p>
       </div>
 

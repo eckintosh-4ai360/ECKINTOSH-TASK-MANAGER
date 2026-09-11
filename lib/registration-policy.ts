@@ -1,8 +1,8 @@
-// Who is allowed to obtain an account through GitHub OAuth.
+// Who is allowed to obtain an account through OAuth.
 //
 // The default is CLOSED: only people who already have a user record can sign
 // in. An admin creates the record first (Admin → Users), then the person signs
-// in with GitHub and the two are linked by email address.
+// in with Google and the two are linked by email address.
 //
 // Two optional env vars open it up for teams that want self-serve onboarding:
 //   SIGNUP_ALLOWED_DOMAINS  — comma-separated, e.g. "acme.com,acme.dev"
@@ -43,7 +43,7 @@ export function isEmailAllowlisted(email: string) {
   return false
 }
 
-// @param email          the address GitHub gave us
+// @param email          the address the OAuth provider gave us
 // @param userExists     whether a user record already exists for it
 // @param workspaceEmpty whether the workspace has no users at all yet
 export function decideRegistration(
