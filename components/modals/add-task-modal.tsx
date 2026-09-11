@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useTransition } from "react"
+import { useEffect, useMemo, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
@@ -49,9 +49,10 @@ export function AddTaskModal({
   const [open, setOpen] = useState(false)
   const [isPending, startTransition] = useTransition()
   const [formData, setFormData] = useState(() => getInitialFormData(initialProjectId, initialSprintId))
-  const availableSprints = formData.projectId
-    ? sprints.filter((sprint) => sprint.projectId === formData.projectId)
-    : []
+  const availableSprints = useMemo(
+    () => formData.projectId ? sprints.filter((sprint) => sprint.projectId === formData.projectId) : [],
+    [formData.projectId, sprints],
+  )
 
   useEffect(() => {
     if (!open) {

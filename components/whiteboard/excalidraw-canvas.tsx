@@ -47,7 +47,6 @@ type Props = {
 
 export const ExcalidrawCanvas = forwardRef<ExcalidrawCanvasHandle, Props>(
   function ExcalidrawCanvas({ initialData, onChange, isDark }, ref) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const apiRef = useRef<any>(null)
 
     // Expose snapshot + export methods to parent

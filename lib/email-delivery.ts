@@ -1,4 +1,4 @@
-import nodemailer from "nodemailer"
+import nodemailer, { type Transporter } from "nodemailer"
 import prisma from "@/lib/prisma"
 import { decryptSecret } from "@/lib/secure-store"
 
@@ -44,7 +44,7 @@ export const GMAIL_DEFAULTS = {
 // Keyed on the connection details so a settings change swaps the transport
 // automatically instead of reusing a stale authenticated connection.
 
-let cachedTransporter: nodemailer.Transporter | null = null
+let cachedTransporter: Transporter | null = null
 let cachedTransporterKey: string | null = null
 
 function transportKey(config: EmailDeliveryConfig) {

@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useTransition } from "react"
+import { useEffect, useMemo, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
@@ -112,9 +112,10 @@ export function TasksContent({ tasks, projects, sprints, users, currentUserId, c
     })
   }, [editingTask])
 
-  const availableSprints = formData.projectId
-    ? sprints.filter((sprint) => sprint.projectId === formData.projectId)
-    : []
+  const availableSprints = useMemo(
+    () => formData.projectId ? sprints.filter((sprint) => sprint.projectId === formData.projectId) : [],
+    [formData.projectId, sprints],
+  )
 
   useEffect(() => {
     if (formData.sprintId === "none") {
