@@ -164,7 +164,7 @@ export function InviteCollaboratorsModal({
         setInputValue("")
         onOpenChange(false)
       } else {
-        toast.error(res.error ?? "Failed to send invitations.")
+        toast.error(res.error ?? res.message ?? "Failed to send invitations.")
       }
     })
   }

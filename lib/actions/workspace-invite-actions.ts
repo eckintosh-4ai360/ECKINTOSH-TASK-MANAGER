@@ -5,7 +5,7 @@ import { requireWorkspace } from "@/lib/auth"
 import { hasPermission } from "@/lib/rbac"
 import type { AppRole } from "@/lib/rbac"
 import type { WorkspaceRole } from "@/lib/workspace"
-import { sendExternalEmail } from "@/lib/email-delivery"
+import { getEmailDeliveryConfig, getEmailDeliveryProblem, sendExternalEmail } from "@/lib/email-delivery"
 import { createInvitation } from "@/lib/invitations"
 
 const MAX_INVITES_PER_CALL = 25
@@ -55,12 +55,26 @@ export async function sendWorkspaceInvites({
     })
     const alreadyMembers = new Set(existingUsers.map((u) => u.user.email))
     const toInvite = validEmails.filter((email) => !alreadyMembers.has(email))
+    const skipped = validEmails.length - toInvite.length
 
-    const appUrl =
-      process.env.AUTH_URL ??
-      process.env.NEXTAUTH_URL ??
-      process.env.NEXT_PUBLIC_APP_URL ??
-      "http://localhost:3000"
+    // Do not create an invitation until we know this deployment has a mail
+    // transport. Otherwise a failed send leaves an apparently valid database
+    // invite that nobody can use.
+    if (toInvite.length > 0) {
+      const emailConfig = await getEmailDeliveryConfig()
+      if (!emailConfig) {
+        const problem = await getEmailDeliveryProblem()
+        return {
+          success: false,
+          sent: 0,
+          failed: toInvite.length,
+          skipped,
+          error: problem ?? "Invitations could not be sent. Check Settings → Email Delivery.",
+        }
+      }
+    }
+
+    const appUrl = getPublicAppUrl()
 
     const results = await Promise.allSettled(
       toInvite.map(async (email) => {
@@ -93,24 +107,52 @@ export async function sendWorkspaceInvites({
 
     const sent = results.filter((r) => r.status === "fulfilled" && r.value.success).length
     const failed = toInvite.length - sent
-    const skipped = validEmails.length - toInvite.length
+    const failureReasons = results.flatMap((result) => {
+      if (result.status === "fulfilled") {
+        return result.value.success || !result.value.error ? [] : [result.value.error]
+      }
+
+      return [describeInviteFailure(result.reason)]
+    })
 
     const parts: string[] = []
     if (sent > 0) parts.push(`Sent to ${sent} recipient${sent !== 1 ? "s" : ""}`)
     if (skipped > 0) parts.push(`${skipped} already ${skipped === 1 ? "has" : "have"} an account`)
-    if (failed > 0) parts.push(`${failed} failed to send (email delivery may not be configured)`)
+    if (failed > 0) {
+      const reason = failureReasons[0]
+      parts.push(`${failed} failed to send${reason ? `: ${reason}` : ""}`)
+    }
 
     return {
       success: sent > 0 || skipped > 0,
       sent,
       failed,
       skipped,
+      error: sent === 0 && failed > 0 ? failureReasons[0] ?? "Email delivery failed." : undefined,
       message: parts.length ? `${parts.join(". ")}.` : "No invitations were sent.",
     }
   } catch (err) {
     console.error("Workspace invite error:", err)
     return { success: false, error: "Failed to send invitations." }
   }
+}
+
+function getPublicAppUrl() {
+  const configuredUrl =
+    process.env.NEXT_PUBLIC_APP_URL ??
+    process.env.AUTH_URL ??
+    process.env.NEXTAUTH_URL
+
+  if (configuredUrl) return configuredUrl.replace(/\/+$/, "")
+
+  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`
+
+  return "http://localhost:3000"
+}
+
+function describeInviteFailure(reason: unknown) {
+  if (reason instanceof Error && reason.message) return reason.message
+  return "The invitation could not be created or delivered."
 }
 
 // ─── Email HTML Builder ───────────────────────────────────────────────────────

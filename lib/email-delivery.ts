@@ -143,6 +143,35 @@ export async function hasExternalEmailDeliveryConfig() {
   return (await getEmailDeliveryConfig()) !== null
 }
 
+// Gives admin-facing flows a useful explanation when config resolution
+// returns null. In particular, a database-stored App Password becomes
+// unreadable if the deployment's encryption/session secret was rotated.
+export async function getEmailDeliveryProblem(): Promise<string | null> {
+  try {
+    const record = await prisma.emailSetting.findUnique({
+      where: { id: EMAIL_SETTINGS_ID },
+      select: { enabled: true, passwordCipher: true },
+    })
+
+    if (record?.enabled && !decryptSecret(record.passwordCipher)) {
+      return "Saved email credentials cannot be decrypted. Re-enter the SMTP password under Settings → Email Delivery and save again."
+    }
+
+    if (record && !record.enabled && !getEnvConfig()) {
+      return "Outbound email is disabled. Enable it under Settings → Email Delivery."
+    }
+
+    if (!record && !getEnvConfig()) {
+      return "Outbound email is not configured. Open Settings → Email Delivery and save a verified SMTP or Gmail App Password."
+    }
+  } catch (error) {
+    console.error("[email] Failed to determine delivery status:", error)
+    return "The app could not read its email delivery settings. Check the deployment logs."
+  }
+
+  return null
+}
+
 function formatFrom(config: EmailDeliveryConfig) {
   return `${config.fromName} <${config.fromEmail}>`
 }
