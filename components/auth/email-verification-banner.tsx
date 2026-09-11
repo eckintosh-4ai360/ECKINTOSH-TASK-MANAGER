@@ -48,8 +48,8 @@ export function EmailVerificationBanner({ email }: { email: string }) {
   return (
     <div className="mb-4 rounded-xl border border-amber-500/25 bg-amber-500/5 px-4 py-3">
       <div className="flex flex-wrap items-center gap-3">
-        <div className="flex items-center gap-2 text-sm text-amber-200">
-          <AlertTriangle className="w-4 h-4 shrink-0 text-amber-400" />
+        <div className="flex items-center gap-2 text-sm text-amber-900 dark:text-amber-200">
+          <AlertTriangle className="w-4 h-4 shrink-0 text-amber-600 dark:text-amber-400" />
           <span>
             Verify <span className="font-medium text-foreground">{email}</span> to secure your account.
           </span>
@@ -63,7 +63,7 @@ export function EmailVerificationBanner({ email }: { email: string }) {
               variant="outline"
               onClick={handleSendCode}
               disabled={isSending}
-              className="h-8 border-amber-500/30 text-amber-200 hover:bg-amber-500/10"
+              className="h-8 border-amber-500/30 text-amber-900 hover:bg-amber-500/10 dark:text-amber-200"
             >
               {isSending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Mail className="w-3.5 h-3.5" />}
               Send code
@@ -91,7 +91,7 @@ export function EmailVerificationBanner({ email }: { email: string }) {
                 type="button"
                 onClick={handleSendCode}
                 disabled={isSending}
-                className="text-xs text-amber-300/80 hover:text-amber-200 transition-colors"
+                className="text-xs text-amber-700/80 hover:text-amber-900 dark:text-amber-300/80 dark:hover:text-amber-200 transition-colors"
               >
                 Resend
               </button>
@@ -101,7 +101,7 @@ export function EmailVerificationBanner({ email }: { email: string }) {
           <button
             type="button"
             onClick={() => setDismissed(true)}
-            className="text-amber-300/60 hover:text-amber-200 transition-colors"
+            className="text-amber-700/60 hover:text-amber-900 dark:text-amber-300/60 dark:hover:text-amber-200 transition-colors"
             title="Dismiss for now"
           >
             <X className="w-4 h-4" />
@@ -110,7 +110,7 @@ export function EmailVerificationBanner({ email }: { email: string }) {
       </div>
 
       {message && (
-        <p className={`mt-2 text-xs ${message.type === "error" ? "text-destructive" : "text-emerald-300"}`}>
+        <p className={`mt-2 text-xs ${message.type === "error" ? "text-destructive" : "text-emerald-700 dark:text-emerald-300"}`}>
           {message.text}
         </p>
       )}

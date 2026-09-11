@@ -22,14 +22,20 @@ export default function EmailLoginPage() {
     setError(null)
     setLoading(true)
     const formData = new FormData(e.currentTarget)
-    const result = await loginAction(formData)
-    if (result?.mfaRequired) {
-      setMfaRequired(true)
-      setLoading(false)
-      return
-    }
-    if (result?.error) {
-      setError(result.error)
+    try {
+      const result = await loginAction(formData)
+      if (result?.mfaRequired) {
+        setMfaRequired(true)
+        setLoading(false)
+        return
+      }
+      if (result?.error) {
+        setError(result.error)
+        setLoading(false)
+      }
+    } catch {
+      // Server-action failures must not leave the form permanently disabled.
+      setError("We couldn't complete sign in. Please try again.")
       setLoading(false)
     }
   }
