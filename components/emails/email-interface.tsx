@@ -202,7 +202,7 @@ export function EmailInterface({ inbox: initialInbox, sent: initialSent, users }
       </div>
 
       {/* Email list */}
-      <div className="w-72 flex-shrink-0 border-r border-border/40 flex flex-col">
+      <div className="w-72 flex-shrink-0 sidebar-scrollbar border-r border-border/40 flex flex-col">
         <div className="px-4 py-3 border-b border-border/40">
           <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{tab === "inbox" ? "Inbox" : "Sent"} · {emails.length} emails</p>
         </div>

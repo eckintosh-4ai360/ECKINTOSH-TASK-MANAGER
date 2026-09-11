@@ -177,7 +177,7 @@ export function JotItContent({ initialNotes }: { initialNotes: JotNote[] }) {
           />
         </div>
 
-        <div className="space-y-2 max-h-[calc(100vh-290px)] overflow-y-auto pr-1">
+        <div className="space-y-2 max-h-[calc(100vh-290px)] overflow-y-auto pr-1 sidebar-scrollbar">
           {filteredNotes.length === 0 && (
             <div className="rounded-xl border border-dashed border-border/70 p-5 text-sm text-muted-foreground">
               {query ? "No notes match your search." : "No notes yet. Start with a quick jot."}

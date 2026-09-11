@@ -150,7 +150,7 @@ export function Sidebar({ role, workspaces = [], activeWorkspaceId }: { role: Ap
   // `bg-sidebar` is opaque on purpose — a translucent nav drawer lets the page
   // show through, and backdrop-filter is unreliable on mobile Safari.
   return (
-    <aside className="flex h-full w-full flex-col overflow-y-auto bg-sidebar border-r border-primary/10">
+    <aside className="flex h-full w-full flex-col overflow-y-auto sidebar-scrollbar bg-sidebar border-r border-primary/10">
       {/* ── Logo & Brand ─────────────────────────────────── */}
       <div className="px-4 pt-5 pb-4 border-b border-white/5">
         <Link href="/" className="flex items-center gap-3 group">

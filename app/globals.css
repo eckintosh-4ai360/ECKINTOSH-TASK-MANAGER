@@ -258,6 +258,43 @@
   animation: border-glow 2s ease-in-out infinite;
 }
 
+/* ── Sidebar scrollbars: thinner, brand gradient thumb ──────────────────── */
+.sidebar-scrollbar {
+  /* Firefox */
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklab, var(--primary) 70%, transparent) transparent;
+}
+
+.sidebar-scrollbar::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+.sidebar-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sidebar-scrollbar::-webkit-scrollbar-thumb {
+  background: linear-gradient(
+    180deg,
+    var(--primary) 0%,
+    color-mix(in oklab, var(--primary) 80%, transparent) 100%
+  );
+  border-radius: 999px;
+}
+
+.sidebar-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklab, var(--primary) 90%, white) 0%,
+    var(--primary) 100%
+  );
+}
+
+.sidebar-scrollbar::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
 /* Glass morphism utilities */
 .glass {
   background: rgba(255, 255, 255, 0.72);
