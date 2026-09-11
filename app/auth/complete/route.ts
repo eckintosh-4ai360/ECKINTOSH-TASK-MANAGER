@@ -58,7 +58,7 @@ export async function GET(request: Request) {
   try {
     dbUser = await prisma.user.findUnique({
       where: { email },
-      select: { id: true, email: true, name: true, role: true },
+      select: { id: true, email: true, name: true, role: true, sessionVersion: true },
     })
     console.log(
       "[auth/complete] DB lookup result:",
@@ -80,6 +80,7 @@ export async function GET(request: Request) {
     email: dbUser.email,
     name: dbUser.name ?? "Developer",
     role: dbUser.role as "ADMIN" | "USER" | "GUEST",
+    sessionVersion: dbUser.sessionVersion,
   })
   const response = redirectTo(request, returnTo)
   response.cookies.set(SESSION_COOKIE_NAME, token, getSessionCookieOptions())
