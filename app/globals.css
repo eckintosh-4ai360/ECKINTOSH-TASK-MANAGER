@@ -258,23 +258,22 @@
   animation: border-glow 2s ease-in-out infinite;
 }
 
-/* ── Sidebar scrollbars: thinner, brand gradient thumb ──────────────────── */
-.sidebar-scrollbar {
-  /* Firefox */
+/* ── Slim scrollbars everywhere: thin brand-gradient thumb ──────────────── */
+* {
   scrollbar-width: thin;
   scrollbar-color: color-mix(in oklab, var(--primary) 70%, transparent) transparent;
 }
 
-.sidebar-scrollbar::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
+::-webkit-scrollbar {
+  width: 3px;
+  height: 3px;
 }
 
-.sidebar-scrollbar::-webkit-scrollbar-track {
+::-webkit-scrollbar-track {
   background: transparent;
 }
 
-.sidebar-scrollbar::-webkit-scrollbar-thumb {
+::-webkit-scrollbar-thumb {
   background: linear-gradient(
     180deg,
     var(--primary) 0%,
@@ -283,7 +282,7 @@
   border-radius: 999px;
 }
 
-.sidebar-scrollbar::-webkit-scrollbar-thumb:hover {
+::-webkit-scrollbar-thumb:hover {
   background: linear-gradient(
     180deg,
     color-mix(in oklab, var(--primary) 90%, white) 0%,
@@ -291,7 +290,7 @@
   );
 }
 
-.sidebar-scrollbar::-webkit-scrollbar-corner {
+::-webkit-scrollbar-corner {
   background: transparent;
 }
 

@@ -399,7 +399,7 @@ export function WhiteboardContent({
         </div>
 
         {/* Board list */}
-        <div className="flex-1 overflow-y-auto p-2 space-y-0.5 sidebar-scrollbar">
+        <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
           {boards.length === 0 ? (
             <div className="px-2 py-6 text-center">
               <p className="text-xs text-muted-foreground/60 leading-relaxed">

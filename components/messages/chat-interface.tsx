@@ -454,7 +454,7 @@ export function ChatInterface({ currentUserId, currentUserName, workspaceId }: C
     <div className="flex h-[calc(100vh-120px)] overflow-hidden rounded-2xl border border-border/60 bg-card shadow-xl shadow-black/5 dark:shadow-black/30">
 
       {/* ── LEFT PANEL: contacts ───────────────────────────────────────────── */}
-      <div className="w-80 flex-shrink-0 flex flex-col sidebar-scrollbar border-r border-border/60 bg-card/85">
+      <div className="w-80 flex-shrink-0 flex flex-col border-r border-border/60 bg-card/85">
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-4 border-b border-border/60">
           <div className="flex items-center gap-2">
