@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getSession } from "@/lib/auth"
-import { getGroqClient } from "@/lib/ai/groq"
+import { getGroqClient, GROQ_MODEL } from "@/lib/ai/groq"
 
 const MAX_PROMPT_LENGTH = 2000
 
@@ -87,7 +87,7 @@ Example Response:
 }`
 
     const response = await groq.chat.completions.create({
-      model: "llama-3.3-70b-versatile",
+      model: GROQ_MODEL,
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: `Generate a diagram for: ${prompt}` },
@@ -95,6 +95,7 @@ Example Response:
       temperature: 0.2,
       max_tokens: 1500,
       response_format: { type: "json_object" },
+      reasoning_effort: "low",
     })
 
     const rawContent = response.choices[0].message.content

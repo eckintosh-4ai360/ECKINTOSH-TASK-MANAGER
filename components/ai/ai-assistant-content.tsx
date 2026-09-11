@@ -230,11 +230,11 @@ export function AIAssistantContent({
         body: JSON.stringify({ messages: history }),
       })
 
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status}`)
-      }
+      const data = await res.json().catch(() => ({}))
 
-      const data = await res.json()
+      if (!res.ok) {
+        throw new Error(data.error ?? `HTTP ${res.status}`)
+      }
 
       if (data.error) {
         throw new Error(data.error)
@@ -264,7 +264,7 @@ export function AIAssistantContent({
       const errMsg: Message = {
         id: crypto.randomUUID(),
         role: "assistant",
-        content: `⚠️ Something went wrong: ${err instanceof Error ? err.message : "Unknown error"}. Make sure your GROQ_API_KEY is set in .env`,
+        content: `Something went wrong: ${err instanceof Error ? err.message : "Unknown error"}`,
       }
       setMessages((prev) => [...prev, errMsg])
     } finally {

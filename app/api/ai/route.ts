@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import type Groq from "groq-sdk"
 import { getAIProductivityIntelligence, getAIWorkspaceContext } from "@/lib/actions/ai-actions"
-import { getGroqClient } from "@/lib/ai/groq"
+import { getGroqClient, GROQ_MODEL } from "@/lib/ai/groq"
 import { getSession } from "@/lib/auth"
 
 // ─── Tool Definitions ────────────────────────────────────────────────────────
@@ -378,20 +378,21 @@ export async function POST(req: NextRequest) {
     const groq = getGroqClient()
 
     if (!groq) {
-      return NextResponse.json({
-        type: "text",
-        content: "GROQ_API_KEY is not configured, but the workspace intelligence layer is ready once the key is added.",
-      })
+      return NextResponse.json(
+        { error: "Groq is not configured for this deployment. Add GROQ_API_KEY to Vercel Production and redeploy." },
+        { status: 503 },
+      )
     }
 
     const response = await groq.chat.completions.create({
-      model: "llama-3.3-70b-versatile",
+      model: GROQ_MODEL,
       messages: [
         { role: "system", content: systemPrompt },
         ...messages,
       ],
       tools,
       tool_choice: "auto",
+      reasoning_effort: "low",
       temperature: 0.7,
       max_tokens: 2048,
     })
@@ -416,7 +417,7 @@ export async function POST(req: NextRequest) {
       ) {
         // Generate a text response about this
         const followUp = await groq.chat.completions.create({
-          model: "llama-3.3-70b-versatile",
+          model: GROQ_MODEL,
           messages: [
             { role: "system", content: systemPrompt },
             ...messages,
@@ -437,6 +438,7 @@ export async function POST(req: NextRequest) {
               }),
             },
           ],
+          reasoning_effort: "low",
           temperature: 0.7,
           max_tokens: 2048,
         })
@@ -449,7 +451,7 @@ export async function POST(req: NextRequest) {
 
       // For write actions, return pending confirmation
       const confirmationText = await groq.chat.completions.create({
-        model: "llama-3.3-70b-versatile",
+        model: GROQ_MODEL,
         messages: [
           {
             role: "system",
@@ -462,6 +464,7 @@ Be specific about what you will create.`,
             content: `Tool: ${toolName}, Args: ${JSON.stringify(toolArgs)}. Write a confirmation message.`,
           },
         ],
+        reasoning_effort: "low",
         temperature: 0.3,
         max_tokens: 100,
       })
@@ -482,8 +485,24 @@ Be specific about what you will create.`,
   } catch (error) {
     console.error("AI route error:", error)
     return NextResponse.json(
-      { error: "Failed to process AI request. Make sure GROQ_API_KEY is set in your .env file." },
-      { status: 500 }
+      { error: describeAIError(error) },
+      { status: 502 }
     )
   }
+}
+
+function describeAIError(error: unknown) {
+  const details = error as { status?: number; message?: string }
+
+  if (details.status === 401 || details.status === 403) {
+    return "Groq rejected the API key. Check that GROQ_API_KEY is valid and enabled for the Vercel Production environment."
+  }
+  if (details.status === 429) {
+    return "Groq rate limit reached. Please wait a moment and try again."
+  }
+  if (details.status === 400 && details.message) {
+    return `Groq rejected the request: ${details.message.slice(0, 240)}`
+  }
+
+  return "The AI provider request failed. Check the Vercel function logs for the underlying error."
 }
