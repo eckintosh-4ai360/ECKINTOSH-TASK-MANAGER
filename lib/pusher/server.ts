@@ -3,6 +3,7 @@ import Pusher from "pusher"
 let cachedPusherServer: Pusher | null = null
 
 export function getPusherServer(): Pusher | null {
+  if (process.env.NEXT_PUBLIC_REALTIME_TRANSPORT === "websocket") return null
   if (cachedPusherServer) return cachedPusherServer
 
   const appId = process.env.PUSHER_APP_ID

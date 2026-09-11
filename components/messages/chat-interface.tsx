@@ -41,6 +41,12 @@ type Message = {
   mediaSize?: number | null
 }
 
+type NativeRealtimeEvent =
+  | { type: "presence"; userId: string; online: boolean }
+  | ({ type: "chat" } & Message)
+  | { type: "delete_message"; id: string }
+  | { type: "edit_message"; id: string; content: string; edited: boolean }
+
 interface ChatInterfaceProps {
   currentUserId: string
   currentUserName: string
@@ -65,6 +71,8 @@ export function ChatInterface({ currentUserId, currentUserName, workspaceId }: C
   const inputRef = useRef<HTMLInputElement>(null)
   const msgRefs = useRef<Record<string, HTMLDivElement | null>>({})
   const restoredRef = useRef(false)
+  const nativeSocketRef = useRef<WebSocket | null>(null)
+  const useNativeWebSocket = process.env.NEXT_PUBLIC_REALTIME_TRANSPORT === "websocket"
   // Track when each user was last seen online
   const lastSeenRef = useRef<Record<string, Date>>({})
 
@@ -78,12 +86,95 @@ export function ChatInterface({ currentUserId, currentUserName, workspaceId }: C
   const selectedUserRef = useRef(selectedUser)
   useEffect(() => { selectedUserRef.current = selectedUser }, [selectedUser])
 
+  const applyChatMessage = useCallback((data: Message) => {
+    const activePartnerId = selectedUserRef.current?.id
+    if (
+      (data.from === activePartnerId && data.to === currentUserId) ||
+      (data.from === currentUserId && data.to === activePartnerId)
+    ) {
+      setMessages((prev) => {
+        if (prev.some((m) => m.id === data.id)) return prev
+        return [...prev, data]
+      })
+    }
+
+    if (data.from !== activePartnerId && data.from !== currentUserId && data.to === currentUserId) {
+      setUnread((prev) => ({ ...prev, [data.from]: (prev[data.from] ?? 0) + 1 }))
+    }
+  }, [currentUserId])
+
+  const applyRealtimeEvent = useCallback((data: NativeRealtimeEvent) => {
+    if (data.type === "presence") {
+      setOnlineUsers((prev) => {
+        const next = new Set(prev)
+        if (data.online) next.add(data.userId)
+        else {
+          next.delete(data.userId)
+          lastSeenRef.current[data.userId] = new Date()
+        }
+        return next
+      })
+      return
+    }
+    if (data.type === "chat") {
+      applyChatMessage(data)
+      return
+    }
+    if (data.type === "delete_message") {
+      setMessages((prev) => prev.filter((message) => message.id !== data.id))
+      return
+    }
+    setMessages((prev) => prev.map((message) => (message.id === data.id ? { ...message, content: data.content, edited: true } : message)))
+  }, [applyChatMessage])
+
   // ── Stable Pusher Realtime Subscription ──────────────────────────────────
   useEffect(() => {
     const pusher = getPusherClient()
     if (!pusher) {
-      setWsStatus("connected")
-      return
+      if (process.env.NEXT_PUBLIC_REALTIME_TRANSPORT !== "websocket") {
+        setWsStatus("offline")
+        return
+      }
+
+      let socket: WebSocket | null = null
+      let reconnectTimer: ReturnType<typeof setTimeout> | null = null
+      let reconnectDelay = 1000
+      let intentionalClose = false
+
+      const connect = () => {
+        if (intentionalClose) return
+        setWsStatus("reconnecting")
+        socket = new WebSocket(`${window.location.protocol === "https:" ? "wss" : "ws"}://${window.location.host}/ws?userId=${currentUserId}`)
+        socket.onopen = () => {
+          nativeSocketRef.current = socket
+          reconnectDelay = 1000
+          setWsStatus("connected")
+        }
+        socket.onmessage = (event) => {
+          try {
+            applyRealtimeEvent(JSON.parse(event.data) as NativeRealtimeEvent)
+          } catch (error) {
+            console.error("[Chat] Failed to parse native realtime event:", error)
+          }
+        }
+        socket.onclose = () => {
+          if (intentionalClose) return
+          setWsStatus("offline")
+          reconnectTimer = setTimeout(() => {
+            reconnectDelay = Math.min(reconnectDelay * 2, 30_000)
+            connect()
+          }, reconnectDelay)
+        }
+        socket.onerror = () => socket?.close()
+      }
+
+      connect()
+      return () => {
+        intentionalClose = true
+        if (reconnectTimer) clearTimeout(reconnectTimer)
+        socket?.close()
+        nativeSocketRef.current = null
+      }
     }
 
     setWsStatus("reconnecting")
@@ -120,37 +211,30 @@ export function ChatInterface({ currentUserId, currentUserName, workspaceId }: C
       })
     })
 
-    channel.bind("chat", (data: Message) => {
-      const activePartnerId = selectedUserRef.current?.id
-      if (
-        (data.from === activePartnerId && data.to === currentUserId) ||
-        (data.from === currentUserId && data.to === activePartnerId)
-      ) {
-        setMessages((prev) => {
-          if (prev.some((m) => m.id === data.id)) return prev
-          return [...prev, data]
-        })
-      }
+    channel.bind("chat", applyChatMessage)
 
-      if (data.from !== activePartnerId && data.from !== currentUserId && data.to === currentUserId) {
-        setUnread((prev) => ({ ...prev, [data.from]: (prev[data.from] ?? 0) + 1 }))
-      }
-    })
+    const handleDelete = (data: { id: string }) => setMessages((prev) => prev.filter((m) => m.id !== data.id))
+    channel.bind("delete_message", handleDelete)
 
-    channel.bind("delete_message", (data: { id: string }) => {
-      setMessages((prev) => prev.filter((m) => m.id !== data.id))
-    })
-
-    channel.bind("edit_message", (data: { id: string; content: string; edited: boolean }) => {
-      setMessages((prev) => prev.map((m) => (m.id === data.id ? { ...m, content: data.content, edited: true } : m)))
-    })
+    const handleEdit = (data: { id: string; content: string; edited: boolean }) => setMessages((prev) => prev.map((m) => (m.id === data.id ? { ...m, content: data.content, edited: true } : m)))
+    channel.bind("edit_message", handleEdit)
 
     return () => {
       pusher.connection.unbind("state_change", handleStateChange)
+      channel.unbind("chat", applyChatMessage)
+      channel.unbind("delete_message", handleDelete)
+      channel.unbind("edit_message", handleEdit)
       channel.unbind_all()
       pusher.unsubscribe(presenceChannel)
     }
-  }, [currentUserId, workspaceId])
+  }, [applyChatMessage, applyRealtimeEvent, currentUserId, workspaceId])
+
+  const sendNativeEvent = (event: Record<string, unknown>) => {
+    if (!useNativeWebSocket || nativeSocketRef.current?.readyState !== WebSocket.OPEN) {
+      throw new Error("The realtime connection is not ready. Please wait a moment and try again.")
+    }
+    nativeSocketRef.current.send(JSON.stringify(event))
+  }
 
   const selectUser = useCallback(async (user: ChatUser) => {
     setSelectedUser(user)
@@ -210,16 +294,27 @@ export function ChatInterface({ currentUserId, currentUserName, workspaceId }: C
       if (!res.ok) { const e = await res.json(); throw new Error(e.error ?? "Upload failed") }
       const { url, mediaType, mediaName, mediaSize } = await res.json()
 
-      const payload = await sendMessageAction({
-        to: selectedUser.id,
-        mediaUrl: url,
-        mediaType,
-        mediaName,
-        mediaSize,
-        replyToId: replyingTo ? replyingTo.id : undefined,
-      })
-
-      setMessages((prev) => (prev.some((m) => m.id === payload.id) ? prev : [...prev, payload]))
+      if (useNativeWebSocket) {
+        sendNativeEvent({
+          type: "chat",
+          to: selectedUser.id,
+          mediaUrl: url,
+          mediaType,
+          mediaName,
+          mediaSize,
+          replyToId: replyingTo ? replyingTo.id : undefined,
+        })
+      } else {
+        const payload = await sendMessageAction({
+          to: selectedUser.id,
+          mediaUrl: url,
+          mediaType,
+          mediaName,
+          mediaSize,
+          replyToId: replyingTo ? replyingTo.id : undefined,
+        })
+        setMessages((prev) => (prev.some((m) => m.id === payload.id) ? prev : [...prev, payload]))
+      }
       setReplyingTo(null)
     } catch (err: any) {
       alert(err.message)
@@ -241,13 +336,16 @@ export function ChatInterface({ currentUserId, currentUserName, workspaceId }: C
     setReplyingTo(null)
 
     try {
-      const payload = await sendMessageAction({
-        to: selectedUser.id,
-        content,
-        replyToId: replyId,
-      })
-
-      setMessages((prev) => (prev.some((m) => m.id === payload.id) ? prev : [...prev, payload]))
+      if (useNativeWebSocket) {
+        sendNativeEvent({ type: "chat", to: selectedUser.id, content, replyToId: replyId })
+      } else {
+        const payload = await sendMessageAction({
+          to: selectedUser.id,
+          content,
+          replyToId: replyId,
+        })
+        setMessages((prev) => (prev.some((m) => m.id === payload.id) ? prev : [...prev, payload]))
+      }
     } catch (err: any) {
       console.error("[Chat] Send failed:", err)
       alert(err.message ?? "Failed to send message")
@@ -266,8 +364,12 @@ export function ChatInterface({ currentUserId, currentUserName, workspaceId }: C
   const sendDelete = async (msgId: string) => {
     if (!confirm("Delete this message for everyone?")) return
     try {
-      await deleteMessageAction(msgId)
-      setMessages((prev) => prev.filter((m) => m.id !== msgId))
+      if (useNativeWebSocket) {
+        sendNativeEvent({ type: "delete_message", id: msgId })
+      } else {
+        await deleteMessageAction(msgId)
+        setMessages((prev) => prev.filter((m) => m.id !== msgId))
+      }
     } catch (err: any) {
       alert(err.message ?? "Failed to delete message")
     }
@@ -283,8 +385,12 @@ export function ChatInterface({ currentUserId, currentUserName, workspaceId }: C
     const content = editInput.trim()
     if (!content) { setEditingId(null); return }
     try {
-      await editMessageAction(msgId, content)
-      setMessages((prev) => prev.map((m) => m.id === msgId ? { ...m, content, edited: true } : m))
+      if (useNativeWebSocket) {
+        sendNativeEvent({ type: "edit_message", id: msgId, content })
+      } else {
+        await editMessageAction(msgId, content)
+        setMessages((prev) => prev.map((m) => m.id === msgId ? { ...m, content, edited: true } : m))
+      }
     } catch (err: any) {
       alert(err.message ?? "Failed to edit message")
     } finally {

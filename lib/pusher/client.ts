@@ -4,6 +4,7 @@ let pusherClientInstance: PusherClient | null = null
 
 export function getPusherClient(): PusherClient | null {
   if (typeof window === "undefined") return null
+  if (process.env.NEXT_PUBLIC_REALTIME_TRANSPORT === "websocket") return null
 
   const key = process.env.NEXT_PUBLIC_PUSHER_KEY
   const cluster = process.env.NEXT_PUBLIC_PUSHER_CLUSTER ?? "mt1"

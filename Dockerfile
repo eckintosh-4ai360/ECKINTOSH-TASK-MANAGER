@@ -16,6 +16,8 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
 ENV NEXT_TELEMETRY_DISABLED=1
+ARG NEXT_PUBLIC_REALTIME_TRANSPORT=websocket
+ENV NEXT_PUBLIC_REALTIME_TRANSPORT=$NEXT_PUBLIC_REALTIME_TRANSPORT
 RUN npx prisma generate
 RUN npm run build
 
@@ -26,6 +28,7 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
+ENV NEXT_PUBLIC_REALTIME_TRANSPORT=websocket
 
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
@@ -48,4 +51,9 @@ USER nextjs
 
 EXPOSE 3000
 
-CMD ["npm", "run", "start"]
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD node -e "fetch('http://127.0.0.1:3000').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"
+
+# Docker owns the native WebSocket process. Apply migrations at container start,
+# then serve Next.js and /ws from one listener.
+CMD ["sh", "-c", "npm run db:migrate && npm run start:node"]

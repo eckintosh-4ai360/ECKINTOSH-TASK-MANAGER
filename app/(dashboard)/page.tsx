@@ -14,11 +14,11 @@ import { getAIProductivityIntelligence } from "@/lib/actions/ai-actions"
 import { getSprints } from "@/lib/actions/sprint-actions"
 import { getStandups } from "@/lib/actions/standup-actions"
 import { getTeamActivityData } from "@/lib/actions/team-actions"
-import { requireSession } from "@/lib/auth"
+import { requireWorkspace } from "@/lib/auth"
 import { hasPermission } from "@/lib/rbac"
 
 export default async function DashboardPage() {
-  const session = await requireSession()
+  const session = await requireWorkspace()
   const canManageProjects = hasPermission(session.role, "manage_projects")
   
   const [projects, stats, workspaceUsers, sprints, deployments, standups, teamActivities, intelligence] = await Promise.all([
@@ -90,7 +90,7 @@ export default async function DashboardPage() {
         </div>
 
         {/* Row 5: Team Activity */}
-        <TeamActivity currentUserId={session.id} initialActivities={teamActivities} />
+        <TeamActivity currentUserId={session.id} workspaceId={session.workspaceId} initialActivities={teamActivities} />
       </div>
     </>
   )

@@ -5,13 +5,15 @@ import { Users, GitCommit, Clock, CheckCircle2 } from "lucide-react"
 import Link from "next/link"
 import { useSearch } from "./search-context"
 import type { TeamMemberActivity } from "@/lib/actions/team-actions"
+import { getPusherClient, getWorkspacePresenceChannel } from "@/lib/pusher/client"
 
 interface TeamActivityProps {
   currentUserId: string
+  workspaceId: string
   initialActivities: TeamMemberActivity[]
 }
 
-export function TeamActivity({ currentUserId, initialActivities }: TeamActivityProps) {
+export function TeamActivity({ currentUserId, workspaceId, initialActivities }: TeamActivityProps) {
   const { matches, isSearching } = useSearch()
   const [activities, setActivities] = useState<TeamMemberActivity[]>(initialActivities)
   const wsRef = useRef<WebSocket | null>(null)
@@ -24,10 +26,14 @@ export function TeamActivity({ currentUserId, initialActivities }: TeamActivityP
     setActivities(initialActivities)
   }, [initialActivities])
 
-  // Establish a real-time WebSocket connection to listen to presence events
+  // Vercel uses Pusher Channels. Docker can use the native /ws server when
+  // explicitly selected; it is never attempted accidentally on Vercel.
   const connectWs = useCallback(() => {
+    const pusher = getPusherClient()
+    if (pusher) return
+    if (process.env.NEXT_PUBLIC_REALTIME_TRANSPORT !== "websocket") return
     if (intentionalCloseRef.current) return
-    if (wsRef.current?.readyState === WebSocket.OPEN) return
+    if (wsRef.current?.readyState === WebSocket.OPEN || wsRef.current?.readyState === WebSocket.CONNECTING) return
 
     const protocol = window.location.protocol === "https:" ? "wss" : "ws"
     const wsUrl = `${protocol}://${window.location.host}/ws?userId=${currentUserId}`
@@ -71,6 +77,27 @@ export function TeamActivity({ currentUserId, initialActivities }: TeamActivityP
       ws.close()
     }
   }, [currentUserId])
+
+  useEffect(() => {
+    const pusher = getPusherClient()
+    if (!pusher) {
+      if (process.env.NEXT_PUBLIC_REALTIME_TRANSPORT === "websocket") connectWs()
+      return
+    }
+
+    const channel = pusher.subscribe(getWorkspacePresenceChannel(workspaceId)) as any
+    const sync = (member: { id: string }, online: boolean) => {
+      setActivities((prev) => prev.map((activity) => activity.id === member.id ? { ...activity, online } : activity))
+    }
+    channel.bind("pusher:member_added", (member: { id: string }) => sync(member, true))
+    channel.bind("pusher:member_removed", (member: { id: string }) => sync(member, false))
+
+    return () => {
+      channel.unbind("pusher:member_added")
+      channel.unbind("pusher:member_removed")
+      pusher.unsubscribe(getWorkspacePresenceChannel(workspaceId))
+    }
+  }, [connectWs, workspaceId])
 
   useEffect(() => {
     intentionalCloseRef.current = false

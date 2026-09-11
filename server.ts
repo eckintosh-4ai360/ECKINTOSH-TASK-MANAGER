@@ -13,7 +13,9 @@ import { getDatabaseSslOptions, normalizeDatabaseUrl } from "@/lib/db-ssl"
 
 const { Pool } = pg
 const dev = process.env.NODE_ENV !== "production"
-const hostname = "localhost"
+// Vercel never runs this file. Docker uses it as the single HTTP + WebSocket
+// process, so bind to all interfaces inside the container.
+const hostname = process.env.WS_HOST ?? "0.0.0.0"
 const port = parseInt(process.env.PORT ?? "3000", 10)
 
 // ─── Prisma (for persisting messages) ─────────────────────────────────────────
@@ -53,8 +55,8 @@ async function getSocketSession(req: { headers: { cookie?: string } }) {
 
   const session = await verifySessionToken(token)
   if (!session) return null
-  const dbUser = await prisma.user.findUnique({ where: { id: session.id }, select: { id: true, email: true, role: true } })
-  if (!dbUser || dbUser.email !== session.email) return null
+  const dbUser = await prisma.user.findUnique({ where: { id: session.id }, select: { id: true, email: true, role: true, sessionVersion: true } })
+  if (!dbUser || dbUser.email !== session.email || dbUser.sessionVersion !== session.sessionVersion) return null
   const preferredWorkspaceId = getCookieValue(req.headers.cookie, "spagad_workspace")
   const membership = await prisma.workspaceMember.findFirst({
     where: { userId: session.id, ...(preferredWorkspaceId ? { workspaceId: preferredWorkspaceId } : {}) },

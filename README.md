@@ -113,6 +113,8 @@ Replace the placeholders below with your actual screenshot paths:
 - **GitHub OAuth** via NextAuth.js v5 with JWT sessions
 - Custom credential-based login with **bcrypt** password hashing
 - Email verification with **OTP** support
+- Workspace invitations and workspace-scoped authorization
+- TOTP **MFA**, recovery codes, password reset, session revocation, and audit logs
 
 ### ⚙️ Settings & Admin
 
@@ -232,7 +234,7 @@ GITHUB_WEBHOOK_SECRET=""
 
 ### 4. Set up the database
 
-Schema changes are tracked with Prisma Migrate (`prisma/migrations/`), not `db push` — this gives you rollback history and makes `npm run build` fail loudly if a migration can't apply, instead of drifting silently.
+Schema changes are tracked with Prisma Migrate (`prisma/migrations/`), not `db push` — this gives you rollback history and prevents application builds from mutating production data.
 
 ```bash
 # First time: create the database and apply all migrations
@@ -249,7 +251,7 @@ When you change `schema.prisma` during development, generate a new migration ins
 npx prisma migrate dev --name describe_your_change
 ```
 
-This writes a new folder under `prisma/migrations/` — commit it. `npm run build` runs `prisma migrate deploy` automatically (via `prebuild`), so production applies whatever migrations are checked in.
+This writes a new folder under `prisma/migrations/` — commit it. Apply migrations explicitly in each environment with `npm run db:migrate` before starting the application.
 
 ---
 
@@ -273,7 +275,10 @@ The custom server also starts a **WebSocket endpoint** at `ws://localhost:3000/w
 | `npm run build`           | Build for production (runs `prisma generate` first) |
 | `npm start`               | Start the production server                         |
 | `npm run lint`            | Run ESLint                                          |
+| `npm run typecheck`       | Run the TypeScript compiler without emitting files  |
+| `npm test`                | Run the security and authorization test suite        |
 | `npm run prisma:generate` | Regenerate the Prisma client                        |
+| `npm run db:migrate`      | Apply checked-in migrations to the target database   |
 
 ---
 
@@ -282,13 +287,27 @@ The custom server also starts a **WebSocket endpoint** at `ws://localhost:3000/w
 1. Push your code to GitHub.
 2. Import the repository into [Vercel](https://vercel.com/).
 3. Add **all environment variables** from `.env.example` in the Vercel dashboard under **Settings → Environment Variables** (select the **Production** scope).
-4. Set your GitHub OAuth App's **Authorization callback URL** to:
+4. Set `NEXT_PUBLIC_REALTIME_TRANSPORT=pusher` and configure the Pusher server/client variables. Vercel Functions cannot host the native `/ws` listener.
+5. Set your GitHub OAuth App's **Authorization callback URL** to:
    ```
    https://your-domain.vercel.app/api/auth/callback/github
    ```
-5. Redeploy.
+6. Run `npm run db:migrate` from a trusted release job against the production database, then redeploy.
+
+Vercel is the serverless deployment: API routes, scheduled jobs, and Pusher events run there. Do not use `npm run start:node` or expect `ws://.../ws` to work on Vercel. Uploads should use Vercel Blob rather than local disk.
 
 > **Verify auth is working** by visiting `https://your-domain.vercel.app/api/auth/providers` — it should return a `github` object, not `{}`.
+
+### 🐳 Docker with native WebSocket
+
+The included `Dockerfile` runs migrations and starts `server.ts`, which serves Next.js and the native WebSocket endpoint from the same process:
+
+```bash
+docker build -t spagad-task-manager .
+docker run --env-file .env -p 3000:3000 spagad-task-manager
+```
+
+Set `NEXT_PUBLIC_REALTIME_TRANSPORT=websocket` for this deployment. Put a reverse proxy/load balancer in front of the container that supports HTTP connection upgrades for `/ws`. Run one WebSocket-capable instance or add a shared broker/sticky routing strategy before horizontal scaling. Persist `MEDIA_STORAGE_DIR` on a volume, or configure object storage; container filesystems are not durable.
 
 ---
 
