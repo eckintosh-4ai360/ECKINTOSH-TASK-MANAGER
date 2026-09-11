@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
   AlertDialog,
@@ -692,19 +693,21 @@ export function SettingsContent({ settings }: SettingsContentProps) {
                 <Globe2 className="w-3.5 h-3.5 text-primary" />
                 Time Zone
               </Label>
-              <select
-                id="timezone"
-                name="timezone"
+              <Select
                 value={form.timezone}
-                onChange={(event) => setForm((current) => ({ ...current, timezone: event.target.value }))}
-                className="glass border-primary/20 focus:border-primary/50 h-11 w-full rounded-md px-3 text-sm text-foreground outline-none"
+                onValueChange={(value) => setForm((current) => ({ ...current, timezone: value }))}
               >
-                {TIMEZONE_OPTIONS.map((timezone) => (
-                  <option key={timezone} value={timezone}>
-                    {timezone}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger id="timezone" className="glass border-primary/20 focus:border-primary/50 h-11 w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="glass-card border-primary/20">
+                  {TIMEZONE_OPTIONS.map((timezone) => (
+                    <SelectItem key={timezone} value={timezone}>
+                      {timezone}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2 md:col-span-2">
               <Label htmlFor="avatar" className="text-sm text-muted-foreground flex items-center gap-2">

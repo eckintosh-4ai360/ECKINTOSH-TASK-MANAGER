@@ -3,9 +3,10 @@
 import { useRouter } from "next/navigation"
 import { useTransition } from "react"
 import Link from "next/link"
-import { ChevronsUpDown, Loader2, Settings2 } from "lucide-react"
+import { Loader2, Settings2 } from "lucide-react"
 import { switchWorkspaceAction } from "@/lib/actions/workspace-actions"
 import { cn } from "@/lib/utils"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import type { WorkspaceOption } from "@/lib/workspace"
 
 export function WorkspaceSwitcher({
@@ -24,33 +25,34 @@ export function WorkspaceSwitcher({
   return (
     <div className="relative mt-3">
       <label className="sr-only" htmlFor="workspace-switcher">Current workspace</label>
-      <select
-        id="workspace-switcher"
+      <Select
         value={active.id}
         disabled={pending}
-        onChange={(event) => {
-          const workspaceId = event.target.value
+        onValueChange={(workspaceId) => {
           startTransition(async () => {
             const result = await switchWorkspaceAction(workspaceId)
             if (result.success) router.refresh()
           })
         }}
-        className={cn(
-          "w-full appearance-none rounded-lg border border-primary/20 bg-background/50 px-3 py-2 pr-8 text-left text-xs font-semibold text-foreground outline-none transition hover:border-primary/40 focus:border-primary",
-          pending && "opacity-70",
-        )}
       >
-        {workspaces.map((workspace) => (
-          <option key={workspace.id} value={workspace.id}>
-            {workspace.name}
-          </option>
-        ))}
-      </select>
-      {pending ? (
-        <Loader2 className="pointer-events-none absolute right-2 top-2.5 h-3.5 w-3.5 animate-spin text-primary" />
-      ) : (
-        <ChevronsUpDown className="pointer-events-none absolute right-2 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
-      )}
+        <SelectTrigger
+          id="workspace-switcher"
+          className={cn(
+            "glass w-full h-9 border-border/50 text-xs font-semibold focus:border-primary/50",
+            pending && "opacity-70",
+          )}
+        >
+          <SelectValue />
+          {pending && <Loader2 className="size-3.5 animate-spin text-primary" />}
+        </SelectTrigger>
+        <SelectContent className="glass-card border-primary/20">
+          {workspaces.map((workspace) => (
+            <SelectItem key={workspace.id} value={workspace.id}>
+              {workspace.name}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
       <Link
         href="/workspaces"
         className="mt-2 flex items-center justify-between rounded-md px-2 py-1.5 text-[11px] font-medium text-muted-foreground transition hover:bg-primary/10 hover:text-primary"
