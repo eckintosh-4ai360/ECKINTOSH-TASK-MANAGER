@@ -258,12 +258,18 @@
   animation: border-glow 2s ease-in-out infinite;
 }
 
-/* ── Slim scrollbars everywhere: thin brand-gradient thumb ──────────────── */
-* {
-  scrollbar-width: thin;
-  scrollbar-color: color-mix(in oklab, var(--primary) 70%, transparent) transparent;
+/* ── Slim scrollbars: thin brand-gradient thumb ─────────────────────────── */
+/* Firefox only: the standard properties must NOT be set in Chromium, where
+   any non-auto scrollbar-width/color disables ::-webkit-scrollbar styling
+   and falls back to the fat native scrollbar. */
+@supports (scrollbar-width: thin) and (not selector(::-webkit-scrollbar)) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in oklab, var(--primary) 75%, transparent) transparent;
+  }
 }
 
+/* Chromium / Safari: slim custom gradient scrollbar */
 ::-webkit-scrollbar {
   width: 3px;
   height: 3px;

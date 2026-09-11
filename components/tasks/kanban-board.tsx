@@ -100,7 +100,7 @@ export function KanbanBoard({ tasks, onCardClick, projects, sprints, canManageTa
 
   return (
     <DragDropContext onDragEnd={onDragEnd}>
-      <div className="flex gap-4 overflow-x-auto pb-4 pt-2 select-none scrollbar-thin">
+      <div className="flex gap-4 overflow-x-auto pb-4 pt-2 select-none">
         {COLUMNS.map((column) => (
           <KanbanColumn
             key={column.id}
