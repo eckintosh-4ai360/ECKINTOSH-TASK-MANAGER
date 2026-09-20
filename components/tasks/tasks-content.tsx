@@ -149,36 +149,53 @@ export function TasksContent({ tasks, projects, sprints, users, currentUserId, c
     })
   }
 
-  const baseTasks =
-    filter === "all"
-      ? tasks
-      : filter === "completed"
-        ? tasks.filter((t) => t.status === "COMPLETED")
-        : tasks.filter((t) => t.status !== "COMPLETED")
+  // These feed the board, so they must keep a stable identity across unrelated
+  // re-renders -- a fresh array every render remounts the drag surface mid-drag.
+  const rankedTasks = useMemo(() => {
+    const baseTasks =
+      filter === "all"
+        ? tasks
+        : filter === "completed"
+          ? tasks.filter((t) => t.status === "COMPLETED")
+          : tasks.filter((t) => t.status !== "COMPLETED")
 
-  const filteredTasks = baseTasks.filter((t) =>
-    matches(t.title, t.project?.name, t.sprint?.name, t.priority, t.status)
+    return baseTasks
+      .filter((t) => matches(t.title, t.project?.name, t.sprint?.name, t.priority, t.status))
+      .map((task) => ({
+        task,
+        ai: scoreTaskPriority({
+          id: task.id,
+          title: task.title,
+          description: task.description,
+          status: task.status,
+          priority: task.priority,
+          dueDate: task.dueDate,
+          createdAt: task.createdAt,
+          updatedAt: task.updatedAt,
+          tags: task.tags,
+          project: task.project,
+        }),
+      }))
+  }, [tasks, filter, matches])
+
+  const displayTasks = useMemo(
+    () =>
+      sortMode === "ai"
+        ? [...rankedTasks].sort((left, right) => right.ai.score - left.ai.score)
+        : rankedTasks,
+    [rankedTasks, sortMode],
   )
 
-  const rankedTasks = filteredTasks.map((task) => ({
-    task,
-    ai: scoreTaskPriority({
-      id: task.id,
-      title: task.title,
-      description: task.description,
-      status: task.status,
-      priority: task.priority,
-      dueDate: task.dueDate,
-      createdAt: task.createdAt,
-      updatedAt: task.updatedAt,
-      tags: task.tags,
-      project: task.project,
-    }),
-  }))
+  const boardTasks = useMemo(() => displayTasks.map(({ task }) => task), [displayTasks])
 
-  const displayTasks = sortMode === "ai"
-    ? [...rankedTasks].sort((left, right) => right.ai.score - left.ai.score)
-    : rankedTasks
+  const boardAiScores = useMemo(
+    () =>
+      rankedTasks.reduce((acc, curr) => {
+        acc[curr.task.id] = curr.ai.score
+        return acc
+      }, {} as Record<string, number>),
+    [rankedTasks],
+  )
 
   const handleSaveTask = () => {
     startTransition(async () => {
@@ -505,7 +522,7 @@ export function TasksContent({ tasks, projects, sprints, users, currentUserId, c
 
       {viewMode === "board" ? (
         <KanbanBoard
-          tasks={displayTasks.map(({ task }) => task)}
+          tasks={boardTasks}
           onCardClick={(task) => {
             setActiveDetailTask(task)
             setIsDetailOpen(true)
@@ -513,10 +530,7 @@ export function TasksContent({ tasks, projects, sprints, users, currentUserId, c
           projects={projects}
           sprints={sprints}
           canManageTasks={canManageTasks}
-          aiScores={rankedTasks.reduce((acc, curr) => {
-            acc[curr.task.id] = curr.ai.score
-            return acc
-          }, {} as Record<string, number>)}
+          aiScores={boardAiScores}
         />
       ) : (
         <div className="grid gap-3">

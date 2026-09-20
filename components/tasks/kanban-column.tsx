@@ -103,7 +103,6 @@ export function KanbanColumn({ id, title, tasks, onCardClick, projects, sprints,
             className={`flex-1 p-3 overflow-y-auto scrollbar-none transition-colors duration-200 ${
               snapshot.isDraggingOver ? "bg-primary/10" : ""
             }`}
-            style={{ contentVisibility: "auto" }}
           >
             {tasks.map((task, index) => (
               <KanbanCard

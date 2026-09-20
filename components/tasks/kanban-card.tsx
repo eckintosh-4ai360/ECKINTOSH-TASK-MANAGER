@@ -1,5 +1,6 @@
 "use client"
 
+import { useRef } from "react"
 import { Draggable } from "@hello-pangea/dnd"
 import { Calendar, Tag, Flag, Brain, MessageSquare, ListChecks } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
@@ -31,6 +32,20 @@ interface KanbanCardProps {
 }
 
 export function KanbanCard({ task, index, onClick, aiScore }: KanbanCardProps) {
+  // Distinguish a real click from the click that fires at the end of a drag.
+  const pointerOrigin = useRef<{ x: number; y: number } | null>(null)
+
+  const handlePointerDown = (event: React.PointerEvent) => {
+    pointerOrigin.current = { x: event.clientX, y: event.clientY }
+  }
+
+  const handleClick = (event: React.MouseEvent) => {
+    const origin = pointerOrigin.current
+    pointerOrigin.current = null
+    if (origin && Math.hypot(event.clientX - origin.x, event.clientY - origin.y) > 5) return
+    onClick()
+  }
+
   const getPriorityStyle = (priority: string) => {
     switch (priority.toUpperCase()) {
       case "HIGH":
@@ -59,9 +74,18 @@ export function KanbanCard({ task, index, onClick, aiScore }: KanbanCardProps) {
           ref={provided.innerRef}
           {...provided.draggableProps}
           {...provided.dragHandleProps}
-          onClick={onClick}
-          className={`glass-card rounded-xl p-4 mb-3 hover:border-primary/40 transition-all duration-300 cursor-grab active:cursor-grabbing border ${
-            snapshot.isDragging ? "border-primary/50 shadow-2xl shadow-primary/20 scale-[1.02]" : "border-primary/10"
+          onPointerDown={handlePointerDown}
+          onClick={handleClick}
+          style={{
+            ...provided.draggableProps.style,
+            // A 20px backdrop blur repainted on every drag frame makes the card stutter.
+            backdropFilter: snapshot.isDragging ? "none" : undefined,
+            WebkitBackdropFilter: snapshot.isDragging ? "none" : undefined,
+          }}
+          // Never transition `transform`: the library rewrites it every frame and a
+          // transition makes the card lag behind and wobble around the cursor.
+          className={`glass-card rounded-xl p-4 mb-3 hover:border-primary/40 transition-[border-color,box-shadow] duration-200 cursor-grab active:cursor-grabbing border ${
+            snapshot.isDragging ? "border-primary/50 shadow-2xl shadow-primary/20" : "border-primary/10"
           }`}
         >
           <div className="space-y-3">

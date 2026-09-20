@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useTransition } from "react"
+import { useState, useEffect, useMemo, useTransition } from "react"
 import { DragDropContext, DropResult } from "@hello-pangea/dnd"
 import { KanbanColumn } from "./kanban-column"
 import { updateTaskStatus } from "@/lib/actions/project-actions"
@@ -42,38 +42,54 @@ const COLUMNS = [
 ]
 
 export function KanbanBoard({ tasks, onCardClick, projects, sprints, canManageTasks, aiScores }: KanbanBoardProps) {
-  const [boardTasks, setBoardTasks] = useState<Task[]>(tasks)
-  const [isPending, startTransition] = useTransition()
+  // Only the pending moves are held locally. The task list itself always comes
+  // straight from props, so a parent re-render can never throw away a drop.
+  const [pendingStatus, setPendingStatus] = useState<Record<string, string>>({})
+  const [, startTransition] = useTransition()
 
-  // Keep boardTasks in sync with parent updates (e.g. from filters)
+  // Release an optimistic move once the server data has caught up with it.
   useEffect(() => {
-    setBoardTasks(tasks)
+    setPendingStatus((current) => {
+      const keys = Object.keys(current)
+      if (keys.length === 0) return current
+      const remaining = keys.filter((id) => {
+        const task = tasks.find((t) => t.id === id)
+        return task !== undefined && task.status !== current[id]
+      })
+      if (remaining.length === keys.length) return current
+      return Object.fromEntries(remaining.map((id) => [id, current[id]]))
+    })
   }, [tasks])
+
+  const boardTasks = useMemo(
+    () => tasks.map((task) => (pendingStatus[task.id] ? { ...task, status: pendingStatus[task.id] } : task)),
+    [tasks, pendingStatus],
+  )
 
   const onDragEnd = (result: DropResult) => {
     const { destination, source, draggableId } = result
 
     if (!destination) return
 
-    if (destination.droppableId === source.droppableId && destination.index === source.index) {
+    if (destination.droppableId === source.droppableId) {
+      // Card order within a column is not persisted (tasks have no order column).
       return
     }
 
     const taskId = draggableId
     const newStatus = destination.droppableId
 
-    // Optimistically update status in local state
-    const originalTasks = [...boardTasks]
-    const updatedTasks = boardTasks.map((t) =>
-      t.id === taskId ? { ...t, status: newStatus } : t
-    )
-    setBoardTasks(updatedTasks)
+    setPendingStatus((current) => ({ ...current, [taskId]: newStatus }))
 
     startTransition(async () => {
       const res = await updateTaskStatus(taskId, newStatus)
       if (!res.success) {
         toast.error(res.error ?? "Failed to update task status.")
-        setBoardTasks(originalTasks) // revert on failure
+        // Dropping the override falls back to the server status, which never changed.
+        setPendingStatus((current) => {
+          const { [taskId]: _reverted, ...rest } = current
+          return rest
+        })
       } else {
         toast.success(`Task moved to ${newStatus.replace("_", " ").toLowerCase()}`)
       }
