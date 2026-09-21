@@ -7,7 +7,7 @@ import { completeMfaLoginAction } from "@/lib/actions/security-actions"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { GitBranch, Mail, Lock, AlertCircle, Loader2, ArrowLeft } from "lucide-react"
+import { GitBranch, Mail, Lock, AlertCircle, Loader2, ArrowLeft, Eye, EyeOff } from "lucide-react"
 import Link from "next/link"
 
 export default function EmailLoginPage() {
@@ -15,6 +15,7 @@ export default function EmailLoginPage() {
   const [loading, setLoading] = useState(false)
   const [mfaRequired, setMfaRequired] = useState(false)
   const [mfaCode, setMfaCode] = useState("")
+  const [showPassword, setShowPassword] = useState(false)
   const router = useRouter()
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -128,7 +129,18 @@ export default function EmailLoginPage() {
               <Label htmlFor="password" className="text-xs text-muted-foreground flex items-center gap-2">
                 <Lock className="w-3.5 h-3.5 text-primary" /> Password
               </Label>
-              <Input id="password" name="password" type="password" placeholder="••••••••" autoComplete="current-password" required className="glass border-border/50 focus:border-primary/50 h-11" />
+              <div className="relative">
+                <Input id="password" name="password" type={showPassword ? "text" : "password"} placeholder="••••••••" autoComplete="current-password" required className="glass h-11 border-border/50 pr-11 focus:border-primary/50" />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((visible) => !visible)}
+                  className="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-muted-foreground transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  aria-pressed={showPassword}
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
             </div>
 
             {error && (

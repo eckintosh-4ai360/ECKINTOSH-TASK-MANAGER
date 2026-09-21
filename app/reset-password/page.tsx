@@ -3,7 +3,7 @@
 import { Suspense, useState } from "react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
-import { AlertCircle, ArrowLeft, CheckCircle2, KeyRound, Loader2 } from "lucide-react"
+import { AlertCircle, ArrowLeft, CheckCircle2, Eye, EyeOff, KeyRound, Loader2 } from "lucide-react"
 import { resetPasswordAction } from "@/lib/actions/security-actions"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -15,6 +15,8 @@ function ResetPasswordForm() {
   const token = searchParams.get("token") ?? ""
   const [password, setPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
+  const [showPassword, setShowPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [error, setError] = useState<string | null>(token ? null : "This reset link is invalid or has expired.")
   const [complete, setComplete] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -53,8 +55,24 @@ function ResetPasswordForm() {
         ) : (
           <form onSubmit={handleSubmit} className="mt-6 space-y-4">
             <p className="text-xs text-muted-foreground">Use at least 12 characters and three character types.</p>
-            <div className="space-y-2"><Label htmlFor="password">New password</Label><Input id="password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="new-password" required minLength={12} className="h-11 glass" /></div>
-            <div className="space-y-2"><Label htmlFor="confirm-password">Confirm password</Label><Input id="confirm-password" type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} autoComplete="new-password" required minLength={12} className="h-11 glass" /></div>
+            <div className="space-y-2">
+              <Label htmlFor="password">New password</Label>
+              <div className="relative">
+                <Input id="password" type={showPassword ? "text" : "password"} value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="new-password" required minLength={12} className="h-11 glass pr-11" />
+                <button type="button" onClick={() => setShowPassword((visible) => !visible)} className="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-muted-foreground transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset" aria-label={showPassword ? "Hide new password" : "Show new password"} aria-pressed={showPassword}>
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="confirm-password">Confirm password</Label>
+              <div className="relative">
+                <Input id="confirm-password" type={showConfirmPassword ? "text" : "password"} value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} autoComplete="new-password" required minLength={12} className="h-11 glass pr-11" />
+                <button type="button" onClick={() => setShowConfirmPassword((visible) => !visible)} className="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-muted-foreground transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset" aria-label={showConfirmPassword ? "Hide confirmed password" : "Show confirmed password"} aria-pressed={showConfirmPassword}>
+                  {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+            </div>
             {error && <div className="flex gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2.5 text-sm text-destructive"><AlertCircle className="h-4 w-4 shrink-0" />{error}</div>}
             <Button type="submit" disabled={loading || !token} className="h-11 w-full">{loading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving…</> : "Save new password"}</Button>
           </form>

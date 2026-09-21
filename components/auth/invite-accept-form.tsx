@@ -5,7 +5,7 @@ import { signIn } from "next-auth/react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Chrome, Lock, AlertCircle, Loader2, User, Mail } from "lucide-react"
+import { Chrome, Lock, AlertCircle, Loader2, User, Mail, Eye, EyeOff } from "lucide-react"
 import { acceptInvitationAction } from "@/lib/actions/invitation-actions"
 
 type InviteAcceptFormProps = {
@@ -17,6 +17,7 @@ export function InviteAcceptForm({ token, email }: InviteAcceptFormProps) {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [googleLoading, setGoogleLoading] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -93,16 +94,27 @@ export function InviteAcceptForm({ token, email }: InviteAcceptFormProps) {
           <Label htmlFor="password" className="text-xs text-muted-foreground flex items-center gap-2">
             <Lock className="w-3.5 h-3.5 text-primary" /> Password
           </Label>
-          <Input
-            id="password"
-            name="password"
-            type="password"
-            placeholder="At least 12 characters"
-            autoComplete="new-password"
-            required
-            minLength={12}
-            className="glass border-border/50 focus:border-primary/50 h-11"
-          />
+          <div className="relative">
+            <Input
+              id="password"
+              name="password"
+              type={showPassword ? "text" : "password"}
+              placeholder="At least 12 characters"
+              autoComplete="new-password"
+              required
+              minLength={12}
+              className="glass h-11 border-border/50 pr-11 focus:border-primary/50"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword((visible) => !visible)}
+              className="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-muted-foreground transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
+              aria-label={showPassword ? "Hide password" : "Show password"}
+              aria-pressed={showPassword}
+            >
+              {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          </div>
           <p className="text-[11px] text-muted-foreground">
             12+ characters, mixing at least three of: lowercase, uppercase, numbers, symbols.
           </p>
