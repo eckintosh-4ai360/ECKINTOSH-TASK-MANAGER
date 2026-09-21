@@ -16,8 +16,22 @@ export const MEDIA_ROOT = process.env.MEDIA_STORAGE_DIR
 
 export const MEDIA_URL_PREFIX = "/api/media"
 
+// @vercel/blob authenticates two ways, and a project connected through the
+// Vercel dashboard today usually gets the second:
+//   1. BLOB_READ_WRITE_TOKEN  — the classic read-write token.
+//   2. VERCEL_OIDC_TOKEN + BLOB_STORE_ID — OIDC, where no read-write token is
+//      ever issued. The SDK picks this up on its own; the call sites need no
+//      extra arguments, but a check for the token alone reports a perfectly
+//      working store as "not configured".
 export function isBlobStorageEnabled() {
-  return Boolean(process.env.BLOB_READ_WRITE_TOKEN)
+  return Boolean(process.env.BLOB_READ_WRITE_TOKEN || process.env.BLOB_STORE_ID)
+}
+
+// Names (never values) of the env vars that decide the above, for error output.
+export function blobEnvVarsPresent() {
+  return ["BLOB_READ_WRITE_TOKEN", "BLOB_STORE_ID", "VERCEL_OIDC_TOKEN"].filter(
+    (name) => Boolean(process.env[name]),
+  )
 }
 
 // Serverless hosts ship a read-only bundle: the only writable path is /tmp, and

@@ -4,7 +4,14 @@ import path from "path"
 import { put } from "@vercel/blob"
 import { getSession } from "@/lib/auth"
 import { hasPermission } from "@/lib/rbac"
-import { MEDIA_ROOT, MEDIA_TYPES, isReadOnlyFilesystem, keyToMediaUrl } from "@/lib/media-storage"
+import {
+  MEDIA_ROOT,
+  MEDIA_TYPES,
+  blobEnvVarsPresent,
+  isBlobStorageEnabled,
+  isReadOnlyFilesystem,
+  keyToMediaUrl,
+} from "@/lib/media-storage"
 
 export const runtime = "nodejs"
 
@@ -34,7 +41,7 @@ export async function POST(request: NextRequest) {
     const filename = `${Date.now()}-${Math.random().toString(36).slice(2)}.${entry.ext}`
     const key = `chat/${session.workspaceId}/${session.id}/${filename}`
 
-    if (process.env.BLOB_READ_WRITE_TOKEN) {
+    if (isBlobStorageEnabled()) {
       // Vercel Blob cloud object storage. `access: "private"` means the
       // blob's real URL is never fetchable directly — only this server, via
       // /api/media, can read it back after checking the session. The client
@@ -44,18 +51,19 @@ export async function POST(request: NextRequest) {
         addRandomSuffix: false,
       })
     } else if (isReadOnlyFilesystem()) {
-      // Name the environment the function is actually running in. Connecting a
-      // Blob store does not retrofit the token into deployments that already
-      // exist, and a store linked to Production alone leaves previews without
-      // it — so "I connected it" and "this build can see it" often disagree.
+      // Report what this build can actually see. A store can be connected to the
+      // project yet invisible here: bound to another environment, or attached
+      // after this deployment was built (connecting does not rebuild anything).
       const env = process.env.VERCEL_ENV ?? "unknown"
       const commit = process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? "unknown"
+      const detected = blobEnvVarsPresent()
       return NextResponse.json(
         {
           error:
             `Attachments are not configured for this deployment (env: ${env}, commit: ${commit}). ` +
-            "BLOB_READ_WRITE_TOKEN is not visible to this build. Connect a Vercel Blob store to " +
-            `the ${env} environment, then redeploy — connecting alone does not update a running deployment.`,
+            `Blob credentials visible to this build: ${detected.length ? detected.join(", ") : "none"}. ` +
+            "Connect a Vercel Blob store to this environment and redeploy — either " +
+            "BLOB_READ_WRITE_TOKEN, or BLOB_STORE_ID alongside OIDC, must be present.",
         },
         { status: 501 },
       )
