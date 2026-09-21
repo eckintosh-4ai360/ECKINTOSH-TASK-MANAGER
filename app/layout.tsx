@@ -4,6 +4,7 @@ import { Geist, Geist_Mono } from "next/font/google"
 import { Analytics } from "@vercel/analytics/next"
 import { ThemeProvider } from "@/components/theme-provider"
 import { ServiceWorkerRegistrar } from "@/components/service-worker-registrar"
+import { Toaster } from "@/components/ui/sonner"
 import "./globals.css"
 
 const _geist = Geist({ subsets: ["latin"] })
@@ -56,6 +57,9 @@ export default function RootLayout({
       <body className={`font-sans antialiased bg-background futuristic-grid`}>
         <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false} storageKey="spagad-theme">
           {children}
+          {/* Mounted here so every toast.success/toast.error in the app is actually seen —
+              without it, failed server actions revert silently. */}
+          <Toaster richColors closeButton />
         </ThemeProvider>
         <ServiceWorkerRegistrar />
         <Analytics />

@@ -28,10 +28,11 @@ interface KanbanCardProps {
   task: Task
   index: number
   onClick: () => void
+  isDragDisabled?: boolean
   aiScore?: number
 }
 
-export function KanbanCard({ task, index, onClick, aiScore }: KanbanCardProps) {
+export function KanbanCard({ task, index, onClick, isDragDisabled = false, aiScore }: KanbanCardProps) {
   // Distinguish a real click from the click that fires at the end of a drag.
   const pointerOrigin = useRef<{ x: number; y: number } | null>(null)
 
@@ -68,7 +69,7 @@ export function KanbanCard({ task, index, onClick, aiScore }: KanbanCardProps) {
   }
 
   return (
-    <Draggable draggableId={task.id} index={index}>
+    <Draggable draggableId={task.id} index={index} isDragDisabled={isDragDisabled}>
       {(provided, snapshot) => (
         <div
           ref={provided.innerRef}
@@ -76,6 +77,7 @@ export function KanbanCard({ task, index, onClick, aiScore }: KanbanCardProps) {
           {...provided.dragHandleProps}
           onPointerDown={handlePointerDown}
           onClick={handleClick}
+          title={isDragDisabled ? "Only the assignee or an admin can move this task" : undefined}
           style={{
             ...provided.draggableProps.style,
             // A 20px backdrop blur repainted on every drag frame makes the card stutter.
@@ -84,7 +86,7 @@ export function KanbanCard({ task, index, onClick, aiScore }: KanbanCardProps) {
           }}
           // Never transition `transform`: the library rewrites it every frame and a
           // transition makes the card lag behind and wobble around the cursor.
-          className={`glass-card rounded-xl p-4 mb-3 hover:border-primary/40 transition-[border-color,box-shadow] duration-200 cursor-grab active:cursor-grabbing border ${
+          className={`glass-card rounded-xl p-4 mb-3 hover:border-primary/40 transition-[border-color,box-shadow] duration-200 border ${isDragDisabled ? "cursor-pointer" : "cursor-grab active:cursor-grabbing"} ${
             snapshot.isDragging ? "border-primary/50 shadow-2xl shadow-primary/20" : "border-primary/10"
           }`}
         >

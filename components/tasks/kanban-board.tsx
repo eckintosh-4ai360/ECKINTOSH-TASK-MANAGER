@@ -30,6 +30,7 @@ interface KanbanBoardProps {
   projects: { id: string; name: string }[]
   sprints: any[]
   canManageTasks: boolean
+  currentUserId: string
   aiScores?: Record<string, number>
 }
 
@@ -41,7 +42,7 @@ const COLUMNS = [
   { id: "COMPLETED", title: "Completed" },
 ]
 
-export function KanbanBoard({ tasks, onCardClick, projects, sprints, canManageTasks, aiScores }: KanbanBoardProps) {
+export function KanbanBoard({ tasks, onCardClick, projects, sprints, canManageTasks, currentUserId, aiScores }: KanbanBoardProps) {
   // Only the pending moves are held locally. The task list itself always comes
   // straight from props, so a parent re-render can never throw away a drop.
   const [pendingStatus, setPendingStatus] = useState<Record<string, string>>({})
@@ -127,6 +128,7 @@ export function KanbanBoard({ tasks, onCardClick, projects, sprints, canManageTa
             projects={projects}
             sprints={sprints}
             canManageTasks={canManageTasks}
+            currentUserId={currentUserId}
             aiScores={aiScores}
           />
         ))}

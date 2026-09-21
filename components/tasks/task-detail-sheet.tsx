@@ -451,7 +451,7 @@ export function TaskDetailSheet({
 
   return (
     <Sheet open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <SheetContent className="glass border-l border-primary/20 sm:max-w-[700px] w-full lg:w-[650px] p-0 flex flex-col h-full bg-slate-950/90 text-foreground overflow-hidden">
+      <SheetContent className="border-l border-primary/20 sm:max-w-[700px] w-full lg:w-[650px] p-0 flex flex-col h-full bg-background/95 backdrop-blur-xl text-foreground overflow-hidden">
         
         {/* Sheet Top Header */}
         <SheetHeader className="p-6 border-b border-primary/10 flex flex-row items-center justify-between gap-4">

@@ -530,6 +530,7 @@ export function TasksContent({ tasks, projects, sprints, users, currentUserId, c
           projects={projects}
           sprints={sprints}
           canManageTasks={canManageTasks}
+          currentUserId={currentUserId}
           aiScores={boardAiScores}
         />
       ) : (

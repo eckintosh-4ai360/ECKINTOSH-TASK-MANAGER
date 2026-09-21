@@ -31,10 +31,11 @@ interface KanbanColumnProps {
   projects: { id: string; name: string }[]
   sprints: any[]
   canManageTasks: boolean
+  currentUserId: string
   aiScores?: Record<string, number>
 }
 
-export function KanbanColumn({ id, title, tasks, onCardClick, projects, sprints, canManageTasks, aiScores }: KanbanColumnProps) {
+export function KanbanColumn({ id, title, tasks, onCardClick, projects, sprints, canManageTasks, currentUserId, aiScores }: KanbanColumnProps) {
   const getStatusIcon = (status: string) => {
     switch (status) {
       case "BACKLOG":
@@ -105,12 +106,15 @@ export function KanbanColumn({ id, title, tasks, onCardClick, projects, sprints,
               snapshot.isDraggingOver ? "bg-primary/10" : ""
             }`}
           >
+            {/* A USER may only move their own tasks, so the card refuses the drag outright
+                rather than letting the server reject it after an optimistic move. */}
             {tasks.map((task, index) => (
               <KanbanCard
                 key={task.id}
                 task={task}
                 index={index}
                 onClick={() => onCardClick(task)}
+                isDragDisabled={!canManageTasks && task.assigneeId !== currentUserId}
                 aiScore={aiScores ? aiScores[task.id] : undefined}
               />
             ))}
