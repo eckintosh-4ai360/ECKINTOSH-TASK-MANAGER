@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { useTransition } from "react"
 import { toast } from "sonner"
 import { deleteUserAction } from "@/lib/actions/auth-actions"
+import { leaveWorkspaceAction } from "@/lib/actions/workspace-actions"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { AlertTriangle, Mail, MessageCircle, CheckCircle2, Clock, Trash2 } from "lucide-react"
@@ -66,8 +67,39 @@ export function TeamContent({ teamMembers, pendingInvitations, canManageTeam, cu
     })
   }
 
+  function handleLeaveWorkspace() {
+    if (!confirm("Leave this workspace? You will lose access immediately and can only rejoin with a new invitation.")) {
+      return
+    }
+
+    startTransition(async () => {
+      const result = await leaveWorkspaceAction()
+      if (!result.success) {
+        toast.error(result.error ?? "Unable to leave the workspace.")
+        return
+      }
+
+      toast.success("You left the workspace.")
+      router.replace("/workspaces")
+      router.refresh()
+    })
+  }
+
   return (
     <div className="space-y-6 animate-fade-in">
+      <div className="flex justify-end">
+        <Button
+          variant="outline"
+          size="sm"
+          className="border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive"
+          onClick={handleLeaveWorkspace}
+          disabled={isPending}
+        >
+          <Trash2 className="mr-2 h-3.5 w-3.5" />
+          Leave workspace
+        </Button>
+      </div>
+
       {pendingInvitations.length > 0 && (
         <section className="glass-card rounded-xl border border-amber-400/20 overflow-hidden">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between px-5 py-4 border-b border-border/40">

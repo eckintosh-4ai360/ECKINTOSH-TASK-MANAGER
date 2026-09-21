@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache"
 import prisma from "@/lib/prisma"
 import { requireSession, requireWorkspace } from "@/lib/auth"
-import { getWorkspaceOptionsForUser, setSelectedWorkspace, type WorkspaceRole } from "@/lib/workspace"
+import { getWorkspaceOptionsForUser, clearSelectedWorkspace, setSelectedWorkspace, type WorkspaceRole } from "@/lib/workspace"
+import { recordRequestAuditEvent } from "@/lib/audit"
 
 function slugify(value: string) {
   return value
@@ -73,4 +74,38 @@ export async function getCurrentWorkspaceAction() {
     slug: session.workspaceSlug,
     role: session.workspaceRole as WorkspaceRole,
   }
+}
+
+export async function leaveWorkspaceAction() {
+  const session = await requireWorkspace()
+
+  const removed = await prisma.workspaceMember.deleteMany({
+    where: {
+      workspaceId: session.workspaceId,
+      userId: session.id,
+    },
+  })
+
+  if (removed.count === 0) {
+    return { success: false, error: "You are no longer a member of this workspace." }
+  }
+
+  // Do not leave a stale workspace selection in the signed-in user's browser.
+  // A later visit must resolve to another membership or the workspace chooser.
+  await clearSelectedWorkspace()
+
+  await recordRequestAuditEvent({
+    action: "workspace.member_left",
+    actorUserId: session.id,
+    actorEmail: session.email,
+    workspaceId: session.workspaceId,
+    targetType: "user",
+    targetId: session.id,
+  })
+
+  revalidatePath("/", "layout")
+  revalidatePath("/team")
+  revalidatePath("/workspaces")
+
+  return { success: true }
 }
