@@ -123,11 +123,16 @@ model WorkspaceMember {
   joinedAt    DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 
+  // Heartbeat written by the chat client. Deployments without a push transport
+  // (no Pusher, no custom WebSocket server) derive presence from this instead.
+  lastSeenAt  DateTime?
+
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([workspaceId, userId])
   @@index([userId])
+  @@index([workspaceId, lastSeenAt])
   @@map("workspace_members")
 }
 

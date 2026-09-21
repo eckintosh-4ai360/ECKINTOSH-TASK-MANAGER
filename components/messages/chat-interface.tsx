@@ -15,6 +15,7 @@ import {
   sendMessageAction,
   deleteMessageAction,
   editMessageAction,
+  heartbeatPresence,
 } from "@/lib/actions/message-actions"
 import { getPusherClient, getWorkspacePresenceChannel } from "@/lib/pusher/client"
 import { MediaBubble } from "@/components/messages/media-bubble"
@@ -42,10 +43,49 @@ type Message = {
 }
 
 type NativeRealtimeEvent =
+  | { type: "presence_sync"; userIds: string[] }
   | { type: "presence"; userId: string; online: boolean }
   | ({ type: "chat" } & Message)
   | { type: "delete_message"; id: string }
   | { type: "edit_message"; id: string; content: string; edited: boolean }
+
+const POLL_INTERVAL_MS = 5000
+
+type ConversationRow = Awaited<ReturnType<typeof getConversation>>[number]
+
+function toMessage(row: ConversationRow): Message {
+  return {
+    id: row.id,
+    from: row.senderId,
+    to: row.receiverId,
+    content: row.content,
+    senderName: row.sender.name ?? row.sender.email,
+    createdAt: row.createdAt.toISOString(),
+    replyToId: row.replyToId,
+    replyTo: row.replyTo
+      ? {
+          id: row.replyTo.id,
+          content: row.replyTo.content ?? `[${row.replyTo.mediaType ?? "media"}]`,
+          senderName: row.replyTo.sender.name ?? row.replyTo.sender.email,
+        }
+      : null,
+    mediaUrl: row.mediaUrl,
+    mediaType: row.mediaType,
+    mediaName: row.mediaName,
+    mediaSize: row.mediaSize,
+    edited: row.edited,
+  }
+}
+
+// Replacing the array on every poll would restart the smooth scroll-to-bottom
+// even when nothing changed, so ticks that bring no news must be dropped.
+function sameMessages(a: Message[], b: Message[]) {
+  if (a.length !== b.length) return false
+  return a.every((message, index) => {
+    const other = b[index]
+    return message.id === other.id && message.content === other.content && message.edited === other.edited
+  })
+}
 
 interface ChatInterfaceProps {
   currentUserId: string
@@ -73,6 +113,9 @@ export function ChatInterface({ currentUserId, currentUserName, workspaceId }: C
   const restoredRef = useRef(false)
   const nativeSocketRef = useRef<WebSocket | null>(null)
   const useNativeWebSocket = process.env.NEXT_PUBLIC_REALTIME_TRANSPORT === "websocket"
+  // Pusher needs a publishable key to connect at all; without one and without
+  // the custom server there is no push transport and the poll below takes over.
+  const realtimeConfigured = useNativeWebSocket || Boolean(process.env.NEXT_PUBLIC_PUSHER_KEY)
   // Track when each user was last seen online
   const lastSeenRef = useRef<Record<string, Date>>({})
 
@@ -104,6 +147,11 @@ export function ChatInterface({ currentUserId, currentUserName, workspaceId }: C
   }, [currentUserId])
 
   const applyRealtimeEvent = useCallback((data: NativeRealtimeEvent) => {
+    // Sent once per connection so a freshly joined tab knows who is already online.
+    if (data.type === "presence_sync") {
+      setOnlineUsers(new Set(data.userIds))
+      return
+    }
     if (data.type === "presence") {
       setOnlineUsers((prev) => {
         const next = new Set(prev)
@@ -132,7 +180,8 @@ export function ChatInterface({ currentUserId, currentUserName, workspaceId }: C
     const pusher = getPusherClient()
     if (!pusher) {
       if (process.env.NEXT_PUBLIC_REALTIME_TRANSPORT !== "websocket") {
-        setWsStatus("offline")
+        // No push transport at all. The polling fallback below owns wsStatus from
+        // here; forcing "offline" would just flash a wrong badge over a working chat.
         return
       }
 
@@ -229,6 +278,55 @@ export function ChatInterface({ currentUserId, currentUserName, workspaceId }: C
     }
   }, [applyChatMessage, applyRealtimeEvent, currentUserId, workspaceId])
 
+  // ── HTTP fallback when nothing can push ───────────────────────────────
+  // Without Pusher credentials and without the custom WebSocket server (the
+  // default Vercel deployment), sendMessageAction still persists the message but
+  // nothing ever delivers it: the recipient sees nothing and everyone reads as
+  // offline. Polling keeps both working. Re-reading the whole thread rather than
+  // a delta means edits and deletions reconcile too.
+  useEffect(() => {
+    if (realtimeConfigured) return
+
+    let cancelled = false
+    let timer: ReturnType<typeof setTimeout> | null = null
+
+    const tick = async () => {
+      try {
+        const partner = selectedUserRef.current
+        const [online, counts, history] = await Promise.all([
+          heartbeatPresence(),
+          getUnreadCounts(),
+          partner ? getConversation(partner.id) : Promise.resolve(null),
+        ])
+        if (cancelled) return
+
+        setOnlineUsers(new Set(online))
+        setWsStatus("connected")
+
+        if (history && partner) {
+          const next = history.map(toMessage)
+          const incoming = next.some((message) => message.to === currentUserId && message.from === partner.id)
+          setMessages((prev) => (sameMessages(prev, next) ? prev : next))
+          // The open thread is being read right now, so its badge must not grow.
+          if (incoming && counts[partner.id]) void markMessagesRead(partner.id)
+          delete counts[partner.id]
+        }
+
+        setUnread(counts)
+      } catch {
+        if (!cancelled) setWsStatus("offline")
+      } finally {
+        if (!cancelled) timer = setTimeout(tick, POLL_INTERVAL_MS)
+      }
+    }
+
+    void tick()
+    return () => {
+      cancelled = true
+      if (timer) clearTimeout(timer)
+    }
+  }, [realtimeConfigured, currentUserId])
+
   const sendNativeEvent = (event: Record<string, unknown>) => {
     if (!useNativeWebSocket || nativeSocketRef.current?.readyState !== WebSocket.OPEN) {
       throw new Error("The realtime connection is not ready. Please wait a moment and try again.")
@@ -249,25 +347,7 @@ export function ChatInterface({ currentUserId, currentUserName, workspaceId }: C
     sessionStorage.setItem("chat:lastUserId", user.id)
 
     const history = await getConversation(user.id)
-    setMessages(
-      history.map((m) => ({
-        id: m.id,
-        from: m.senderId,
-        to: m.receiverId,
-        content: m.content,
-        senderName: m.sender.name ?? m.sender.email,
-        createdAt: m.createdAt.toISOString(),
-        replyToId: m.replyToId,
-        replyTo: m.replyTo
-          ? { id: m.replyTo.id, content: m.replyTo.content ?? `[${m.replyTo.mediaType ?? 'media'}]`, senderName: m.replyTo.sender.name ?? m.replyTo.sender.email }
-          : null,
-        mediaUrl: m.mediaUrl,
-        mediaType: m.mediaType,
-        mediaName: m.mediaName,
-        mediaSize: m.mediaSize,
-        edited: m.edited,
-      }))
-    )
+    setMessages(history.map(toMessage))
     await markMessagesRead(user.id)
     setUnread((prev) => { const next = { ...prev }; delete next[user.id]; return next })
   }, [])

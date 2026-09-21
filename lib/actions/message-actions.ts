@@ -93,6 +93,37 @@ export async function getUnreadCounts() {
   )
 }
 
+// ─── Presence fallback ──────────────────────────────────────────────
+
+// A member counts as online while their heartbeat is younger than this. Kept
+// comfortably above the client's poll interval so one slow request does not
+// flicker somebody offline.
+const PRESENCE_TTL_MS = 45_000
+
+// Records that the caller is still here and reports who else is. Used only by
+// deployments with no push transport, where presence cannot be event-driven.
+export async function heartbeatPresence(): Promise<string[]> {
+  const session = await requireWorkspace()
+  if (!hasPermission(session.role, "use_messages")) return []
+
+  const now = new Date()
+  await prisma.workspaceMember.update({
+    where: { workspaceId_userId: { workspaceId: session.workspaceId, userId: session.id } },
+    data: { lastSeenAt: now },
+  })
+
+  const active = await prisma.workspaceMember.findMany({
+    where: {
+      workspaceId: session.workspaceId,
+      userId: { not: session.id },
+      lastSeenAt: { gte: new Date(now.getTime() - PRESENCE_TTL_MS) },
+    },
+    select: { userId: true },
+  })
+
+  return active.map((member) => member.userId)
+}
+
 // ─── Realtime Message Mutation Actions ───────────────────────────────────────
 
 export type SendMessageInput = {

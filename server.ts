@@ -65,11 +65,25 @@ async function getSocketSession(req: { headers: { cookie?: string } }) {
   const dbUser = await prisma.user.findUnique({ where: { id: session.id }, select: { id: true, email: true, role: true, sessionVersion: true } })
   if (!dbUser || dbUser.email !== session.email || dbUser.sessionVersion !== session.sessionVersion) return null
   const preferredWorkspaceId = getCookieValue(req.headers.cookie, "spagad_workspace")
-  const membership = await prisma.workspaceMember.findFirst({
-    where: { userId: session.id, ...(preferredWorkspaceId ? { workspaceId: preferredWorkspaceId } : {}) },
-    select: { workspaceId: true, role: true },
-    orderBy: { joinedAt: "asc" },
-  })
+  // Mirrors getActiveWorkspaceMembership() on the HTTP side: prefer the cookie's
+  // workspace, but fall back to the earliest membership when it does not match.
+  // Applying the cookie as a hard filter instead drops the socket whenever the
+  // cookie is stale (removed from that workspace, workspace deleted, cookie left
+  // over from another account), which closes the connection as unauthorized and
+  // leaves the user permanently "offline" with every send failing — while the
+  // rest of the app happily resolves a different workspace.
+  const membership =
+    (preferredWorkspaceId
+      ? await prisma.workspaceMember.findFirst({
+          where: { userId: session.id, workspaceId: preferredWorkspaceId },
+          select: { workspaceId: true, role: true },
+        })
+      : null) ??
+    (await prisma.workspaceMember.findFirst({
+      where: { userId: session.id },
+      select: { workspaceId: true, role: true },
+      orderBy: { joinedAt: "asc" },
+    }))
   if (!membership) return null
   return {
     ...session,
@@ -157,6 +171,11 @@ app.prepare().then(() => {
       }
       userSockets.add(ws)
       console.log(`[WS] Connected: ${userId} (${clients.size} distinct users online, ${userSockets.size} tabs for this user)`)
+
+      // A joining tab starts with no presence state, and the broadcasts below only
+      // cover changes from here on. Without this snapshot the most recently connected
+      // user sees everyone else as offline. Mirrors Pusher pusher:subscription_succeeded.
+      ws.send(JSON.stringify({ type: "presence_sync", userIds: onlineUserIdsIn(workspaceId, userId) }))
 
       // Broadcast online presence if first tab connected
       if (isFirstConnection) {
@@ -309,6 +328,24 @@ app.prepare().then(() => {
       })
     })()
   })
+
+  // Ids of users in this workspace that currently hold at least one live socket.
+  function onlineUserIdsIn(workspaceId: string, excludeUserId?: string) {
+    const prefix = `${workspaceId}:`
+    const ids: string[] = []
+    clients.forEach((userSockets, key) => {
+      if (!key.startsWith(prefix)) return
+      const id = key.slice(prefix.length)
+      if (id === excludeUserId) return
+      for (const socket of userSockets) {
+        if (socket.readyState === WebSocket.OPEN) {
+          ids.push(id)
+          return
+        }
+      }
+    })
+    return ids
+  }
 
   function sendToUser(targetUserId: string, message: string, workspaceId: string) {
     const userSockets = clients.get(`${workspaceId}:${targetUserId}`)
