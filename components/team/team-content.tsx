@@ -1,11 +1,16 @@
 "use client"
 
 import Link from "next/link"
+import { useRouter } from "next/navigation"
+import { useTransition } from "react"
+import { toast } from "sonner"
+import { deleteUserAction } from "@/lib/actions/auth-actions"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { AlertTriangle, Mail, MessageCircle, MoreHorizontal, CheckCircle2, Clock } from "lucide-react"
+import { AlertTriangle, Mail, MessageCircle, CheckCircle2, Clock, Trash2 } from "lucide-react"
 
 export type TeamMember = {
+  id: string
   name: string
   role: string
   email: string
@@ -28,6 +33,8 @@ export type PendingInvitation = {
 interface TeamContentProps {
   teamMembers: TeamMember[]
   pendingInvitations: PendingInvitation[]
+  canManageTeam: boolean
+  currentUserId: string
 }
 
 function formatDate(value: string) {
@@ -38,7 +45,27 @@ function roleLabel(role: string) {
   return role === "ADMIN" ? "Admin" : role === "VIEWER" ? "Viewer" : "Member"
 }
 
-export function TeamContent({ teamMembers, pendingInvitations }: TeamContentProps) {
+export function TeamContent({ teamMembers, pendingInvitations, canManageTeam, currentUserId }: TeamContentProps) {
+  const router = useRouter()
+  const [isPending, startTransition] = useTransition()
+
+  function handleRemoveMember(member: TeamMember) {
+    if (!confirm(`Remove ${member.name} from this workspace? They will no longer be able to access its projects, tasks, or conversations.`)) {
+      return
+    }
+
+    startTransition(async () => {
+      const result = await deleteUserAction(member.id)
+      if (result?.error) {
+        toast.error(result.error)
+        return
+      }
+
+      toast.success(`${member.name} was removed from the workspace.`)
+      router.refresh()
+    })
+  }
+
   return (
     <div className="space-y-6 animate-fade-in">
       {pendingInvitations.length > 0 && (
@@ -96,9 +123,19 @@ export function TeamContent({ teamMembers, pendingInvitations }: TeamContentProp
                 </Avatar>
                 <span className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-card ${member.status === "active" ? "bg-primary animate-pulse" : "bg-muted-foreground"}`}></span>
               </div>
-              <Button variant="ghost" size="icon" className="opacity-0 group-hover:opacity-100 transition-opacity">
-                <MoreHorizontal className="w-4 h-4" />
-              </Button>
+              {canManageTeam && member.id !== currentUserId && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                  onClick={() => handleRemoveMember(member)}
+                  disabled={isPending}
+                  title={`Remove ${member.name} from the workspace`}
+                  aria-label={`Remove ${member.name} from the workspace`}
+                >
+                  <Trash2 className="w-4 h-4" />
+                </Button>
+              )}
             </div>
 
             <div className="space-y-3">

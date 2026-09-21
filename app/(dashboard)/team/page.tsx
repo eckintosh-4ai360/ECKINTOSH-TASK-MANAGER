@@ -48,6 +48,7 @@ export default async function TeamPage() {
       : name.substring(0, 2).toUpperCase()
 
     return {
+      id: user.id,
       name,
       role: user.title || user.role || "Member",
       email: user.email,
@@ -83,7 +84,12 @@ export default async function TeamPage() {
       />
 
       <div className="mt-6">
-        <TeamContent teamMembers={teamMembers} pendingInvitations={pendingInvitations} />
+        <TeamContent
+          teamMembers={teamMembers}
+          pendingInvitations={pendingInvitations}
+          canManageTeam={canManageTeam}
+          currentUserId={session.id}
+        />
       </div>
     </>
   )

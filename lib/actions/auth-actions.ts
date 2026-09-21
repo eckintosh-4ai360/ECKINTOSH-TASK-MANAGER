@@ -313,5 +313,6 @@ export async function deleteUserAction(userId: string) {
     targetId: userId,
   })
   revalidatePath("/admin/users")
+  revalidatePath("/team")
   return { success: true }
 }
