@@ -70,7 +70,7 @@ export function KanbanColumn({ id, title, tasks, onCardClick, projects, sprints,
   };
 
   return (
-    <div className={`flex flex-col flex-1 min-w-[280px] max-w-[340px] bg-primary/5 rounded-xl border border-primary/10 overflow-hidden h-[calc(100vh-220px)] border-t-2 ${getStatusAccent(id)} shadow-inner shadow-primary/5`}>
+    <div className={`flex flex-col flex-1 min-w-[280px] max-w-[340px] bg-primary/5 rounded-xl border border-primary/10 overflow-hidden min-h-[calc(100vh-220px)] border-t-2 ${getStatusAccent(id)} shadow-inner shadow-primary/5`}>
       {/* Column Header */}
       <div className="flex items-center justify-between p-3.5 border-b border-primary/10 bg-primary/10 backdrop-blur-sm">
         <div className="flex items-center gap-2">
@@ -94,13 +94,14 @@ export function KanbanColumn({ id, title, tasks, onCardClick, projects, sprints,
         )}
       </div>
 
-      {/* Droppable Area */}
+      {/* The list itself must not scroll: the board row is already a scroll container,
+          and dnd supports only one scroll context per droppable. */}
       <Droppable droppableId={id}>
         {(provided, snapshot) => (
           <div
             ref={provided.innerRef}
             {...provided.droppableProps}
-            className={`flex-1 p-3 overflow-y-auto scrollbar-none transition-colors duration-200 ${
+            className={`flex-1 p-3 transition-colors duration-200 ${
               snapshot.isDraggingOver ? "bg-primary/10" : ""
             }`}
           >
@@ -115,7 +116,7 @@ export function KanbanColumn({ id, title, tasks, onCardClick, projects, sprints,
             ))}
             {provided.placeholder}
 
-            {tasks.length === 0 && (
+            {tasks.length === 0 && !snapshot.isDraggingOver && (
               <div className="h-24 border border-dashed border-primary/10 rounded-xl flex items-center justify-center italic text-xs text-muted-foreground/60 p-4 text-center">
                 Drag tasks here
               </div>

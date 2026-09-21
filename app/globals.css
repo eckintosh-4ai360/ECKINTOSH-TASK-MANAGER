@@ -197,7 +197,10 @@
 }
 
 .animate-slide-in-up {
-  animation: slideInUp 0.5s ease-out forwards;
+  /* No `forwards`: a filled `transform: translateY(0)` outlives the animation and turns
+     this element into a containing block for `position: fixed` descendants, which breaks
+     drag-and-drop. The last keyframe already equals the resting style, so filling adds nothing. */
+  animation: slideInUp 0.5s ease-out;
 }
 
 /* Added utility classes for new animations */
@@ -206,7 +209,8 @@
 }
 
 .animate-fade-in {
-  animation: fade-in 0.2s ease-out forwards;
+  /* See .animate-slide-in-up — intentionally no `forwards`. */
+  animation: fade-in 0.2s ease-out;
 }
 
 /* Futuristic glow effects */
