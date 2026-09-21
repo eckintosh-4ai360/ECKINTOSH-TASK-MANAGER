@@ -22,6 +22,8 @@ import {
   Bot,
   PenLine,
   Building2,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useState } from "react"
@@ -74,7 +76,7 @@ const systemItems: NavItem[] = [
 
 
 
-function NavSection({ title, items }: { title: string; items: NavItem[] }) {
+function NavSection({ title, items, collapsed = false }: { title: string; items: NavItem[]; collapsed?: boolean }) {
   const pathname = usePathname()
   const [hovered, setHovered] = useState<string | null>(null)
 
@@ -82,10 +84,14 @@ function NavSection({ title, items }: { title: string; items: NavItem[] }) {
 
   return (
     <div>
-      <p className="text-[9px] font-bold text-primary/60 mb-2 uppercase tracking-[0.15em] flex items-center gap-2 px-1">
-        <span className="w-4 h-px bg-gradient-to-r from-primary/40 to-transparent" />
-        {title}
-      </p>
+      {collapsed ? (
+        <div className="mx-2 mb-2 h-px bg-primary/15" />
+      ) : (
+        <p className="text-[9px] font-bold text-primary/60 mb-2 uppercase tracking-[0.15em] flex items-center gap-2 px-1">
+          <span className="w-4 h-px bg-gradient-to-r from-primary/40 to-transparent" />
+          {title}
+        </p>
+      )}
       <nav className="space-y-0.5">
         {items.map((item) => {
           const isActive = pathname === item.href
@@ -95,8 +101,11 @@ function NavSection({ title, items }: { title: string; items: NavItem[] }) {
               href={item.href}
               onMouseEnter={() => setHovered(item.label)}
               onMouseLeave={() => setHovered(null)}
+              title={collapsed ? item.label : undefined}
+              aria-label={collapsed ? item.label : undefined}
               className={cn(
                 "w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 relative overflow-hidden group",
+                collapsed && "justify-center px-2",
                 isActive
                   ? "bg-gradient-to-r from-primary/20 to-primary/5 text-primary border border-primary/30 shadow-lg shadow-primary/10"
                   : "text-muted-foreground hover:bg-white/5 hover:text-foreground border border-transparent",
@@ -107,9 +116,9 @@ function NavSection({ title, items }: { title: string; items: NavItem[] }) {
                 <span className="absolute left-0 top-1 bottom-1 w-0.5 bg-primary rounded-full shadow-lg shadow-primary/50" />
               )}
               <item.icon className={cn("w-4 h-4 flex-shrink-0", isActive ? "text-primary" : "text-muted-foreground group-hover:text-foreground")} />
-              <span className="flex-1 text-sm">{item.label}</span>
+              <span className={cn("flex-1 text-sm", collapsed && "sr-only")}>{item.label}</span>
               {"badge" in item && item.badge && (
-                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-primary/20 text-primary border border-primary/30">
+                <span className={cn("text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-primary/20 text-primary border border-primary/30", collapsed && "hidden")}>
                   {item.badge}
                 </span>
               )}
@@ -121,7 +130,19 @@ function NavSection({ title, items }: { title: string; items: NavItem[] }) {
   )
 }
 
-export function Sidebar({ role, workspaces = [], activeWorkspaceId }: { role: AppRole; workspaces?: WorkspaceOption[]; activeWorkspaceId?: string }) {
+export function Sidebar({
+  role,
+  workspaces = [],
+  activeWorkspaceId,
+  collapsed = false,
+  onCollapsedChange,
+}: {
+  role: AppRole
+  workspaces?: WorkspaceOption[]
+  activeWorkspaceId?: string
+  collapsed?: boolean
+  onCollapsedChange?: (collapsed: boolean) => void
+}) {
   const pathname = usePathname()
 
   const visibleWorkspaceItems = workspaceItems.filter((item) => {
@@ -150,37 +171,55 @@ export function Sidebar({ role, workspaces = [], activeWorkspaceId }: { role: Ap
   // `bg-sidebar` is opaque on purpose — a translucent nav drawer lets the page
   // show through, and backdrop-filter is unreliable on mobile Safari.
   return (
-    <aside className="flex h-full w-full flex-col overflow-y-auto bg-sidebar border-r border-primary/10">
+    <aside className="flex h-full w-full flex-col overflow-x-hidden overflow-y-auto bg-sidebar border-r border-primary/10">
       {/* ── Logo & Brand ─────────────────────────────────── */}
-      <div className="px-4 pt-5 pb-4 border-b border-white/5">
-        <Link href="/" className="flex items-center gap-3 group">
+      <div className={cn("relative px-4 pt-5 pb-4 border-b border-white/5", collapsed && "px-3")}>
+        <Link href="/" className={cn("flex items-center gap-3 group", collapsed && "justify-center")}>
           <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary to-primary/50 flex items-center justify-center shadow-lg shadow-primary/30 group-hover:scale-105 transition-transform duration-300 animate-glow-pulse flex-shrink-0">
             <GitBranch className="w-4 h-4 text-primary-foreground" />
           </div>
-          <div>
+          <div className={cn(collapsed && "hidden")}>
             <span className="text-base font-extrabold neon-text tracking-wider">Spagad</span>
             <p className="text-[9px] text-muted-foreground leading-none mt-0.5">SRAD – Rapid Application Development</p>
           </div>
         </Link>
 
         {/* Workspace chip */}
-        <WorkspaceSwitcher workspaces={workspaces} activeWorkspaceId={activeWorkspaceId} />
+        {onCollapsedChange && (
+          <button
+            type="button"
+            onClick={() => onCollapsedChange(!collapsed)}
+            className={cn(
+              "absolute right-3 top-5 flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+              collapsed && "right-[-12px] top-12 z-50 border border-primary/20 bg-sidebar shadow-lg",
+            )}
+            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          >
+            {collapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+          </button>
+        )}
+        {!collapsed && <WorkspaceSwitcher workspaces={workspaces} activeWorkspaceId={activeWorkspaceId} />}
       </div>
 
       {/* ── Navigation ───────────────────────────────────── */}
-      <div className="flex-1 px-3 py-4 space-y-5 overflow-y-auto">
-        <NavSection title="Workspace" items={visibleWorkspaceItems} />
-        <NavSection title="Team" items={teamItems} />
-        <NavSection title="Communication" items={visibleCommsItems} />
+      <div className={cn("flex-1 py-4 space-y-5 overflow-y-auto", collapsed ? "px-2" : "px-3")}>
+        <NavSection title="Workspace" items={visibleWorkspaceItems} collapsed={collapsed} />
+        <NavSection title="Team" items={teamItems} collapsed={collapsed} />
+        <NavSection title="Communication" items={visibleCommsItems} collapsed={collapsed} />
 
 
 
         {/* ── System ──────────────────────────────────── */}
         <div>
-          <p className="text-[9px] font-bold text-primary/60 mb-2 uppercase tracking-[0.15em] flex items-center gap-2 px-1">
-            <span className="w-4 h-px bg-gradient-to-r from-primary/40 to-transparent" />
-            System
-          </p>
+          {collapsed ? (
+            <div className="mx-2 mb-2 h-px bg-primary/15" />
+          ) : (
+            <p className="text-[9px] font-bold text-primary/60 mb-2 uppercase tracking-[0.15em] flex items-center gap-2 px-1">
+              <span className="w-4 h-px bg-gradient-to-r from-primary/40 to-transparent" />
+              System
+            </p>
+          )}
           <nav className="space-y-0.5">
             {visibleSystemItems.map((item) => {
               const isActive = pathname === item.href
@@ -190,10 +229,12 @@ export function Sidebar({ role, workspaces = [], activeWorkspaceId }: { role: Ap
                   <a
                     key={item.label}
                     href={item.href}
-                    className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 border border-transparent text-muted-foreground hover:text-red-400 hover:bg-red-500/10 hover:border-red-500/20"
+                    title={collapsed ? item.label : undefined}
+                    aria-label={collapsed ? item.label : undefined}
+                    className={cn("w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 border border-transparent text-muted-foreground hover:text-red-400 hover:bg-red-500/10 hover:border-red-500/20", collapsed && "justify-center px-2")}
                   >
                     <item.icon className="w-4 h-4 flex-shrink-0" />
-                    <span className="text-sm">{item.label}</span>
+                    <span className={cn("text-sm", collapsed && "sr-only")}>{item.label}</span>
                   </a>
                 )
               }
@@ -202,8 +243,11 @@ export function Sidebar({ role, workspaces = [], activeWorkspaceId }: { role: Ap
                 <Link
                   key={item.label}
                   href={item.href}
+                  title={collapsed ? item.label : undefined}
+                  aria-label={collapsed ? item.label : undefined}
                   className={cn(
                     "w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 border border-transparent",
+                    collapsed && "justify-center px-2",
                     isActive
                       ? "bg-gradient-to-r from-primary/20 to-primary/5 text-primary border-primary/30"
                       : isDanger
@@ -212,7 +256,7 @@ export function Sidebar({ role, workspaces = [], activeWorkspaceId }: { role: Ap
                   )}
                 >
                   <item.icon className="w-4 h-4 flex-shrink-0" />
-                  <span className="text-sm">{item.label}</span>
+                  <span className={cn("text-sm", collapsed && "sr-only")}>{item.label}</span>
                 </Link>
               )
             })}

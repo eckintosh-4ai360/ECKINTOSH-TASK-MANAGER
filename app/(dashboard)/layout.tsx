@@ -1,5 +1,5 @@
 import type React from "react"
-import { Sidebar } from "@/components/dashboard/sidebar"
+import { DashboardShell } from "@/components/dashboard/dashboard-shell"
 import { SearchProvider } from "@/components/dashboard/search-context"
 import { EmailVerificationBanner } from "@/components/auth/email-verification-banner"
 import { requireWorkspace } from "@/lib/auth"
@@ -22,17 +22,10 @@ export default async function DashboardLayout({
 
   return (
     <SearchProvider>
-      <div className="flex min-h-dvh bg-background">
-        {/* The fixed rail lives here, not in Sidebar, so the same component can
-            be dropped into the mobile drawer without pinning itself to the viewport. */}
-        <div className="hidden lg:block fixed inset-y-0 left-0 z-40 w-64">
-          <Sidebar role={session.role} workspaces={workspaces} activeWorkspaceId={session.workspaceId} />
-        </div>
-        <main className="flex-1 p-3 md:p-4 lg:p-6 lg:ml-64">
+      <DashboardShell role={session.role} workspaces={workspaces} activeWorkspaceId={session.workspaceId}>
           {!verified && <EmailVerificationBanner email={session.email} />}
           {children}
-        </main>
-      </div>
+      </DashboardShell>
     </SearchProvider>
   )
 }
