@@ -113,9 +113,13 @@ export function ChatInterface({ currentUserId, currentUserName, workspaceId }: C
   const restoredRef = useRef(false)
   const nativeSocketRef = useRef<WebSocket | null>(null)
   const useNativeWebSocket = process.env.NEXT_PUBLIC_REALTIME_TRANSPORT === "websocket"
-  // Pusher needs a publishable key to connect at all; without one and without
-  // the custom server there is no push transport and the poll below takes over.
-  const realtimeConfigured = useNativeWebSocket || Boolean(process.env.NEXT_PUBLIC_PUSHER_KEY)
+  // Whether a push transport is actually delivering right now — not whether one
+  // looks configured. Env vars lie: a NEXT_PUBLIC_PUSHER_KEY with no server
+  // secret, or transport="websocket" on a host that runs no WebSocket server,
+  // both read as "configured" while nothing is delivered. Only a live socket
+  // flips this, so the HTTP fallback covers every way the push path can fail.
+  const [pushConnected, setPushConnected] = useState(false)
+  const [pollError, setPollError] = useState<string | null>(null)
   // Track when each user was last seen online
   const lastSeenRef = useRef<Record<string, Date>>({})
 
@@ -197,6 +201,7 @@ export function ChatInterface({ currentUserId, currentUserName, workspaceId }: C
         socket.onopen = () => {
           nativeSocketRef.current = socket
           reconnectDelay = 1000
+          setPushConnected(true)
           setWsStatus("connected")
         }
         socket.onmessage = (event) => {
@@ -207,6 +212,7 @@ export function ChatInterface({ currentUserId, currentUserName, workspaceId }: C
           }
         }
         socket.onclose = () => {
+          setPushConnected(false)
           if (intentionalClose) return
           setWsStatus("offline")
           reconnectTimer = setTimeout(() => {
@@ -229,13 +235,17 @@ export function ChatInterface({ currentUserId, currentUserName, workspaceId }: C
     setWsStatus("reconnecting")
 
     const handleStateChange = (states: { current: string }) => {
+      setPushConnected(states.current === "connected")
       if (states.current === "connected") setWsStatus("connected")
       else if (states.current === "connecting") setWsStatus("reconnecting")
       else setWsStatus("offline")
     }
 
     pusher.connection.bind("state_change", handleStateChange)
-    if (pusher.connection.state === "connected") setWsStatus("connected")
+    if (pusher.connection.state === "connected") {
+      setPushConnected(true)
+      setWsStatus("connected")
+    }
 
     const presenceChannel = getWorkspacePresenceChannel(workspaceId)
     const channel = pusher.subscribe(presenceChannel) as any
@@ -279,13 +289,13 @@ export function ChatInterface({ currentUserId, currentUserName, workspaceId }: C
   }, [applyChatMessage, applyRealtimeEvent, currentUserId, workspaceId])
 
   // ── HTTP fallback when nothing can push ───────────────────────────────
-  // Without Pusher credentials and without the custom WebSocket server (the
-  // default Vercel deployment), sendMessageAction still persists the message but
-  // nothing ever delivers it: the recipient sees nothing and everyone reads as
-  // offline. Polling keeps both working. Re-reading the whole thread rather than
-  // a delta means edits and deletions reconcile too.
+  // Runs whenever no push transport is actually delivering — none configured,
+  // one misconfigured, or a live one that dropped. In that state
+  // sendMessageAction still persists the message but nothing ever hands it over:
+  // the recipient sees nothing and everyone reads as offline. Re-reading the
+  // whole thread rather than a delta means edits and deletions reconcile too.
   useEffect(() => {
-    if (realtimeConfigured) return
+    if (pushConnected) return
 
     let cancelled = false
     let timer: ReturnType<typeof setTimeout> | null = null
@@ -301,6 +311,7 @@ export function ChatInterface({ currentUserId, currentUserName, workspaceId }: C
         if (cancelled) return
 
         setOnlineUsers(new Set(online))
+        setPollError(null)
         setWsStatus("connected")
 
         if (history && partner) {
@@ -313,8 +324,14 @@ export function ChatInterface({ currentUserId, currentUserName, workspaceId }: C
         }
 
         setUnread(counts)
-      } catch {
-        if (!cancelled) setWsStatus("offline")
+      } catch (error) {
+        // Swallowing this is how a broken fallback looks identical to "nobody is
+        // online": everyone reads as offline and no message ever lands.
+        console.error("[Chat] Polling fallback failed:", error)
+        if (!cancelled) {
+          setPollError(error instanceof Error ? error.message : String(error))
+          setWsStatus("offline")
+        }
       } finally {
         if (!cancelled) timer = setTimeout(tick, POLL_INTERVAL_MS)
       }
@@ -325,7 +342,7 @@ export function ChatInterface({ currentUserId, currentUserName, workspaceId }: C
       cancelled = true
       if (timer) clearTimeout(timer)
     }
-  }, [realtimeConfigured, currentUserId])
+  }, [pushConnected, currentUserId])
 
   const sendNativeEvent = (event: Record<string, unknown>) => {
     if (!useNativeWebSocket || nativeSocketRef.current?.readyState !== WebSocket.OPEN) {
@@ -792,7 +809,7 @@ export function ChatInterface({ currentUserId, currentUserName, workspaceId }: C
           <div className="flex items-center gap-2 px-4 py-3 border-t border-border/60 bg-card flex-shrink-0">
             {wsStatus !== "connected" && (
               <div className="absolute left-1/2 -translate-x-1/2 bottom-20 z-10">
-                <span className={cn(
+                <span title={pollError ?? undefined} className={cn(
                   "text-[11px] font-medium px-3 py-1 rounded-full border flex items-center gap-1.5 shadow-lg",
                   wsStatus === "reconnecting"
                     ? "bg-amber-500/10 border-amber-500/30 text-amber-400"

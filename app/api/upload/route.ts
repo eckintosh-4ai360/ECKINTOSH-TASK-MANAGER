@@ -44,10 +44,18 @@ export async function POST(request: NextRequest) {
         addRandomSuffix: false,
       })
     } else if (isReadOnlyFilesystem()) {
+      // Name the environment the function is actually running in. Connecting a
+      // Blob store does not retrofit the token into deployments that already
+      // exist, and a store linked to Production alone leaves previews without
+      // it — so "I connected it" and "this build can see it" often disagree.
+      const env = process.env.VERCEL_ENV ?? "unknown"
+      const commit = process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? "unknown"
       return NextResponse.json(
         {
           error:
-            "Attachments are not configured on this deployment. Connect a Vercel Blob store so BLOB_READ_WRITE_TOKEN is set, then redeploy.",
+            `Attachments are not configured for this deployment (env: ${env}, commit: ${commit}). ` +
+            "BLOB_READ_WRITE_TOKEN is not visible to this build. Connect a Vercel Blob store to " +
+            `the ${env} environment, then redeploy — connecting alone does not update a running deployment.`,
         },
         { status: 501 },
       )
