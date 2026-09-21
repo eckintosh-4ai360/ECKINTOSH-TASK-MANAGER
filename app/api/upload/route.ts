@@ -4,7 +4,7 @@ import path from "path"
 import { put } from "@vercel/blob"
 import { getSession } from "@/lib/auth"
 import { hasPermission } from "@/lib/rbac"
-import { MEDIA_ROOT, MEDIA_TYPES, keyToMediaUrl } from "@/lib/media-storage"
+import { MEDIA_ROOT, MEDIA_TYPES, isReadOnlyFilesystem, keyToMediaUrl } from "@/lib/media-storage"
 
 export const runtime = "nodejs"
 
@@ -43,6 +43,14 @@ export async function POST(request: NextRequest) {
         access: "private",
         addRandomSuffix: false,
       })
+    } else if (isReadOnlyFilesystem()) {
+      return NextResponse.json(
+        {
+          error:
+            "Attachments are not configured on this deployment. Connect a Vercel Blob store so BLOB_READ_WRITE_TOKEN is set, then redeploy.",
+        },
+        { status: 501 },
+      )
     } else {
       // Local storage fallback for offline / development environments
       const uploadDir = path.join(MEDIA_ROOT, `chat/${session.workspaceId}/${session.id}`)

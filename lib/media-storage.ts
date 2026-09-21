@@ -20,6 +20,16 @@ export function isBlobStorageEnabled() {
   return Boolean(process.env.BLOB_READ_WRITE_TOKEN)
 }
 
+// Serverless hosts ship a read-only bundle: the only writable path is /tmp, and
+// that is per-instance and wiped between invocations, so an attachment written
+// there would 404 for the recipient. Such a deployment has to use Blob storage,
+// and saying so beats letting mkdir fail with an opaque ENOENT on /var/task.
+// An explicit MEDIA_STORAGE_DIR opts out — that is someone mounting real storage.
+export function isReadOnlyFilesystem() {
+  if (process.env.MEDIA_STORAGE_DIR) return false
+  return Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME)
+}
+
 // SVG is deliberately absent: the browser executes script inside an SVG served
 // as image/svg+xml, which would be stored XSS on our own origin.
 export const MEDIA_TYPES: Record<string, { kind: string; ext: string }> = {
