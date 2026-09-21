@@ -54,7 +54,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="bg-background" suppressHydrationWarning>
-      <body className={`font-sans antialiased bg-background futuristic-grid`}>
+      <body className={`font-sans antialiased bg-background developer-workspace`}>
         <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false} storageKey="spagad-theme">
           {children}
           {/* Mounted here so every toast.success/toast.error in the app is actually seen —

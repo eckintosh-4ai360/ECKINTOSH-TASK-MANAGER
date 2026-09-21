@@ -116,7 +116,7 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <div className="min-h-screen bg-background futuristic-grid flex items-center justify-center p-4 relative overflow-hidden">
+    <div className="min-h-screen bg-background developer-workspace flex items-center justify-center p-4 relative overflow-hidden">
       {/* Background ambient glows */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
         <div className="absolute top-1/4 left-1/3 w-[700px] h-[700px] bg-primary/8 rounded-full blur-[120px]" />

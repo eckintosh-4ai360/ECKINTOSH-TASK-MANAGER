@@ -40,7 +40,7 @@ function ResetPasswordForm() {
   }
 
   return (
-    <main className="min-h-screen bg-background futuristic-grid flex items-center justify-center p-4">
+    <main className="min-h-screen bg-background developer-workspace flex items-center justify-center p-4">
       <div className="glass-card w-full max-w-md rounded-2xl border border-primary/20 p-8 shadow-2xl shadow-primary/10">
         <Link href="/login/email" className="mb-6 inline-flex items-center gap-2 text-xs text-muted-foreground hover:text-primary"><ArrowLeft className="h-3.5 w-3.5" /> Back to sign in</Link>
         <div className="mb-6 flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10">

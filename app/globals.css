@@ -335,21 +335,28 @@
   box-shadow: none;
 }
 
-/* Futuristic grid background */
-.futuristic-grid {
-  background-image: 
-    radial-gradient(circle at top left, rgba(0, 212, 255, 0.16), transparent 32rem),
-    radial-gradient(circle at 78% 12%, rgba(66, 153, 225, 0.12), transparent 28rem),
-    linear-gradient(rgba(0, 128, 170, 0.055) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(0, 128, 170, 0.055) 1px, transparent 1px);
-  background-size: 50px 50px;
+/* Developer-workspace background: terminal glow and monitor scan lines, without a grid. */
+.developer-workspace {
+  background-image:
+    radial-gradient(ellipse 45rem 28rem at -8% -12%, rgba(0, 184, 212, 0.16), transparent 68%),
+    radial-gradient(ellipse 38rem 24rem at 108% 8%, rgba(99, 102, 241, 0.1), transparent 70%),
+    linear-gradient(115deg, transparent 18%, rgba(14, 165, 233, 0.035) 48%, transparent 76%),
+    repeating-linear-gradient(180deg, rgba(14, 116, 144, 0.025) 0 1px, transparent 1px 7px);
+  background-attachment: fixed;
 }
 
-.dark .futuristic-grid {
+.dark .developer-workspace {
   background-image:
-    linear-gradient(rgba(0, 212, 255, 0.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(0, 212, 255, 0.03) 1px, transparent 1px);
-  background-size: 50px 50px;
+    radial-gradient(ellipse 48rem 30rem at -8% -12%, rgba(0, 212, 255, 0.12), transparent 68%),
+    radial-gradient(ellipse 40rem 26rem at 108% 8%, rgba(79, 70, 229, 0.13), transparent 70%),
+    linear-gradient(115deg, transparent 18%, rgba(0, 212, 255, 0.045) 48%, transparent 76%),
+    repeating-linear-gradient(180deg, rgba(148, 163, 184, 0.026) 0 1px, transparent 1px 7px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .developer-workspace {
+    background-attachment: scroll;
+  }
 }
 
 /* Neon text utilities */

@@ -211,7 +211,7 @@ export function ProfileContent({ settings }: ProfileContentProps) {
   return (
     <div className="space-y-6">
       <section className="glass-card overflow-hidden rounded-2xl border border-primary/15">
-        <div className="futuristic-grid border-b border-white/10 px-6 py-6 lg:px-7">
+        <div className="developer-workspace border-b border-white/10 px-6 py-6 lg:px-7">
           <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
             <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
               <Avatar className="h-24 w-24 border border-primary/20 shadow-2xl shadow-primary/20">
